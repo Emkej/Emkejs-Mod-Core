@@ -1,4 +1,4 @@
-#include "emc/mod_hub_client.h"
+#include "mod_hub_consumer_adapter.h"
 
 namespace
 {
@@ -14,7 +14,10 @@ ExampleModState g_state = {
     1,
     { 42, 0u },
     10,
-    2.5f};
+    2.5f };
+
+emc::ModHubClient g_client;
+bool g_client_configured = false;
 
 EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
 {
@@ -133,7 +136,7 @@ const EMC_ModDescriptorV1 kModDescriptor = {
     "__NAMESPACE_DISPLAY_NAME__",
     "__MOD_ID__",
     "__MOD_DISPLAY_NAME__",
-    &g_state};
+    &g_state };
 
 const EMC_BoolSettingDefV1 kBoolSetting = {
     "enabled",
@@ -141,7 +144,7 @@ const EMC_BoolSettingDefV1 kBoolSetting = {
     "Enable the feature",
     &g_state,
     &GetEnabled,
-    &SetEnabled};
+    &SetEnabled };
 
 const EMC_KeybindSettingDefV1 kKeybindSetting = {
     "hotkey",
@@ -149,7 +152,7 @@ const EMC_KeybindSettingDefV1 kKeybindSetting = {
     "Primary feature hotkey",
     &g_state,
     &GetHotkey,
-    &SetHotkey};
+    &SetHotkey };
 
 const EMC_IntSettingDefV1 kIntSetting = {
     "count",
@@ -160,7 +163,7 @@ const EMC_IntSettingDefV1 kIntSetting = {
     100,
     5,
     &GetCount,
-    &SetCount};
+    &SetCount };
 
 const EMC_FloatSettingDefV1 kFloatSetting = {
     "radius",
@@ -172,7 +175,7 @@ const EMC_FloatSettingDefV1 kFloatSetting = {
     0.5f,
     EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT,
     &GetRadius,
-    &SetRadius};
+    &SetRadius };
 
 const EMC_ActionRowDefV1 kActionRow = {
     "refresh_now",
@@ -180,7 +183,7 @@ const EMC_ActionRowDefV1 kActionRow = {
     "Re-sync values from runtime state",
     &g_state,
     EMC_ACTION_FORCE_REFRESH,
-    &RefreshNow};
+    &RefreshNow };
 
 const emc::ModHubClientSettingRowV1 kRows[] = {
     { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kBoolSetting },
@@ -193,11 +196,64 @@ const emc::ModHubClientSettingRowV1 kRows[] = {
 const emc::ModHubClientTableRegistrationV1 kRegistration = {
     &kModDescriptor,
     kRows,
-    (uint32_t)(sizeof(kRows) / sizeof(kRows[0]))};
+    (uint32_t)(sizeof(kRows) / sizeof(kRows[0])) };
+
+void EnsureClientConfigured()
+{
+    if (g_client_configured)
+    {
+        return;
+    }
+
+    emc::ModHubClient::Config config;
+    config.table_registration = &kRegistration;
+    g_client.SetConfig(config);
+    g_client_configured = true;
+}
 }
 
-// Call this from your ModHubClient::Config setup.
-const emc::ModHubClientTableRegistrationV1* GetModHubTableRegistration()
+void ModHubConsumerAdapter_OnStartup()
+{
+    EnsureClientConfigured();
+    g_client.OnStartup();
+}
+
+void ModHubConsumerAdapter_OnOptionsWindowInit()
+{
+    EnsureClientConfigured();
+    g_client.OnOptionsWindowInit();
+}
+
+bool ModHubConsumerAdapter_UseHubUi()
+{
+    EnsureClientConfigured();
+    return g_client.UseHubUi();
+}
+
+bool ModHubConsumerAdapter_ShouldCreateLocalTab()
+{
+    return !ModHubConsumerAdapter_UseHubUi();
+}
+
+bool ModHubConsumerAdapter_IsAttachRetryPending()
+{
+    EnsureClientConfigured();
+    return g_client.IsAttachRetryPending();
+}
+
+bool ModHubConsumerAdapter_HasAttachRetryAttempted()
+{
+    EnsureClientConfigured();
+    return g_client.HasAttachRetryAttempted();
+}
+
+EMC_Result ModHubConsumerAdapter_LastAttachFailureResult()
+{
+    EnsureClientConfigured();
+    return g_client.LastAttemptFailureResult();
+}
+
+const emc::ModHubClientTableRegistrationV1* ModHubConsumerAdapter_GetTableRegistration()
 {
     return &kRegistration;
 }
