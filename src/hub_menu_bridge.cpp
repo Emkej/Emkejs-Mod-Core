@@ -12,6 +12,7 @@
 #include <mygui/MyGUI_Button.h>
 #include <mygui/MyGUI_EditBox.h>
 #include <mygui/MyGUI_Gui.h>
+#include <mygui/MyGUI_InputManager.h>
 #include <mygui/MyGUI_TabControl.h>
 #include <mygui/MyGUI_TabItem.h>
 #include <mygui/MyGUI_TextBox.h>
@@ -80,6 +81,7 @@ const char* kNamespaceButtonSkin = "Kenshi_Button1";
 const char* kHeaderButtonSkin = "Kenshi_Button1";
 const char* kValueButtonSkin = "Kenshi_Button1";
 const char* kTextSkin = "Kenshi_TextboxStandardText";
+const char* kEditBoxSkin = "Kenshi_EditBox";
 const char* kNoMatchesText = "No matches in this tab. Try checking other tabs?";
 
 bool g_hub_enabled = true;
@@ -99,6 +101,9 @@ DatapanelGUI* g_active_hub_panel = 0;
 MyGUI::Widget* g_active_hub_panel_widget = 0;
 std::string g_selected_namespace_id;
 std::vector<MyGUI::Widget*> g_dynamic_widgets;
+bool g_logged_missing_edit_box_skin = false;
+bool g_restore_search_focus_after_rebuild = false;
+std::string g_restore_search_focus_namespace_id;
 
 struct RenderModGroup
 {
@@ -203,7 +208,14 @@ MyGUI::EditBox* CreateTrackedSearchBox(MyGUI::Widget* parent, const MyGUI::IntCo
         return 0;
     }
 
-    const char* skins[] = { "EditBox", "EditBoxEmpty", "EditBoxLE", "EditBoxLEEmpty", "Kenshi_EditBox" };
+    const char* skins[] = {
+        kEditBoxSkin,
+        "Kenshi_EditBoxStrechEmpty",
+        "EditBoxLE",
+        "EditBoxLEEmpty",
+        "EditBox",
+        "EditBoxEmpty"
+    };
     for (size_t index = 0; index < sizeof(skins) / sizeof(skins[0]); ++index)
     {
         try
@@ -211,6 +223,7 @@ MyGUI::EditBox* CreateTrackedSearchBox(MyGUI::Widget* parent, const MyGUI::IntCo
             MyGUI::EditBox* widget = parent->createWidget<MyGUI::EditBox>(skins[index], coord, MyGUI::Align::Default);
             if (widget != 0)
             {
+                widget->setTextColour(MyGUI::Colour(0.85f, 0.85f, 0.85f, 1.0f));
                 g_dynamic_widgets.push_back(widget);
                 return widget;
             }
@@ -218,6 +231,12 @@ MyGUI::EditBox* CreateTrackedSearchBox(MyGUI::Widget* parent, const MyGUI::IntCo
         catch (...)
         {
         }
+    }
+
+    if (!g_logged_missing_edit_box_skin)
+    {
+        ErrorLog("Emkejs-Mod-Core: failed to create EditBox for Mod Hub (no compatible skin found)");
+        g_logged_missing_edit_box_skin = true;
     }
 
     return 0;
@@ -355,8 +374,88 @@ std::string FormatKeybindButtonCaption(const HubUiRowView& row)
         return "Unbound";
     }
 
+    std::string key_name;
+    switch (row.pending_keybind_value.keycode)
+    {
+    case OIS::KC_ESCAPE: key_name = "Esc"; break;
+    case OIS::KC_TAB: key_name = "Tab"; break;
+    case OIS::KC_RETURN: key_name = "Enter"; break;
+    case OIS::KC_SPACE: key_name = "Space"; break;
+    case OIS::KC_BACK: key_name = "Backspace"; break;
+    case OIS::KC_LSHIFT: key_name = "LShift"; break;
+    case OIS::KC_RSHIFT: key_name = "RShift"; break;
+    case OIS::KC_LCONTROL: key_name = "LCtrl"; break;
+    case OIS::KC_RCONTROL: key_name = "RCtrl"; break;
+    case OIS::KC_LMENU: key_name = "LAlt"; break;
+    case OIS::KC_RMENU: key_name = "RAlt"; break;
+    case OIS::KC_F1: key_name = "F1"; break;
+    case OIS::KC_F2: key_name = "F2"; break;
+    case OIS::KC_F3: key_name = "F3"; break;
+    case OIS::KC_F4: key_name = "F4"; break;
+    case OIS::KC_F5: key_name = "F5"; break;
+    case OIS::KC_F6: key_name = "F6"; break;
+    case OIS::KC_F7: key_name = "F7"; break;
+    case OIS::KC_F8: key_name = "F8"; break;
+    case OIS::KC_F9: key_name = "F9"; break;
+    case OIS::KC_F10: key_name = "F10"; break;
+    case OIS::KC_F11: key_name = "F11"; break;
+    case OIS::KC_F12: key_name = "F12"; break;
+    case OIS::KC_1: key_name = "1"; break;
+    case OIS::KC_2: key_name = "2"; break;
+    case OIS::KC_3: key_name = "3"; break;
+    case OIS::KC_4: key_name = "4"; break;
+    case OIS::KC_5: key_name = "5"; break;
+    case OIS::KC_6: key_name = "6"; break;
+    case OIS::KC_7: key_name = "7"; break;
+    case OIS::KC_8: key_name = "8"; break;
+    case OIS::KC_9: key_name = "9"; break;
+    case OIS::KC_0: key_name = "0"; break;
+    case OIS::KC_A: key_name = "A"; break;
+    case OIS::KC_B: key_name = "B"; break;
+    case OIS::KC_C: key_name = "C"; break;
+    case OIS::KC_D: key_name = "D"; break;
+    case OIS::KC_E: key_name = "E"; break;
+    case OIS::KC_F: key_name = "F"; break;
+    case OIS::KC_G: key_name = "G"; break;
+    case OIS::KC_H: key_name = "H"; break;
+    case OIS::KC_I: key_name = "I"; break;
+    case OIS::KC_J: key_name = "J"; break;
+    case OIS::KC_K: key_name = "K"; break;
+    case OIS::KC_L: key_name = "L"; break;
+    case OIS::KC_M: key_name = "M"; break;
+    case OIS::KC_N: key_name = "N"; break;
+    case OIS::KC_O: key_name = "O"; break;
+    case OIS::KC_P: key_name = "P"; break;
+    case OIS::KC_Q: key_name = "Q"; break;
+    case OIS::KC_R: key_name = "R"; break;
+    case OIS::KC_S: key_name = "S"; break;
+    case OIS::KC_T: key_name = "T"; break;
+    case OIS::KC_U: key_name = "U"; break;
+    case OIS::KC_V: key_name = "V"; break;
+    case OIS::KC_W: key_name = "W"; break;
+    case OIS::KC_X: key_name = "X"; break;
+    case OIS::KC_Y: key_name = "Y"; break;
+    case OIS::KC_Z: key_name = "Z"; break;
+    default:
+        break;
+    }
+
+    if (key_name.empty())
+    {
+        if (row.pending_keybind_value.keycode >= 32 && row.pending_keybind_value.keycode <= 126)
+        {
+            key_name.assign(1, static_cast<char>(row.pending_keybind_value.keycode));
+        }
+        else
+        {
+            std::ostringstream fallback;
+            fallback << "Key " << row.pending_keybind_value.keycode;
+            key_name = fallback.str();
+        }
+    }
+
     std::ostringstream caption;
-    caption << "Key " << row.pending_keybind_value.keycode;
+    caption << key_name;
     if (row.pending_keybind_value.modifiers != 0u)
     {
         caption << " +" << row.pending_keybind_value.modifiers;
@@ -437,6 +536,8 @@ void OnHubSearchTextChanged(MyGUI::EditBox* sender)
 
     if (HubUi_SetNamespaceSearchQuery(namespace_id.c_str(), query.c_str()) == EMC_OK)
     {
+        g_restore_search_focus_after_rebuild = true;
+        g_restore_search_focus_namespace_id = namespace_id;
         RebuildHubPanelWidgets();
     }
 }
@@ -848,7 +949,7 @@ void RebuildHubPanelWidgets()
         namespace_x += 178;
     }
 
-    y += 44;
+    y += 56;
 
     const RenderNamespaceGroup* selected_namespace = 0;
     for (size_t index = 0; index < namespaces.size(); ++index)
@@ -867,28 +968,47 @@ void RebuildHubPanelWidgets()
 
     const char* search_query = "";
     HubUi_GetNamespaceSearchQuery(selected_namespace->namespace_id.c_str(), &search_query);
+    const bool should_restore_search_focus =
+        g_restore_search_focus_after_rebuild
+        && selected_namespace->namespace_id == g_restore_search_focus_namespace_id;
+    g_restore_search_focus_after_rebuild = false;
+    g_restore_search_focus_namespace_id.clear();
 
     MyGUI::TextBox* search_label = CreateTrackedWidget<MyGUI::TextBox>(
         g_active_hub_panel_widget,
         kTextSkin,
-        MyGUI::IntCoord(24, y + 6, 70, 24));
+        MyGUI::IntCoord(24, y + 10, 70, 24));
     if (search_label != 0)
     {
         search_label->setCaption("Search:");
     }
 
+    int search_width = (panel_width - 120) / 2;
+    if (search_width < 220)
+    {
+        search_width = 220;
+    }
+
     MyGUI::EditBox* search_box = CreateTrackedSearchBox(
         g_active_hub_panel_widget,
-        MyGUI::IntCoord(96, y, panel_width - 120, 30));
+        MyGUI::IntCoord(96, y, search_width, 40));
     if (search_box != 0)
     {
         search_box->setEditMultiLine(false);
         search_box->setOnlyText(search_query != 0 ? search_query : "");
         search_box->setUserString("emc_ns", selected_namespace->namespace_id);
         search_box->eventEditTextChange += MyGUI::newDelegate(&OnHubSearchTextChanged);
+        if (should_restore_search_focus)
+        {
+            MyGUI::InputManager* input = MyGUI::InputManager::getInstancePtr();
+            if (input != 0)
+            {
+                input->setKeyFocusWidget(search_box);
+            }
+        }
     }
 
-    y += 42;
+    y += 50;
 
     std::vector<RenderModGroup> filtered_mods;
     BuildFilteredModsForNamespace(*selected_namespace, &filtered_mods);

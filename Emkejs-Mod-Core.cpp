@@ -7,6 +7,7 @@
 
 #include <core/Functions.h>
 #include <kenshi/Kenshi.h>
+#include <ois/OISKeyboard.h>
 
 #include <Windows.h>
 
@@ -34,7 +35,7 @@ struct HubTestState
 
 HubTestState g_hub_test_state = {
     1,
-    { static_cast<int32_t>('X'), 0u },
+    { static_cast<int32_t>(OIS::KC_X), 0u },
     8,
     1.5f
 };
@@ -209,7 +210,7 @@ EMC_Result __cdecl TestResetAction(void* user_data, char* err_buf, uint32_t err_
 
     HubTestState* state = static_cast<HubTestState*>(user_data);
     state->enabled = 1;
-    state->keybind.keycode = static_cast<int32_t>('X');
+    state->keybind.keycode = static_cast<int32_t>(OIS::KC_X);
     state->keybind.modifiers = 0u;
     state->int_value = 8;
     state->float_value = 1.5f;
