@@ -38,3 +38,7 @@ After deploy, expected files:
 
 ## Config
 `mod-config.json` is currently a minimal placeholder for future plugin settings.
+
+## Load Order Recommendation (Mod Hub Consumers)
+- If other mods use this Mod Hub integration, place `Emkejs-Mod-Core` before those consumer mods in load order.
+- Consumer mods have attach + one retry fallback logic, but loading this mod first gives the most reliable hub UI startup path.
