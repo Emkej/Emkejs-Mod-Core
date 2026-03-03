@@ -1,5 +1,8 @@
 #include "emc/mod_hub_api.h"
+#include "hub_commit.h"
+#include "hub_menu_bridge.h"
 #include "hub_registry.h"
+#include "hub_ui.h"
 
 #include <Debug.h>
 
@@ -213,4 +216,99 @@ extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_SetRegistryAttachEnabled
     }
 
     SetRegistryAttachOverride(is_enabled != 0);
+}
+
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Menu_SetHubEnabled(int32_t is_enabled)
+{
+    HubMenuBridge_SetHubEnabled(is_enabled != 0);
+}
+
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Menu_OpenOptionsWindow()
+{
+    HubMenuBridge_OnOptionsWindowInit();
+}
+
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Menu_SaveOptionsWindow()
+{
+    HubMenuBridge_OnOptionsWindowSave();
+}
+
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Menu_CloseOptionsWindow()
+{
+    HubMenuBridge_OnOptionsWindowClose();
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetPendingBool(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t value)
+{
+    return HubUi_SetPendingBool(namespace_id, mod_id, setting_id, value);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_BeginKeybindCapture(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id)
+{
+    return HubUi_BeginKeybindCapture(namespace_id, mod_id, setting_id);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_CancelKeybindCapture(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id)
+{
+    return HubUi_CancelKeybindCapture(namespace_id, mod_id, setting_id);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_ApplyCapturedKeycode(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t keycode)
+{
+    return HubUi_ApplyCapturedKeycode(namespace_id, mod_id, setting_id, keycode);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_ClearPendingKeybind(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id)
+{
+    return HubUi_ClearPendingKeybind(namespace_id, mod_id, setting_id);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_InvokeActionRow(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id)
+{
+    return HubUi_InvokeActionRow(namespace_id, mod_id, setting_id);
+}
+
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Commit_GetLastSummary(
+    uint32_t* out_attempted,
+    uint32_t* out_succeeded,
+    uint32_t* out_failed,
+    uint32_t* out_skipped,
+    int32_t* out_skip_reason)
+{
+    if (out_attempted == nullptr
+        || out_succeeded == nullptr
+        || out_failed == nullptr
+        || out_skipped == nullptr
+        || out_skip_reason == nullptr)
+    {
+        return;
+    }
+
+    HubCommitSummary summary;
+    HubCommit_GetLastSummary(&summary);
+    *out_attempted = summary.attempted;
+    *out_succeeded = summary.succeeded;
+    *out_failed = summary.failed;
+    *out_skipped = summary.skipped;
+    *out_skip_reason = summary.skip_reason;
 }
