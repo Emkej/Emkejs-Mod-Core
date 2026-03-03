@@ -88,6 +88,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Emkejs-Mod-Core.cpp" />
+    <ClCompile Include="src\mod_hub_client.cpp" />
     <ClCompile Include="src\hub_commit.cpp" />
     <ClCompile Include="src\hub_exports.cpp" />
     <ClCompile Include="src\hub_menu_bridge.cpp" />
@@ -97,6 +98,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\emc\mod_hub_api.h" />
+    <ClInclude Include="include\emc\mod_hub_client.h" />
     <ClInclude Include="src\hub_commit.h" />
     <ClInclude Include="src\hub_menu_bridge.h" />
     <ClInclude Include="src\hub_registry.h" />

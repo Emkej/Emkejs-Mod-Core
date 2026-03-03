@@ -1,5 +1,6 @@
 #include "wall_b_gone_hub_bridge.h"
 
+#include "emc/mod_hub_client.h"
 #include "emc/mod_hub_api.h"
 
 #include <Debug.h>
@@ -56,13 +57,6 @@ const int32_t kAttachFailureModeNone = 0;
 const int32_t kAttachFailureModeStartupOnly = 1;
 const int32_t kAttachFailureModeAlways = 2;
 
-enum HubAttachAttemptResult
-{
-    HUB_ATTACH_ATTEMPT_SUCCESS = 0,
-    HUB_ATTACH_ATTEMPT_ATTACH_FAILED = 1,
-    HUB_ATTACH_ATTEMPT_REGISTRATION_FAILED = 2
-};
-
 struct WallBGoneState
 {
     int32_t enabled;
@@ -95,12 +89,9 @@ WallBGoneState g_wall_b_gone_state = {
     0,
     { kDefaultDismantleHotkey, 0u }};
 
-bool g_use_hub_ui = false;
-bool g_hub_attach_retry_pending = false;
-bool g_hub_attach_retry_attempted = false;
+emc::ModHubClient g_mod_hub_client;
 bool g_logged_register_mod_fallback = false;
 int32_t g_attach_failure_mode = kAttachFailureModeNone;
-EMC_Result g_last_attempt_failure_result = EMC_OK;
 std::string g_config_path;
 HMODULE g_runtime_module = 0;
 FnWallBGoneGetRuntimeStateV1 g_fn_get_runtime_state = 0;
@@ -1076,43 +1067,6 @@ EMC_Result __cdecl ResetHotkeyDefault(void* user_data, char* err_buf, uint32_t e
     return EMC_OK;
 }
 
-bool TryAcquireHubApi(bool is_retry, const EMC_HubApiV1** out_api, EMC_Result* out_result)
-{
-    if (out_api == 0 || out_result == 0)
-    {
-        return false;
-    }
-
-    *out_api = 0;
-    *out_result = EMC_ERR_INTERNAL;
-
-    if (ShouldForceAttachFailure(is_retry))
-    {
-        *out_result = EMC_ERR_INTERNAL;
-        return false;
-    }
-
-    uint32_t api_size = 0u;
-    EMC_Result result = EMC_ModHub_GetApi(
-        EMC_HUB_API_VERSION_1,
-        EMC_HUB_API_V1_MIN_SIZE,
-        out_api,
-        &api_size);
-    *out_result = result;
-    if (result != EMC_OK)
-    {
-        return false;
-    }
-
-    if (*out_api == 0 || api_size < EMC_HUB_API_V1_MIN_SIZE)
-    {
-        *out_result = EMC_ERR_INTERNAL;
-        return false;
-    }
-
-    return true;
-}
-
 EMC_Result RegisterWallBGoneSettings(const EMC_HubApiV1* api)
 {
     if (api == 0
@@ -1193,35 +1147,36 @@ EMC_Result RegisterWallBGoneSettings(const EMC_HubApiV1* api)
     return EMC_OK;
 }
 
-HubAttachAttemptResult AttemptAttachAndRegister(const char* phase, bool is_retry)
+EMC_Result __cdecl RegisterWallBGoneSettingsForClient(const EMC_HubApiV1* api, void* user_data)
 {
-    const EMC_HubApiV1* api = 0;
-    EMC_Result attach_result = EMC_ERR_INTERNAL;
-    if (!TryAcquireHubApi(is_retry, &api, &attach_result))
+    (void)user_data;
+    return RegisterWallBGoneSettings(api);
+}
+
+bool __cdecl ShouldForceAttachFailureForClient(void* user_data, bool is_retry, EMC_Result* out_result)
+{
+    (void)user_data;
+    if (!ShouldForceAttachFailure(is_retry))
     {
-        g_last_attempt_failure_result = attach_result;
-        g_use_hub_ui = false;
-        LogAttachFailure(phase, attach_result, "get_api_failed");
-        return HUB_ATTACH_ATTEMPT_ATTACH_FAILED;
+        return false;
     }
 
-    EMC_Result register_result = RegisterWallBGoneSettings(api);
-    if (register_result != EMC_OK)
+    if (out_result != 0)
     {
-        g_last_attempt_failure_result = register_result;
-        g_use_hub_ui = false;
-        if (!g_logged_register_mod_fallback)
-        {
-            g_logged_register_mod_fallback = true;
-            LogFallback("register_mod_or_setting_failed", register_result);
-        }
-        return HUB_ATTACH_ATTEMPT_REGISTRATION_FAILED;
+        *out_result = EMC_ERR_INTERNAL;
     }
 
-    g_use_hub_ui = true;
-    g_last_attempt_failure_result = EMC_OK;
-    LogAttachSuccess(phase);
-    return HUB_ATTACH_ATTEMPT_SUCCESS;
+    return true;
+}
+
+void ConfigureHubClient()
+{
+    emc::ModHubClient::Config config;
+    config.register_fn = &RegisterWallBGoneSettingsForClient;
+    config.register_user_data = &g_wall_b_gone_state;
+    config.should_force_attach_failure_fn = &ShouldForceAttachFailureForClient;
+    config.attach_failure_user_data = 0;
+    g_mod_hub_client.SetConfig(config);
 }
 }
 
@@ -1229,55 +1184,85 @@ void WallBGoneHubBridge_OnPluginStart()
 {
     ResetValuesToDefaults();
     LoadStateFromConfig();
-
-    g_use_hub_ui = false;
-    g_hub_attach_retry_pending = false;
-    g_hub_attach_retry_attempted = false;
     g_logged_register_mod_fallback = false;
+    ConfigureHubClient();
 
-    HubAttachAttemptResult result = AttemptAttachAndRegister("startup", false);
-    if (result == HUB_ATTACH_ATTEMPT_ATTACH_FAILED)
+    const emc::ModHubClient::AttemptResult result = g_mod_hub_client.OnStartup();
+    if (result == emc::ModHubClient::ATTACH_SUCCESS)
     {
-        g_hub_attach_retry_pending = true;
+        LogAttachSuccess("startup");
+    }
+    else if (result == emc::ModHubClient::ATTACH_FAILED)
+    {
+        LogAttachFailure("startup", g_mod_hub_client.LastAttemptFailureResult(), "get_api_failed");
 
-        std::ostringstream line;
-        line << kPluginName
-             << " INFO: event=wall_b_gone_hub_retry_scheduled"
-             << " hook=OptionsWindowInit";
-        DebugLog(line.str().c_str());
+        if (g_mod_hub_client.IsAttachRetryPending())
+        {
+            std::ostringstream line;
+            line << kPluginName
+                 << " INFO: event=wall_b_gone_hub_retry_scheduled"
+                 << " hook=OptionsWindowInit";
+            DebugLog(line.str().c_str());
+        }
+    }
+    else if (result == emc::ModHubClient::REGISTRATION_FAILED)
+    {
+        if (!g_logged_register_mod_fallback)
+        {
+            g_logged_register_mod_fallback = true;
+            LogFallback("register_mod_or_setting_failed", g_mod_hub_client.LastAttemptFailureResult());
+        }
+    }
+    else
+    {
+        LogFallback("invalid_client_configuration", g_mod_hub_client.LastAttemptFailureResult());
     }
 }
 
 void WallBGoneHubBridge_OnOptionsWindowInit()
 {
-    if (!g_hub_attach_retry_pending || g_hub_attach_retry_attempted)
+    if (!g_mod_hub_client.IsAttachRetryPending() || g_mod_hub_client.HasAttachRetryAttempted())
     {
         return;
     }
 
-    g_hub_attach_retry_attempted = true;
-    g_hub_attach_retry_pending = false;
-
-    HubAttachAttemptResult result = AttemptAttachAndRegister("options_init_retry", true);
-    if (result == HUB_ATTACH_ATTEMPT_ATTACH_FAILED)
+    const emc::ModHubClient::AttemptResult result = g_mod_hub_client.OnOptionsWindowInit();
+    if (result == emc::ModHubClient::ATTACH_SUCCESS)
     {
-        LogFallback("attach_retry_failed", g_last_attempt_failure_result);
+        LogAttachSuccess("options_init_retry");
+    }
+    else if (result == emc::ModHubClient::ATTACH_FAILED)
+    {
+        LogAttachFailure("options_init_retry", g_mod_hub_client.LastAttemptFailureResult(), "get_api_failed");
+        LogFallback("attach_retry_failed", g_mod_hub_client.LastAttemptFailureResult());
+    }
+    else if (result == emc::ModHubClient::REGISTRATION_FAILED)
+    {
+        if (!g_logged_register_mod_fallback)
+        {
+            g_logged_register_mod_fallback = true;
+            LogFallback("register_mod_or_setting_failed", g_mod_hub_client.LastAttemptFailureResult());
+        }
+    }
+    else
+    {
+        LogFallback("invalid_client_configuration", g_mod_hub_client.LastAttemptFailureResult());
     }
 }
 
 bool WallBGoneHubBridge_UseHubUi()
 {
-    return g_use_hub_ui;
+    return g_mod_hub_client.UseHubUi();
 }
 
 bool WallBGoneHubBridge_IsAttachRetryPending()
 {
-    return g_hub_attach_retry_pending;
+    return g_mod_hub_client.IsAttachRetryPending();
 }
 
 bool WallBGoneHubBridge_HasAttachRetryAttempted()
 {
-    return g_hub_attach_retry_attempted;
+    return g_mod_hub_client.HasAttachRetryAttempted();
 }
 
 void WallBGoneHubBridge_Test_SetAttachFailureMode(int32_t mode)
@@ -1294,10 +1279,7 @@ void WallBGoneHubBridge_Test_SetAttachFailureMode(int32_t mode)
 void WallBGoneHubBridge_Test_ResetRuntimeState()
 {
     ResetValuesToDefaults();
-    g_use_hub_ui = false;
-    g_hub_attach_retry_pending = false;
-    g_hub_attach_retry_attempted = false;
+    g_mod_hub_client.Reset();
     g_logged_register_mod_fallback = false;
     g_attach_failure_mode = kAttachFailureModeNone;
-    g_last_attempt_failure_result = EMC_OK;
 }
