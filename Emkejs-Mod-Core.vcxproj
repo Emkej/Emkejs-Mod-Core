@@ -58,7 +58,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;EMC_MOD_HUB_BUILD_DLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <ForcedIncludeFiles>$(KENSHILIB_DIR)\Include\kenshi\util\OgreUnordered.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
     </ClCompile>
@@ -74,7 +74,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;EMC_MOD_HUB_BUILD_DLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <ForcedIncludeFiles>$(KENSHILIB_DIR)\Include\kenshi\util\OgreUnordered.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
     </ClCompile>
@@ -88,10 +88,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Emkejs-Mod-Core.cpp" />
+    <ClCompile Include="src\hub_exports.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\emc\mod_hub_api.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>
-
 
