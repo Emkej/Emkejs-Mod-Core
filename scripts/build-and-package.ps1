@@ -11,7 +11,11 @@ param(
     [string]$ConfigFileName = "RE_Kenshi.json",
     [string]$OutDir = "",
     [string]$ZipName = "",
-    [string]$Version = ""
+    [string]$Version = "",
+    [switch]$SkipSdkPackage,
+    [string]$SdkOutDir = "",
+    [string]$SdkZipName = "",
+    [string]$SdkVersion = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,4 +42,32 @@ foreach ($k in @('ModName','ProjectFileName','OutputSubdir','Configuration','Pla
 }
 
 & $SharedScript @Forward
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+if ($SkipSdkPackage) {
+    exit 0
+}
+
+$SdkScript = Join-Path $ScriptDir "package-sdk.ps1"
+if (-not (Test-Path $SdkScript)) {
+    Write-Host "ERROR: SDK package script not found: $SdkScript" -ForegroundColor Red
+    exit 1
+}
+
+$SdkParams = @{
+    RepoDir = $RepoDir
+}
+
+if ($PSBoundParameters.ContainsKey("ModName")) { $SdkParams.ModName = $ModName }
+if ($PSBoundParameters.ContainsKey("SdkOutDir")) { $SdkParams.OutDir = $SdkOutDir }
+elseif ($PSBoundParameters.ContainsKey("OutDir")) { $SdkParams.OutDir = $OutDir }
+
+if ($PSBoundParameters.ContainsKey("SdkZipName")) { $SdkParams.ZipName = $SdkZipName }
+
+if ($PSBoundParameters.ContainsKey("SdkVersion")) { $SdkParams.Version = $SdkVersion }
+elseif ($PSBoundParameters.ContainsKey("Version")) { $SdkParams.Version = $Version }
+
+& $SdkScript @SdkParams
 exit $LASTEXITCODE

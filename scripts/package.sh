@@ -24,7 +24,7 @@ for arg in "$@"; do
   fi
 
   case "$arg" in
-    -KenshiPath|-SourceModPath|-OutDir)
+    -KenshiPath|-SourceModPath|-OutDir|-SdkOutDir)
       ARGS+=("$arg")
       EXPECT_PATH=1
       ;;

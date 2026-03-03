@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR_UNIX="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR_UNIX/_env.sh"
-PS_SCRIPT="$(to_windows_path "$SCRIPT_DIR_UNIX/build-and-package.ps1")"
+PS_SCRIPT="$(to_windows_path "$SCRIPT_DIR_UNIX/package-sdk.ps1")"
 if [[ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]]; then
   PSH="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
 elif command -v powershell.exe >/dev/null 2>&1; then
@@ -24,7 +24,7 @@ for arg in "$@"; do
   fi
 
   case "$arg" in
-    -ProjectFileName|-OutputSubdir|-OutDir|-SdkOutDir)
+    -RepoDir|-OutDir)
       ARGS+=("$arg")
       EXPECT_PATH=1
       ;;
