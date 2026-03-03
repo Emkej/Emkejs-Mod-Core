@@ -18,10 +18,19 @@
     <ClCompile Include="Emkejs-Mod-Core.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\hub_commit.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\hub_exports.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\hub_menu_bridge.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\hub_registry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\hub_ui.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -29,7 +38,16 @@
     <ClInclude Include="include\emc\mod_hub_api.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\hub_commit.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\hub_menu_bridge.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\hub_registry.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\hub_ui.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

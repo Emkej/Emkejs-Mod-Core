@@ -1,5 +1,7 @@
 #include <Debug.h>
 
+#include "src/hub_menu_bridge.h"
+
 #include <core/Functions.h>
 #include <kenshi/Kenshi.h>
 
@@ -33,8 +35,17 @@ __declspec(dllexport) void startPlugin()
         return;
     }
 
+    const unsigned int platform = versionInfo.GetPlatform();
+    const std::string version = versionInfo.GetVersion();
+    if (!HubMenuBridge_InstallHooks(platform, version))
+    {
+        HubMenuBridge_SetHubEnabled(false);
+        ErrorLog("Emkejs-Mod-Core: failed to install Mod Hub hooks; hub path disabled");
+        return;
+    }
+
     std::stringstream info;
-    info << kPluginName << " INFO: base plugin initialized";
+    info << kPluginName << " INFO: base plugin initialized (hooks installed)";
     DebugLog(info.str().c_str());
 }
 

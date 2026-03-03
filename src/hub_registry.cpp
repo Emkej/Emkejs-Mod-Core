@@ -353,6 +353,39 @@ void AppendNewSetting(ModEntry* mod, SettingEntry* setting)
     mod->settings_in_order.push_back(setting);
     mod->settings_by_id[setting->setting_id] = setting;
 }
+
+void PopulateSettingView(const SettingEntry* setting, HubRegistrySettingView* out_view)
+{
+    std::memset(out_view, 0, sizeof(HubRegistrySettingView));
+
+    out_view->kind = static_cast<int32_t>(setting->kind);
+    out_view->setting_id = setting->setting_id.c_str();
+    out_view->label = setting->label.c_str();
+    out_view->description = setting->description.c_str();
+    out_view->user_data = setting->user_data;
+
+    out_view->get_bool = setting->get_bool;
+    out_view->set_bool = setting->set_bool;
+
+    out_view->get_keybind = setting->get_keybind;
+    out_view->set_keybind = setting->set_keybind;
+
+    out_view->get_int = setting->get_int;
+    out_view->set_int = setting->set_int;
+    out_view->int_min_value = setting->int_min_value;
+    out_view->int_max_value = setting->int_max_value;
+    out_view->int_step = setting->int_step;
+
+    out_view->get_float = setting->get_float;
+    out_view->set_float = setting->set_float;
+    out_view->float_min_value = setting->float_min_value;
+    out_view->float_max_value = setting->float_max_value;
+    out_view->float_step = setting->float_step;
+    out_view->float_display_decimals = setting->float_display_decimals;
+
+    out_view->on_action = setting->on_action;
+    out_view->action_flags = setting->action_flags;
+}
 }
 
 void HubRegistry_SetRegistrationLocked(bool is_locked)
@@ -799,4 +832,42 @@ EMC_Result __cdecl HubRegistry_RegisterActionRow(EMC_ModHandle mod, const EMC_Ac
     setting->action_flags = def->action_flags;
     AppendNewSetting(mod_entry, setting);
     return EMC_OK;
+}
+
+void HubRegistry_ForEachSettingInOrder(HubRegistryVisitSettingFn visitor, void* user_data)
+{
+    if (visitor == nullptr)
+    {
+        return;
+    }
+
+    for (size_t namespace_index = 0; namespace_index < g_namespaces_in_order.size(); ++namespace_index)
+    {
+        const NamespaceEntry* namespace_entry = g_namespaces_in_order[namespace_index];
+
+        HubRegistryNamespaceView namespace_view;
+        namespace_view.namespace_id = namespace_entry->namespace_id.c_str();
+        namespace_view.namespace_display_name = namespace_entry->namespace_display_name.c_str();
+
+        for (size_t mod_index = 0; mod_index < namespace_entry->mods_in_order.size(); ++mod_index)
+        {
+            const ModEntry* mod_entry = namespace_entry->mods_in_order[mod_index];
+
+            HubRegistryModView mod_view;
+            mod_view.namespace_id = namespace_entry->namespace_id.c_str();
+            mod_view.namespace_display_name = namespace_entry->namespace_display_name.c_str();
+            mod_view.mod_id = mod_entry->mod_id.c_str();
+            mod_view.mod_display_name = mod_entry->mod_display_name.c_str();
+            mod_view.mod_user_data = mod_entry->mod_user_data;
+            mod_view.handle = mod_entry->handle;
+
+            for (size_t setting_index = 0; setting_index < mod_entry->settings_in_order.size(); ++setting_index)
+            {
+                const SettingEntry* setting_entry = mod_entry->settings_in_order[setting_index];
+                HubRegistrySettingView setting_view;
+                PopulateSettingView(setting_entry, &setting_view);
+                visitor(&namespace_view, &mod_view, &setting_view, user_data);
+            }
+        }
+    }
 }
