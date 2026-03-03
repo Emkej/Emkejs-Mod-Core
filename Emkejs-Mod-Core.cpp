@@ -12,7 +12,7 @@ namespace
 {
 const char* kPluginName = "Emkejs-Mod-Core";
 
-bool IsSupportedVersion(const KenshiLib::BinaryVersion& versionInfo)
+bool IsSupportedVersion(KenshiLib::BinaryVersion& versionInfo)
 {
     const unsigned int platform = versionInfo.GetPlatform();
     const std::string version = versionInfo.GetVersion();
@@ -26,7 +26,7 @@ __declspec(dllexport) void startPlugin()
 {
     DebugLog("Emkejs-Mod-Core: startPlugin()");
 
-    const KenshiLib::BinaryVersion versionInfo = KenshiLib::GetKenshiVersion();
+    KenshiLib::BinaryVersion versionInfo = KenshiLib::GetKenshiVersion();
     if (!IsSupportedVersion(versionInfo))
     {
         ErrorLog("Emkejs-Mod-Core: unsupported Kenshi version/platform");
