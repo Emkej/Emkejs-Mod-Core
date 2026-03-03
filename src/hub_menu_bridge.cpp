@@ -10,6 +10,7 @@
 #include <kenshi/InputHandler.h>
 #include <kenshi/TitleScreen.h>
 #include <mygui/MyGUI_Button.h>
+#include <mygui/MyGUI_EditBox.h>
 #include <mygui/MyGUI_Gui.h>
 #include <mygui/MyGUI_TabControl.h>
 #include <mygui/MyGUI_TabItem.h>
@@ -79,6 +80,7 @@ const char* kNamespaceButtonSkin = "Kenshi_Button1";
 const char* kHeaderButtonSkin = "Kenshi_Button1";
 const char* kValueButtonSkin = "Kenshi_Button1";
 const char* kTextSkin = "Kenshi_TextboxStandardText";
+const char* kNoMatchesText = "No matches in this tab. Try checking other tabs?";
 
 bool g_hub_enabled = true;
 bool g_hooks_installed = false;
@@ -192,6 +194,33 @@ TWidget* CreateTrackedWidget(MyGUI::Widget* parent, const char* skin, const MyGU
         g_dynamic_widgets.push_back(widget);
     }
     return widget;
+}
+
+MyGUI::EditBox* CreateTrackedSearchBox(MyGUI::Widget* parent, const MyGUI::IntCoord& coord)
+{
+    if (parent == 0)
+    {
+        return 0;
+    }
+
+    const char* skins[] = { "EditBox", "EditBoxEmpty", "EditBoxLE", "EditBoxLEEmpty", "Kenshi_EditBox" };
+    for (size_t index = 0; index < sizeof(skins) / sizeof(skins[0]); ++index)
+    {
+        try
+        {
+            MyGUI::EditBox* widget = parent->createWidget<MyGUI::EditBox>(skins[index], coord, MyGUI::Align::Default);
+            if (widget != 0)
+            {
+                g_dynamic_widgets.push_back(widget);
+                return widget;
+            }
+        }
+        catch (...)
+        {
+        }
+    }
+
+    return 0;
 }
 
 void AttachHubAction(MyGUI::Widget* widget, const char* action, const std::string& namespace_id, const std::string& mod_id, const std::string& setting_id)
@@ -372,6 +401,34 @@ void EnsureSelectedNamespace(const std::vector<RenderNamespaceGroup>& namespaces
 
 void RebuildHubPanelWidgets();
 
+void OnHubSearchTextChanged(MyGUI::EditBox* sender)
+{
+    if (sender == 0)
+    {
+        return;
+    }
+
+    const std::string namespace_id = sender->getUserString("emc_ns");
+    if (namespace_id.empty())
+    {
+        return;
+    }
+
+    const std::string query = sender->getOnlyText().asUTF8();
+    const char* existing_query = "";
+    if (HubUi_GetNamespaceSearchQuery(namespace_id.c_str(), &existing_query)
+        && existing_query != 0
+        && query == existing_query)
+    {
+        return;
+    }
+
+    if (HubUi_SetNamespaceSearchQuery(namespace_id.c_str(), query.c_str()) == EMC_OK)
+    {
+        RebuildHubPanelWidgets();
+    }
+}
+
 void OnHubButtonClicked(MyGUI::Widget* sender)
 {
     if (sender == 0)
@@ -537,6 +594,36 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
     *out_next_y = next_y;
 }
 
+void BuildFilteredModsForNamespace(const RenderNamespaceGroup& namespace_group, std::vector<RenderModGroup>* out_mods)
+{
+    if (out_mods == 0)
+    {
+        return;
+    }
+
+    out_mods->clear();
+    for (size_t mod_index = 0; mod_index < namespace_group.mods.size(); ++mod_index)
+    {
+        const RenderModGroup& mod_group = namespace_group.mods[mod_index];
+        RenderModGroup filtered_mod = mod_group;
+        filtered_mod.rows.clear();
+
+        for (size_t row_index = 0; row_index < mod_group.rows.size(); ++row_index)
+        {
+            const HubUiRowView& row = mod_group.rows[row_index];
+            if (HubUi_DoesRowMatchNamespaceSearch(&row))
+            {
+                filtered_mod.rows.push_back(row);
+            }
+        }
+
+        if (!filtered_mod.rows.empty())
+        {
+            out_mods->push_back(filtered_mod);
+        }
+    }
+}
+
 void RebuildHubPanelWidgets()
 {
     if (g_active_hub_panel_widget == 0)
@@ -606,9 +693,49 @@ void RebuildHubPanelWidgets()
         selected_namespace = &namespaces[0];
     }
 
-    for (size_t mod_index = 0; mod_index < selected_namespace->mods.size(); ++mod_index)
+    const char* search_query = "";
+    HubUi_GetNamespaceSearchQuery(selected_namespace->namespace_id.c_str(), &search_query);
+
+    MyGUI::TextBox* search_label = CreateTrackedWidget<MyGUI::TextBox>(
+        g_active_hub_panel_widget,
+        kTextSkin,
+        MyGUI::IntCoord(24, y + 6, 70, 24));
+    if (search_label != 0)
     {
-        const RenderModGroup& mod_group = selected_namespace->mods[mod_index];
+        search_label->setCaption("Search:");
+    }
+
+    MyGUI::EditBox* search_box = CreateTrackedSearchBox(
+        g_active_hub_panel_widget,
+        MyGUI::IntCoord(96, y, panel_width - 120, 30));
+    if (search_box != 0)
+    {
+        search_box->setEditMultiLine(false);
+        search_box->setOnlyText(search_query != 0 ? search_query : "");
+        search_box->setUserString("emc_ns", selected_namespace->namespace_id);
+        search_box->eventEditTextChange += MyGUI::newDelegate(&OnHubSearchTextChanged);
+    }
+
+    y += 42;
+
+    std::vector<RenderModGroup> filtered_mods;
+    BuildFilteredModsForNamespace(*selected_namespace, &filtered_mods);
+    if (filtered_mods.empty())
+    {
+        MyGUI::TextBox* no_matches_text = CreateTrackedWidget<MyGUI::TextBox>(
+            g_active_hub_panel_widget,
+            kTextSkin,
+            MyGUI::IntCoord(24, y, panel_width - 48, 28));
+        if (no_matches_text != 0)
+        {
+            no_matches_text->setCaption(kNoMatchesText);
+        }
+        return;
+    }
+
+    for (size_t mod_index = 0; mod_index < filtered_mods.size(); ++mod_index)
+    {
+        const RenderModGroup& mod_group = filtered_mods[mod_index];
 
         MyGUI::Button* mod_header = CreateTrackedWidget<MyGUI::Button>(
             g_active_hub_panel_widget,

@@ -92,6 +92,68 @@ bool KeybindEquals(EMC_KeybindValueV1 lhs, EMC_KeybindValueV1 rhs)
     return lhs.keycode == rhs.keycode && lhs.modifiers == rhs.modifiers;
 }
 
+unsigned char FoldAsciiForSearch(unsigned char value)
+{
+    if (value >= 'A' && value <= 'Z')
+    {
+        return static_cast<unsigned char>(value - 'A' + 'a');
+    }
+
+    return value;
+}
+
+bool BytesEqualForSearch(unsigned char lhs, unsigned char rhs)
+{
+    if (lhs < 0x80u && rhs < 0x80u)
+    {
+        return FoldAsciiForSearch(lhs) == FoldAsciiForSearch(rhs);
+    }
+
+    return lhs == rhs;
+}
+
+bool ContainsSearchMatch(const char* haystack, const std::string& needle)
+{
+    if (needle.empty())
+    {
+        return true;
+    }
+
+    if (haystack == nullptr || haystack[0] == '\0')
+    {
+        return false;
+    }
+
+    const size_t haystack_len = std::strlen(haystack);
+    const size_t needle_len = needle.size();
+    if (needle_len > haystack_len)
+    {
+        return false;
+    }
+
+    for (size_t start = 0; start <= haystack_len - needle_len; ++start)
+    {
+        bool matched = true;
+        for (size_t offset = 0; offset < needle_len; ++offset)
+        {
+            const unsigned char hay_byte = static_cast<unsigned char>(haystack[start + offset]);
+            const unsigned char needle_byte = static_cast<unsigned char>(needle[offset]);
+            if (!BytesEqualForSearch(hay_byte, needle_byte))
+            {
+                matched = false;
+                break;
+            }
+        }
+
+        if (matched)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void LogUiGetFailure(const HubUiSettingRow* row, EMC_Result result, const char* message)
 {
     std::ostringstream line;
@@ -296,6 +358,25 @@ HubUiModSection* FindModSection(const char* namespace_id, const char* mod_id)
         }
 
         return nullptr;
+    }
+
+    return nullptr;
+}
+
+HubUiNamespaceTab* FindNamespaceTab(const char* namespace_id)
+{
+    if (namespace_id == nullptr)
+    {
+        return nullptr;
+    }
+
+    for (size_t tab_index = 0; tab_index < g_tabs_in_order.size(); ++tab_index)
+    {
+        HubUiNamespaceTab* tab = g_tabs_in_order[tab_index];
+        if (tab->namespace_id == namespace_id)
+        {
+            return tab;
+        }
     }
 
     return nullptr;
@@ -575,6 +656,88 @@ bool HubUi_GetModCollapsed(const char* namespace_id, const char* mod_id, bool* o
     }
 
     *out_is_collapsed = mod->collapsed;
+    return true;
+}
+
+EMC_Result HubUi_SetNamespaceSearchQuery(const char* namespace_id, const char* search_query)
+{
+    HubUiNamespaceTab* tab = FindNamespaceTab(namespace_id);
+    if (tab == nullptr)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    tab->search_query = search_query != nullptr ? search_query : "";
+    return EMC_OK;
+}
+
+bool HubUi_GetNamespaceSearchQuery(const char* namespace_id, const char** out_search_query)
+{
+    if (out_search_query == nullptr)
+    {
+        return false;
+    }
+
+    *out_search_query = "";
+
+    HubUiNamespaceTab* tab = FindNamespaceTab(namespace_id);
+    if (tab == nullptr)
+    {
+        return false;
+    }
+
+    *out_search_query = tab->search_query.c_str();
+    return true;
+}
+
+bool HubUi_DoesRowMatchNamespaceSearch(const HubUiRowView* row)
+{
+    if (row == nullptr || row->namespace_id == nullptr)
+    {
+        return false;
+    }
+
+    HubUiNamespaceTab* tab = FindNamespaceTab(row->namespace_id);
+    if (tab == nullptr)
+    {
+        return false;
+    }
+
+    if (tab->search_query.empty())
+    {
+        return true;
+    }
+
+    return ContainsSearchMatch(row->mod_display_name, tab->search_query)
+        || ContainsSearchMatch(row->label, tab->search_query)
+        || ContainsSearchMatch(row->description, tab->search_query);
+}
+
+bool HubUi_DoesSettingMatchNamespaceSearch(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    bool* out_matches)
+{
+    if (out_matches == nullptr)
+    {
+        return false;
+    }
+
+    *out_matches = false;
+
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr)
+    {
+        return false;
+    }
+
+    HubUiRowView view;
+    view.namespace_id = row->namespace_id.c_str();
+    view.mod_display_name = row->mod_display_name.c_str();
+    view.label = row->label.c_str();
+    view.description = row->description.c_str();
+    *out_matches = HubUi_DoesRowMatchNamespaceSearch(&view);
     return true;
 }
 

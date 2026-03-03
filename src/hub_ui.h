@@ -46,6 +46,14 @@ bool HubUi_IsAnyKeybindCaptureActive();
 
 EMC_Result HubUi_SetModCollapsed(const char* namespace_id, const char* mod_id, bool is_collapsed);
 bool HubUi_GetModCollapsed(const char* namespace_id, const char* mod_id, bool* out_is_collapsed);
+EMC_Result HubUi_SetNamespaceSearchQuery(const char* namespace_id, const char* search_query);
+bool HubUi_GetNamespaceSearchQuery(const char* namespace_id, const char** out_search_query);
+bool HubUi_DoesRowMatchNamespaceSearch(const HubUiRowView* row);
+bool HubUi_DoesSettingMatchNamespaceSearch(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    bool* out_matches);
 
 EMC_Result HubUi_SetPendingBool(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t value);
 EMC_Result HubUi_BeginKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id);
