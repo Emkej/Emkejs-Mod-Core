@@ -288,6 +288,64 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_InvokeActionRow
     return HubUi_InvokeActionRow(namespace_id, mod_id, setting_id);
 }
 
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetNamespaceSearchQuery(
+    const char* namespace_id,
+    const char* search_query)
+{
+    return HubUi_SetNamespaceSearchQuery(namespace_id, search_query);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetModCollapsed(
+    const char* namespace_id,
+    const char* mod_id,
+    int32_t is_collapsed)
+{
+    return HubUi_SetModCollapsed(namespace_id, mod_id, is_collapsed != 0);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetModCollapsed(
+    const char* namespace_id,
+    const char* mod_id,
+    int32_t* out_is_collapsed)
+{
+    if (out_is_collapsed == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    bool collapsed = false;
+    if (!HubUi_GetModCollapsed(namespace_id, mod_id, &collapsed))
+    {
+        *out_is_collapsed = 0;
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    *out_is_collapsed = collapsed ? 1 : 0;
+    return EMC_OK;
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_DoesSettingMatchNamespaceSearch(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t* out_matches)
+{
+    if (out_matches == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    bool matches = false;
+    if (!HubUi_DoesSettingMatchNamespaceSearch(namespace_id, mod_id, setting_id, &matches))
+    {
+        *out_matches = 0;
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    *out_matches = matches ? 1 : 0;
+    return EMC_OK;
+}
+
 extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Commit_GetLastSummary(
     uint32_t* out_attempted,
     uint32_t* out_succeeded,
