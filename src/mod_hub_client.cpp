@@ -10,14 +10,111 @@ EMC_Result DefaultGetApi(
 {
     return EMC_ModHub_GetApi(requested_version, caller_api_size, out_api, out_api_size);
 }
+
+EMC_Result RegisterSettingsRow(
+    const EMC_HubApiV1* api,
+    EMC_ModHandle mod_handle,
+    const emc::ModHubClientSettingRowV1* row)
+{
+    if (api == 0 || row == 0 || row->def == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    switch (row->kind)
+    {
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL:
+        if (api->register_bool_setting == 0)
+        {
+            return EMC_ERR_INTERNAL;
+        }
+        return api->register_bool_setting(mod_handle, static_cast<const EMC_BoolSettingDefV1*>(row->def));
+
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND:
+        if (api->register_keybind_setting == 0)
+        {
+            return EMC_ERR_INTERNAL;
+        }
+        return api->register_keybind_setting(mod_handle, static_cast<const EMC_KeybindSettingDefV1*>(row->def));
+
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_INT:
+        if (api->register_int_setting == 0)
+        {
+            return EMC_ERR_INTERNAL;
+        }
+        return api->register_int_setting(mod_handle, static_cast<const EMC_IntSettingDefV1*>(row->def));
+
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT:
+        if (api->register_float_setting == 0)
+        {
+            return EMC_ERR_INTERNAL;
+        }
+        return api->register_float_setting(mod_handle, static_cast<const EMC_FloatSettingDefV1*>(row->def));
+
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION:
+        if (api->register_action_row == 0)
+        {
+            return EMC_ERR_INTERNAL;
+        }
+        return api->register_action_row(mod_handle, static_cast<const EMC_ActionRowDefV1*>(row->def));
+
+    default:
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+}
 }
 
 namespace emc
 {
+EMC_Result RegisterSettingsTableV1(
+    const EMC_HubApiV1* api,
+    const ModHubClientTableRegistrationV1* table_registration)
+{
+    if (api == 0 || table_registration == 0 || table_registration->mod_desc == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (api->register_mod == 0)
+    {
+        return EMC_ERR_INTERNAL;
+    }
+
+    if (table_registration->row_count > 0u && table_registration->rows == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EMC_ModHandle mod_handle = 0;
+    EMC_Result result = api->register_mod(table_registration->mod_desc, &mod_handle);
+    if (result != EMC_OK)
+    {
+        return result;
+    }
+
+    if (mod_handle == 0)
+    {
+        return EMC_ERR_INTERNAL;
+    }
+
+    for (uint32_t row_index = 0u; row_index < table_registration->row_count; ++row_index)
+    {
+        const ModHubClientSettingRowV1* row = &table_registration->rows[row_index];
+        result = RegisterSettingsRow(api, mod_handle, row);
+        if (result != EMC_OK)
+        {
+            return result;
+        }
+    }
+
+    return EMC_OK;
+}
+
 ModHubClient::Config::Config()
     : get_api_fn(0)
     , register_fn(0)
     , register_user_data(0)
+    , table_registration(0)
     , should_force_attach_failure_fn(0)
     , attach_failure_user_data(0)
 {
@@ -99,7 +196,7 @@ EMC_Result ModHubClient::LastAttemptFailureResult() const
 
 ModHubClient::AttemptResult ModHubClient::AttemptAttachAndRegister(bool is_retry)
 {
-    if (config_.register_fn == 0)
+    if (config_.register_fn == 0 && config_.table_registration == 0)
     {
         use_hub_ui_ = false;
         last_attempt_failure_result_ = EMC_ERR_INVALID_ARGUMENT;
@@ -139,7 +236,15 @@ ModHubClient::AttemptResult ModHubClient::AttemptAttachAndRegister(bool is_retry
         return ATTACH_FAILED;
     }
 
-    EMC_Result register_result = config_.register_fn(api, config_.register_user_data);
+    EMC_Result register_result = EMC_ERR_INVALID_ARGUMENT;
+    if (config_.table_registration != 0)
+    {
+        register_result = RegisterSettingsTableV1(api, config_.table_registration);
+    }
+    else
+    {
+        register_result = config_.register_fn(api, config_.register_user_data);
+    }
     if (register_result != EMC_OK)
     {
         use_hub_ui_ = false;

@@ -1067,90 +1067,60 @@ EMC_Result __cdecl ResetHotkeyDefault(void* user_data, char* err_buf, uint32_t e
     return EMC_OK;
 }
 
-EMC_Result RegisterWallBGoneSettings(const EMC_HubApiV1* api)
+const emc::ModHubClientTableRegistrationV1* GetWallBGoneTableRegistration()
 {
-    if (api == 0
-        || api->register_mod == 0
-        || api->register_bool_setting == 0
-        || api->register_keybind_setting == 0
-        || api->register_action_row == 0)
-    {
-        return EMC_ERR_INTERNAL;
-    }
+    static const EMC_ModDescriptorV1 kModDescriptor = {
+        kNamespaceId,
+        kNamespaceDisplayName,
+        kModId,
+        kModDisplayName,
+        &g_wall_b_gone_state};
 
-    EMC_ModDescriptorV1 mod_desc;
-    mod_desc.namespace_id = kNamespaceId;
-    mod_desc.namespace_display_name = kNamespaceDisplayName;
-    mod_desc.mod_id = kModId;
-    mod_desc.mod_display_name = kModDisplayName;
-    mod_desc.mod_user_data = &g_wall_b_gone_state;
+    static const EMC_BoolSettingDefV1 kEnabledSettingDef = {
+        kSettingEnabledId,
+        kSettingEnabledLabel,
+        kSettingEnabledDescription,
+        &g_wall_b_gone_state,
+        &GetEnabled,
+        &SetEnabled};
 
-    EMC_ModHandle mod_handle = 0;
-    EMC_Result result = api->register_mod(&mod_desc, &mod_handle);
-    if (result != EMC_OK || mod_handle == 0)
-    {
-        return result != EMC_OK ? result : EMC_ERR_INTERNAL;
-    }
+    static const EMC_BoolSettingDefV1 kSleepingBagSettingDef = {
+        kSettingSleepingBagEnabledId,
+        kSettingSleepingBagEnabledLabel,
+        kSettingSleepingBagEnabledDescription,
+        &g_wall_b_gone_state,
+        &GetSleepingBagEnabled,
+        &SetSleepingBagEnabled};
 
-    EMC_BoolSettingDefV1 enabled_def;
-    enabled_def.setting_id = kSettingEnabledId;
-    enabled_def.label = kSettingEnabledLabel;
-    enabled_def.description = kSettingEnabledDescription;
-    enabled_def.user_data = &g_wall_b_gone_state;
-    enabled_def.get_value = &GetEnabled;
-    enabled_def.set_value = &SetEnabled;
-    result = api->register_bool_setting(mod_handle, &enabled_def);
-    if (result != EMC_OK)
-    {
-        return result;
-    }
+    static const EMC_KeybindSettingDefV1 kHotkeySettingDef = {
+        kSettingDismantleHotkeyId,
+        kSettingDismantleHotkeyLabel,
+        kSettingDismantleHotkeyDescription,
+        &g_wall_b_gone_state,
+        &GetDismantleHotkey,
+        &SetDismantleHotkey};
 
-    EMC_BoolSettingDefV1 sleeping_bag_enabled_def;
-    sleeping_bag_enabled_def.setting_id = kSettingSleepingBagEnabledId;
-    sleeping_bag_enabled_def.label = kSettingSleepingBagEnabledLabel;
-    sleeping_bag_enabled_def.description = kSettingSleepingBagEnabledDescription;
-    sleeping_bag_enabled_def.user_data = &g_wall_b_gone_state;
-    sleeping_bag_enabled_def.get_value = &GetSleepingBagEnabled;
-    sleeping_bag_enabled_def.set_value = &SetSleepingBagEnabled;
-    result = api->register_bool_setting(mod_handle, &sleeping_bag_enabled_def);
-    if (result != EMC_OK)
-    {
-        return result;
-    }
+    static const EMC_ActionRowDefV1 kResetHotkeyActionDef = {
+        kActionResetHotkeyId,
+        kActionResetHotkeyLabel,
+        kActionResetHotkeyDescription,
+        &g_wall_b_gone_state,
+        EMC_ACTION_FORCE_REFRESH,
+        &ResetHotkeyDefault};
 
-    EMC_KeybindSettingDefV1 keybind_def;
-    keybind_def.setting_id = kSettingDismantleHotkeyId;
-    keybind_def.label = kSettingDismantleHotkeyLabel;
-    keybind_def.description = kSettingDismantleHotkeyDescription;
-    keybind_def.user_data = &g_wall_b_gone_state;
-    keybind_def.get_value = &GetDismantleHotkey;
-    keybind_def.set_value = &SetDismantleHotkey;
-    result = api->register_keybind_setting(mod_handle, &keybind_def);
-    if (result != EMC_OK)
-    {
-        return result;
-    }
+    static const emc::ModHubClientSettingRowV1 kSettingRows[] = {
+        { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kEnabledSettingDef },
+        { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kSleepingBagSettingDef },
+        { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, &kHotkeySettingDef },
+        { emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION, &kResetHotkeyActionDef }
+    };
 
-    EMC_ActionRowDefV1 action_def;
-    action_def.setting_id = kActionResetHotkeyId;
-    action_def.label = kActionResetHotkeyLabel;
-    action_def.description = kActionResetHotkeyDescription;
-    action_def.user_data = &g_wall_b_gone_state;
-    action_def.action_flags = EMC_ACTION_FORCE_REFRESH;
-    action_def.on_action = &ResetHotkeyDefault;
-    result = api->register_action_row(mod_handle, &action_def);
-    if (result != EMC_OK)
-    {
-        return result;
-    }
+    static const emc::ModHubClientTableRegistrationV1 kTableRegistration = {
+        &kModDescriptor,
+        kSettingRows,
+        (uint32_t)(sizeof(kSettingRows) / sizeof(kSettingRows[0]))};
 
-    return EMC_OK;
-}
-
-EMC_Result __cdecl RegisterWallBGoneSettingsForClient(const EMC_HubApiV1* api, void* user_data)
-{
-    (void)user_data;
-    return RegisterWallBGoneSettings(api);
+    return &kTableRegistration;
 }
 
 bool __cdecl ShouldForceAttachFailureForClient(void* user_data, bool is_retry, EMC_Result* out_result)
@@ -1172,8 +1142,7 @@ bool __cdecl ShouldForceAttachFailureForClient(void* user_data, bool is_retry, E
 void ConfigureHubClient()
 {
     emc::ModHubClient::Config config;
-    config.register_fn = &RegisterWallBGoneSettingsForClient;
-    config.register_user_data = &g_wall_b_gone_state;
+    config.table_registration = GetWallBGoneTableRegistration();
     config.should_force_attach_failure_fn = &ShouldForceAttachFailureForClient;
     config.attach_failure_user_data = 0;
     g_mod_hub_client.SetConfig(config);

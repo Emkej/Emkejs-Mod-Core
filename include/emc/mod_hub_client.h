@@ -18,6 +18,32 @@ typedef bool(__cdecl* ModHubClientForceAttachFailureFn)(
     bool is_retry,
     EMC_Result* out_result);
 
+enum ModHubClientSettingKind
+{
+    MOD_HUB_CLIENT_SETTING_KIND_BOOL = 0,
+    MOD_HUB_CLIENT_SETTING_KIND_KEYBIND = 1,
+    MOD_HUB_CLIENT_SETTING_KIND_INT = 2,
+    MOD_HUB_CLIENT_SETTING_KIND_FLOAT = 3,
+    MOD_HUB_CLIENT_SETTING_KIND_ACTION = 4
+};
+
+struct ModHubClientSettingRowV1
+{
+    int32_t kind;
+    const void* def;
+};
+
+struct ModHubClientTableRegistrationV1
+{
+    const EMC_ModDescriptorV1* mod_desc;
+    const ModHubClientSettingRowV1* rows;
+    uint32_t row_count;
+};
+
+EMC_Result RegisterSettingsTableV1(
+    const EMC_HubApiV1* api,
+    const ModHubClientTableRegistrationV1* table_registration);
+
 class ModHubClient
 {
 public:
@@ -26,6 +52,7 @@ public:
         ModHubClientGetApiFn get_api_fn;
         ModHubClientRegisterFn register_fn;
         void* register_user_data;
+        const ModHubClientTableRegistrationV1* table_registration;
         ModHubClientForceAttachFailureFn should_force_attach_failure_fn;
         void* attach_failure_user_data;
 
