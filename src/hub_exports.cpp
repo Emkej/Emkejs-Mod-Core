@@ -247,6 +247,42 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetPendingBool(
     return HubUi_SetPendingBool(namespace_id, mod_id, setting_id, value);
 }
 
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_AdjustPendingIntStep(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t step_delta)
+{
+    return HubUi_AdjustPendingIntStep(namespace_id, mod_id, setting_id, step_delta);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetPendingIntFromText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    const char* text)
+{
+    return HubUi_SetPendingIntFromText(namespace_id, mod_id, setting_id, text);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_AdjustPendingFloatStep(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t step_delta)
+{
+    return HubUi_AdjustPendingFloatStep(namespace_id, mod_id, setting_id, step_delta);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetPendingFloatFromText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    const char* text)
+{
+    return HubUi_SetPendingFloatFromText(namespace_id, mod_id, setting_id, text);
+}
+
 extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_BeginKeybindCapture(
     const char* namespace_id,
     const char* mod_id,

@@ -236,6 +236,18 @@ void AttachHubAction(MyGUI::Widget* widget, const char* action, const std::strin
     widget->setUserString("emc_setting", setting_id);
 }
 
+void AttachHubIdentity(MyGUI::Widget* widget, const std::string& namespace_id, const std::string& mod_id, const std::string& setting_id)
+{
+    if (widget == 0)
+    {
+        return;
+    }
+
+    widget->setUserString("emc_ns", namespace_id);
+    widget->setUserString("emc_mod", mod_id);
+    widget->setUserString("emc_setting", setting_id);
+}
+
 void FindOrAddRenderNamespace(std::vector<RenderNamespaceGroup>* namespaces, const HubUiRowView& row, RenderNamespaceGroup** out_namespace)
 {
     if (namespaces == 0 || out_namespace == 0)
@@ -429,6 +441,68 @@ void OnHubSearchTextChanged(MyGUI::EditBox* sender)
     }
 }
 
+void OnHubIntTextChanged(MyGUI::EditBox* sender)
+{
+    if (sender == 0)
+    {
+        return;
+    }
+
+    const std::string namespace_id = sender->getUserString("emc_ns");
+    const std::string mod_id = sender->getUserString("emc_mod");
+    const std::string setting_id = sender->getUserString("emc_setting");
+    if (namespace_id.empty() || mod_id.empty() || setting_id.empty())
+    {
+        return;
+    }
+
+    const std::string text = sender->getOnlyText().asUTF8();
+
+    HubUiRowView row;
+    if (TryFindRowViewById(namespace_id, mod_id, setting_id, &row)
+        && row.pending_int_text != 0
+        && text == row.pending_int_text)
+    {
+        return;
+    }
+
+    if (HubUi_SetPendingIntFromText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), text.c_str()) == EMC_OK)
+    {
+        RebuildHubPanelWidgets();
+    }
+}
+
+void OnHubFloatTextChanged(MyGUI::EditBox* sender)
+{
+    if (sender == 0)
+    {
+        return;
+    }
+
+    const std::string namespace_id = sender->getUserString("emc_ns");
+    const std::string mod_id = sender->getUserString("emc_mod");
+    const std::string setting_id = sender->getUserString("emc_setting");
+    if (namespace_id.empty() || mod_id.empty() || setting_id.empty())
+    {
+        return;
+    }
+
+    const std::string text = sender->getOnlyText().asUTF8();
+
+    HubUiRowView row;
+    if (TryFindRowViewById(namespace_id, mod_id, setting_id, &row)
+        && row.pending_float_text != 0
+        && text == row.pending_float_text)
+    {
+        return;
+    }
+
+    if (HubUi_SetPendingFloatFromText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), text.c_str()) == EMC_OK)
+    {
+        RebuildHubPanelWidgets();
+    }
+}
+
 void OnHubButtonClicked(MyGUI::Widget* sender)
 {
     if (sender == 0)
@@ -481,6 +555,34 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     if (action == "keybind_clear")
     {
         HubUi_ClearPendingKeybind(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "int_step_dec")
+    {
+        HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), -1);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "int_step_inc")
+    {
+        HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), 1);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "float_step_dec")
+    {
+        HubUi_AdjustPendingFloatStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), -1);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "float_step_inc")
+    {
+        HubUi_AdjustPendingFloatStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), 1);
         RebuildHubPanelWidgets();
         return;
     }
@@ -568,6 +670,76 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             clear_button->setCaption("Clear");
             clear_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(clear_button, "keybind_clear", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+        }
+    }
+    else if (row.kind == HUB_UI_ROW_KIND_INT)
+    {
+        MyGUI::Button* minus_button = CreateTrackedWidget<MyGUI::Button>(
+            parent,
+            kValueButtonSkin,
+            MyGUI::IntCoord(value_x - 70, y, 40, 30));
+        if (minus_button != 0)
+        {
+            minus_button->setCaption("-");
+            minus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(minus_button, "int_step_dec", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+        }
+
+        MyGUI::EditBox* value_box = CreateTrackedSearchBox(
+            parent,
+            MyGUI::IntCoord(value_x - 22, y, 120, 30));
+        if (value_box != 0)
+        {
+            value_box->setEditMultiLine(false);
+            value_box->setOnlyText(row.pending_int_text != 0 ? row.pending_int_text : "");
+            AttachHubIdentity(value_box, row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            value_box->eventEditTextChange += MyGUI::newDelegate(&OnHubIntTextChanged);
+        }
+
+        MyGUI::Button* plus_button = CreateTrackedWidget<MyGUI::Button>(
+            parent,
+            kValueButtonSkin,
+            MyGUI::IntCoord(value_x + 106, y, 40, 30));
+        if (plus_button != 0)
+        {
+            plus_button->setCaption("+");
+            plus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(plus_button, "int_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+        }
+    }
+    else if (row.kind == HUB_UI_ROW_KIND_FLOAT)
+    {
+        MyGUI::Button* minus_button = CreateTrackedWidget<MyGUI::Button>(
+            parent,
+            kValueButtonSkin,
+            MyGUI::IntCoord(value_x - 70, y, 40, 30));
+        if (minus_button != 0)
+        {
+            minus_button->setCaption("-");
+            minus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(minus_button, "float_step_dec", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+        }
+
+        MyGUI::EditBox* value_box = CreateTrackedSearchBox(
+            parent,
+            MyGUI::IntCoord(value_x - 22, y, 120, 30));
+        if (value_box != 0)
+        {
+            value_box->setEditMultiLine(false);
+            value_box->setOnlyText(row.pending_float_text != 0 ? row.pending_float_text : "");
+            AttachHubIdentity(value_box, row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            value_box->eventEditTextChange += MyGUI::newDelegate(&OnHubFloatTextChanged);
+        }
+
+        MyGUI::Button* plus_button = CreateTrackedWidget<MyGUI::Button>(
+            parent,
+            kValueButtonSkin,
+            MyGUI::IntCoord(value_x + 106, y, 40, 30));
+        if (plus_button != 0)
+        {
+            plus_button->setCaption("+");
+            plus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(plus_button, "float_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_ACTION)

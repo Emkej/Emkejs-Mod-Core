@@ -7,7 +7,9 @@ enum HubUiRowKind
 {
     HUB_UI_ROW_KIND_BOOL = 0,
     HUB_UI_ROW_KIND_KEYBIND = 1,
-    HUB_UI_ROW_KIND_ACTION = 2
+    HUB_UI_ROW_KIND_ACTION = 2,
+    HUB_UI_ROW_KIND_INT = 3,
+    HUB_UI_ROW_KIND_FLOAT = 4
 };
 
 struct HubUiRowView
@@ -33,6 +35,25 @@ struct HubUiRowView
     EMC_GetKeybindCallback get_keybind;
     EMC_SetKeybindCallback set_keybind;
     EMC_KeybindValueV1 pending_keybind_value;
+
+    EMC_GetIntCallback get_int;
+    EMC_SetIntCallback set_int;
+    int32_t int_min_value;
+    int32_t int_max_value;
+    int32_t int_step;
+    int32_t pending_int_value;
+    const char* pending_int_text;
+    bool int_text_parse_error;
+
+    EMC_GetFloatCallback get_float;
+    EMC_SetFloatCallback set_float;
+    float float_min_value;
+    float float_max_value;
+    float float_step;
+    uint32_t float_display_decimals;
+    float pending_float_value;
+    const char* pending_float_text;
+    bool float_text_parse_error;
 };
 
 void HubUi_SetOptionsWindowOpen(bool is_open);
@@ -56,6 +77,10 @@ bool HubUi_DoesSettingMatchNamespaceSearch(
     bool* out_matches);
 
 EMC_Result HubUi_SetPendingBool(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t value);
+EMC_Result HubUi_AdjustPendingIntStep(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t step_delta);
+EMC_Result HubUi_SetPendingIntFromText(const char* namespace_id, const char* mod_id, const char* setting_id, const char* text);
+EMC_Result HubUi_AdjustPendingFloatStep(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t step_delta);
+EMC_Result HubUi_SetPendingFloatFromText(const char* namespace_id, const char* mod_id, const char* setting_id, const char* text);
 EMC_Result HubUi_BeginKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_CancelKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_ApplyCapturedKeycode(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t keycode);
@@ -69,5 +94,7 @@ bool HubUi_GetRowViewByIndex(uint32_t index, HubUiRowView* out_view);
 void HubUi_OnCommitSetFailure(void* token, const char* message);
 void HubUi_OnCommitSyncBool(void* token, int32_t canonical_value);
 void HubUi_OnCommitSyncKeybind(void* token, EMC_KeybindValueV1 canonical_value);
+void HubUi_OnCommitSyncInt(void* token, int32_t canonical_value);
+void HubUi_OnCommitSyncFloat(void* token, float canonical_value);
 
 #endif

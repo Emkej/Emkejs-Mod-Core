@@ -86,6 +86,15 @@ bool IsBoolValueValid(int32_t value)
 {
     return value == 0 || value == 1;
 }
+
+bool FloatBitsEqual(float lhs, float rhs)
+{
+    uint32_t lhs_bits = 0;
+    uint32_t rhs_bits = 0;
+    std::memcpy(&lhs_bits, &lhs, sizeof(lhs_bits));
+    std::memcpy(&rhs_bits, &rhs, sizeof(rhs_bits));
+    return lhs_bits == rhs_bits;
+}
 }
 
 void HubCommit_RunOptionsSave()
@@ -120,7 +129,16 @@ void HubCommit_RunOptionsSave()
             continue;
         }
 
-        if (row.kind != HUB_UI_ROW_KIND_BOOL && row.kind != HUB_UI_ROW_KIND_KEYBIND)
+        if (row.kind != HUB_UI_ROW_KIND_BOOL
+            && row.kind != HUB_UI_ROW_KIND_KEYBIND
+            && row.kind != HUB_UI_ROW_KIND_INT
+            && row.kind != HUB_UI_ROW_KIND_FLOAT)
+        {
+            continue;
+        }
+
+        if ((row.kind == HUB_UI_ROW_KIND_INT && row.int_text_parse_error)
+            || (row.kind == HUB_UI_ROW_KIND_FLOAT && row.float_text_parse_error))
         {
             continue;
         }
@@ -172,10 +190,86 @@ void HubCommit_RunOptionsSave()
             continue;
         }
 
-        EMC_Result set_result = EMC_ERR_INVALID_ARGUMENT;
-        if (row.set_keybind != nullptr)
+        if (row.kind == HUB_UI_ROW_KIND_KEYBIND)
         {
-            set_result = row.set_keybind(row.user_data, row.pending_keybind_value, err_buf, (uint32_t)sizeof(err_buf));
+            EMC_Result set_result = EMC_ERR_INVALID_ARGUMENT;
+            if (row.set_keybind != nullptr)
+            {
+                set_result = row.set_keybind(row.user_data, row.pending_keybind_value, err_buf, (uint32_t)sizeof(err_buf));
+            }
+
+            if (set_result != EMC_OK)
+            {
+                summary.failed += 1u;
+                const char* message = ResolveErrorMessage(err_buf, kSetCallbackFailedMessage);
+                HubUi_OnCommitSetFailure(row.token, message);
+                LogCommitFailure(row, set_result, message);
+                continue;
+            }
+
+            summary.succeeded += 1u;
+
+            EMC_KeybindValueV1 canonical_value = row.pending_keybind_value;
+            EMC_Result get_result = EMC_ERR_INVALID_ARGUMENT;
+            const char* get_message = kGetCallbackFailedMessage;
+            if (row.get_keybind != nullptr)
+            {
+                get_result = row.get_keybind(row.user_data, &canonical_value);
+            }
+
+            if (get_result != EMC_OK)
+            {
+                LogCommitGetFailure(row, get_result, get_message);
+                HubUi_OnCommitSyncKeybind(row.token, row.pending_keybind_value);
+                continue;
+            }
+
+            HubUi_OnCommitSyncKeybind(row.token, canonical_value);
+            continue;
+        }
+
+        if (row.kind == HUB_UI_ROW_KIND_INT)
+        {
+            EMC_Result set_result = EMC_ERR_INVALID_ARGUMENT;
+            if (row.set_int != nullptr)
+            {
+                set_result = row.set_int(row.user_data, row.pending_int_value, err_buf, (uint32_t)sizeof(err_buf));
+            }
+
+            if (set_result != EMC_OK)
+            {
+                summary.failed += 1u;
+                const char* message = ResolveErrorMessage(err_buf, kSetCallbackFailedMessage);
+                HubUi_OnCommitSetFailure(row.token, message);
+                LogCommitFailure(row, set_result, message);
+                continue;
+            }
+
+            summary.succeeded += 1u;
+
+            int32_t canonical_value = row.pending_int_value;
+            EMC_Result get_result = EMC_ERR_INVALID_ARGUMENT;
+            const char* get_message = kGetCallbackFailedMessage;
+            if (row.get_int != nullptr)
+            {
+                get_result = row.get_int(row.user_data, &canonical_value);
+            }
+
+            if (get_result != EMC_OK)
+            {
+                LogCommitGetFailure(row, get_result, get_message);
+                HubUi_OnCommitSyncInt(row.token, row.pending_int_value);
+                continue;
+            }
+
+            HubUi_OnCommitSyncInt(row.token, canonical_value);
+            continue;
+        }
+
+        EMC_Result set_result = EMC_ERR_INVALID_ARGUMENT;
+        if (row.set_float != nullptr)
+        {
+            set_result = row.set_float(row.user_data, row.pending_float_value, err_buf, (uint32_t)sizeof(err_buf));
         }
 
         if (set_result != EMC_OK)
@@ -189,22 +283,28 @@ void HubCommit_RunOptionsSave()
 
         summary.succeeded += 1u;
 
-        EMC_KeybindValueV1 canonical_value = row.pending_keybind_value;
+        float canonical_value = row.pending_float_value;
         EMC_Result get_result = EMC_ERR_INVALID_ARGUMENT;
         const char* get_message = kGetCallbackFailedMessage;
-        if (row.get_keybind != nullptr)
+        if (row.get_float != nullptr)
         {
-            get_result = row.get_keybind(row.user_data, &canonical_value);
+            get_result = row.get_float(row.user_data, &canonical_value);
         }
 
         if (get_result != EMC_OK)
         {
             LogCommitGetFailure(row, get_result, get_message);
-            HubUi_OnCommitSyncKeybind(row.token, row.pending_keybind_value);
+            HubUi_OnCommitSyncFloat(row.token, row.pending_float_value);
             continue;
         }
 
-        HubUi_OnCommitSyncKeybind(row.token, canonical_value);
+        if (FloatBitsEqual(canonical_value, row.pending_float_value))
+        {
+            HubUi_OnCommitSyncFloat(row.token, row.pending_float_value);
+            continue;
+        }
+
+        HubUi_OnCommitSyncFloat(row.token, canonical_value);
     }
 
     g_last_summary = summary;

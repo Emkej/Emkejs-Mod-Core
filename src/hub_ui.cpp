@@ -6,7 +6,12 @@
 
 #include <ois/OISKeyboard.h>
 
+#include <cerrno>
+#include <cctype>
+#include <cmath>
 #include <cstring>
+#include <cstdlib>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <string>
@@ -17,6 +22,9 @@ namespace
 const char* kLogNone = "none";
 const char* kUnavailableMessage = "Unavailable";
 const char* kActionFailedMessage = "action_callback_failed";
+const char* kInvalidIntTextMessage = "invalid_int_text";
+const char* kInvalidFloatTextMessage = "invalid_float_text";
+const float kFloatSnapEpsilon = 1e-6f;
 
 struct HubUiModSection;
 
@@ -41,6 +49,27 @@ struct HubUiSettingRow
     EMC_SetKeybindCallback set_keybind;
     EMC_KeybindValueV1 canonical_keybind_value;
     EMC_KeybindValueV1 pending_keybind_value;
+
+    EMC_GetIntCallback get_int;
+    EMC_SetIntCallback set_int;
+    int32_t int_min_value;
+    int32_t int_max_value;
+    int32_t int_step;
+    int32_t canonical_int_value;
+    int32_t pending_int_value;
+    std::string pending_int_text;
+    bool int_text_parse_error;
+
+    EMC_GetFloatCallback get_float;
+    EMC_SetFloatCallback set_float;
+    float float_min_value;
+    float float_max_value;
+    float float_step;
+    uint32_t float_display_decimals;
+    float canonical_float_value;
+    float pending_float_value;
+    std::string pending_float_text;
+    bool float_text_parse_error;
 
     EMC_ActionRowCallback on_action;
     uint32_t action_flags;
@@ -90,6 +119,264 @@ bool IsBoolValueValid(int32_t value)
 bool KeybindEquals(EMC_KeybindValueV1 lhs, EMC_KeybindValueV1 rhs)
 {
     return lhs.keycode == rhs.keycode && lhs.modifiers == rhs.modifiers;
+}
+
+bool FloatBitsEqual(float lhs, float rhs)
+{
+    uint32_t lhs_bits = 0;
+    uint32_t rhs_bits = 0;
+    std::memcpy(&lhs_bits, &lhs, sizeof(lhs_bits));
+    std::memcpy(&rhs_bits, &rhs, sizeof(rhs_bits));
+    return lhs_bits == rhs_bits;
+}
+
+int32_t ClampIntValue(int32_t value, int32_t min_value, int32_t max_value)
+{
+    if (value < min_value)
+    {
+        return min_value;
+    }
+
+    if (value > max_value)
+    {
+        return max_value;
+    }
+
+    return value;
+}
+
+float ClampFloatValue(float value, float min_value, float max_value)
+{
+    if (value < min_value)
+    {
+        return min_value;
+    }
+
+    if (value > max_value)
+    {
+        return max_value;
+    }
+
+    return value;
+}
+
+std::string FormatIntText(int32_t value)
+{
+    std::ostringstream stream;
+    stream << value;
+    return stream.str();
+}
+
+std::string FormatFloatText(float value, uint32_t display_decimals)
+{
+    std::ostringstream stream;
+    stream.setf(std::ios::fixed, std::ios::floatfield);
+    stream.precision(static_cast<std::streamsize>(display_decimals));
+    stream << value;
+    return stream.str();
+}
+
+bool TryParseIntText(const char* text, int32_t* out_value)
+{
+    if (text == nullptr || out_value == nullptr)
+    {
+        return false;
+    }
+
+    errno = 0;
+    char* end = nullptr;
+    const long parsed = std::strtol(text, &end, 10);
+    if (end == text)
+    {
+        return false;
+    }
+
+    while (end != nullptr && *end != '\0' && std::isspace(static_cast<unsigned char>(*end)))
+    {
+        ++end;
+    }
+
+    if (end != nullptr && *end != '\0')
+    {
+        return false;
+    }
+
+    if (errno == ERANGE
+        || parsed < static_cast<long>(std::numeric_limits<int32_t>::min())
+        || parsed > static_cast<long>(std::numeric_limits<int32_t>::max()))
+    {
+        return false;
+    }
+
+    *out_value = static_cast<int32_t>(parsed);
+    return true;
+}
+
+bool TryParseFloatText(const char* text, float* out_value)
+{
+    if (text == nullptr || out_value == nullptr)
+    {
+        return false;
+    }
+
+    errno = 0;
+    char* end = nullptr;
+    const double parsed = std::strtod(text, &end);
+    if (end == text)
+    {
+        return false;
+    }
+
+    while (end != nullptr && *end != '\0' && std::isspace(static_cast<unsigned char>(*end)))
+    {
+        ++end;
+    }
+
+    if (end != nullptr && *end != '\0')
+    {
+        return false;
+    }
+
+    if (errno == ERANGE
+        || parsed != parsed
+        || parsed < -static_cast<double>(std::numeric_limits<float>::max())
+        || parsed > static_cast<double>(std::numeric_limits<float>::max()))
+    {
+        return false;
+    }
+
+    *out_value = static_cast<float>(parsed);
+    return true;
+}
+
+int32_t SnapIntValueToStep(int32_t value, int32_t min_value, int32_t max_value, int32_t step)
+{
+    if (step <= 0)
+    {
+        return ClampIntValue(value, min_value, max_value);
+    }
+
+    const int64_t clamped_value = static_cast<int64_t>(ClampIntValue(value, min_value, max_value));
+    const int64_t min64 = static_cast<int64_t>(min_value);
+    const int64_t max64 = static_cast<int64_t>(max_value);
+    const int64_t step64 = static_cast<int64_t>(step);
+
+    const int64_t offset = clamped_value - min64;
+    const int64_t lower_index = offset / step64;
+
+    int64_t lower = min64 + (lower_index * step64);
+    int64_t upper = lower + step64;
+    const bool upper_valid = upper <= max64;
+
+    const int64_t distance_to_lower = clamped_value - lower;
+    const int64_t distance_to_upper = upper_valid ? (upper - clamped_value) : std::numeric_limits<int64_t>::max();
+
+    int64_t chosen = lower;
+    if (upper_valid && distance_to_upper < distance_to_lower)
+    {
+        chosen = upper;
+    }
+    else if (upper_valid && distance_to_upper == distance_to_lower)
+    {
+        const int64_t abs_lower = lower < 0 ? -lower : lower;
+        const int64_t abs_upper = upper < 0 ? -upper : upper;
+        chosen = abs_upper < abs_lower ? upper : lower;
+    }
+
+    if (chosen < min64)
+    {
+        chosen = min64;
+    }
+    if (chosen > max64)
+    {
+        chosen = max64;
+    }
+
+    return static_cast<int32_t>(chosen);
+}
+
+float SnapFloatValueToStep(float value, float min_value, float max_value, float step)
+{
+    if (step <= 0.0f)
+    {
+        return ClampFloatValue(value, min_value, max_value);
+    }
+
+    const double min64 = static_cast<double>(min_value);
+    const double max64 = static_cast<double>(max_value);
+    const double step64 = static_cast<double>(step);
+    const double clamped = static_cast<double>(ClampFloatValue(value, min_value, max_value));
+
+    const double offset = clamped - min64;
+    const double ratio = offset / step64;
+    const double eps_ratio = static_cast<double>(kFloatSnapEpsilon) / step64;
+
+    const double lower_index = std::floor(ratio);
+    double upper_index = lower_index + 1.0;
+    if (std::fabs(ratio - lower_index) <= eps_ratio)
+    {
+        upper_index = lower_index;
+    }
+
+    const double lower = min64 + (lower_index * step64);
+    const double upper = min64 + (upper_index * step64);
+    const bool upper_valid = upper <= (max64 + static_cast<double>(kFloatSnapEpsilon));
+
+    const double distance_to_lower = std::fabs(clamped - lower);
+    const double distance_to_upper =
+        upper_valid ? std::fabs(upper - clamped) : std::numeric_limits<double>::infinity();
+
+    double chosen = lower;
+    if (upper_valid && (distance_to_upper + static_cast<double>(kFloatSnapEpsilon)) < distance_to_lower)
+    {
+        chosen = upper;
+    }
+    else if (upper_valid
+        && std::fabs(distance_to_upper - distance_to_lower) <= static_cast<double>(kFloatSnapEpsilon))
+    {
+        const double abs_lower = std::fabs(lower);
+        const double abs_upper = std::fabs(upper);
+        chosen = (abs_upper + static_cast<double>(kFloatSnapEpsilon)) < abs_lower ? upper : lower;
+    }
+
+    if (chosen < min64 && (min64 - chosen) <= static_cast<double>(kFloatSnapEpsilon))
+    {
+        chosen = min64;
+    }
+    else if (chosen < min64)
+    {
+        chosen = min64;
+    }
+    if (chosen > max64 && (chosen - max64) <= static_cast<double>(kFloatSnapEpsilon))
+    {
+        chosen = max64;
+    }
+    else if (chosen > max64)
+    {
+        chosen = max64;
+    }
+
+    return static_cast<float>(chosen);
+}
+
+void RecomputeIntDirty(HubUiSettingRow* row)
+{
+    if (row == nullptr)
+    {
+        return;
+    }
+
+    row->dirty = row->int_text_parse_error || row->pending_int_value != row->canonical_int_value;
+}
+
+void RecomputeFloatDirty(HubUiSettingRow* row)
+{
+    if (row == nullptr)
+    {
+        return;
+    }
+
+    row->dirty = row->float_text_parse_error || !FloatBitsEqual(row->pending_float_value, row->canonical_float_value);
 }
 
 unsigned char FoldAsciiForSearch(unsigned char value)
@@ -291,6 +578,82 @@ bool TryReadKeybind(HubUiSettingRow* row, EMC_KeybindValueV1* out_value, EMC_Res
     return true;
 }
 
+bool TryReadInt(HubUiSettingRow* row, int32_t* out_value, EMC_Result* out_result, const char** out_message)
+{
+    if (row->get_int == nullptr)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = EMC_ERR_INVALID_ARGUMENT;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "missing_get_callback";
+        }
+        return false;
+    }
+
+    int32_t value = 0;
+    const EMC_Result result = row->get_int(row->user_data, &value);
+    if (result != EMC_OK)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = result;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "get_callback_failed";
+        }
+        return false;
+    }
+
+    if (out_value != nullptr)
+    {
+        *out_value = value;
+    }
+
+    return true;
+}
+
+bool TryReadFloat(HubUiSettingRow* row, float* out_value, EMC_Result* out_result, const char** out_message)
+{
+    if (row->get_float == nullptr)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = EMC_ERR_INVALID_ARGUMENT;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "missing_get_callback";
+        }
+        return false;
+    }
+
+    float value = 0.0f;
+    const EMC_Result result = row->get_float(row->user_data, &value);
+    if (result != EMC_OK)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = result;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "get_callback_failed";
+        }
+        return false;
+    }
+
+    if (out_value != nullptr)
+    {
+        *out_value = value;
+    }
+
+    return true;
+}
+
 void ClearTabsAndRows()
 {
     for (size_t tab_index = 0; tab_index < g_tabs_in_order.size(); ++tab_index)
@@ -394,10 +757,15 @@ void RefreshValueRowsForMod(HubUiModSection* mod, bool force_refresh)
         for (size_t row_index = 0; row_index < mod->rows.size(); ++row_index)
         {
             HubUiSettingRow* row = mod->rows[row_index];
-            if (row->kind == HUB_UI_ROW_KIND_BOOL || row->kind == HUB_UI_ROW_KIND_KEYBIND)
+            if (row->kind == HUB_UI_ROW_KIND_BOOL
+                || row->kind == HUB_UI_ROW_KIND_KEYBIND
+                || row->kind == HUB_UI_ROW_KIND_INT
+                || row->kind == HUB_UI_ROW_KIND_FLOAT)
             {
                 row->dirty = false;
                 row->capture_active = false;
+                row->int_text_parse_error = false;
+                row->float_text_parse_error = false;
             }
         }
     }
@@ -405,7 +773,10 @@ void RefreshValueRowsForMod(HubUiModSection* mod, bool force_refresh)
     for (size_t row_index = 0; row_index < mod->rows.size(); ++row_index)
     {
         HubUiSettingRow* row = mod->rows[row_index];
-        if (row->kind != HUB_UI_ROW_KIND_BOOL && row->kind != HUB_UI_ROW_KIND_KEYBIND)
+        if (row->kind != HUB_UI_ROW_KIND_BOOL
+            && row->kind != HUB_UI_ROW_KIND_KEYBIND
+            && row->kind != HUB_UI_ROW_KIND_INT
+            && row->kind != HUB_UI_ROW_KIND_FLOAT)
         {
             continue;
         }
@@ -433,19 +804,59 @@ void RefreshValueRowsForMod(HubUiModSection* mod, bool force_refresh)
             continue;
         }
 
-        EMC_KeybindValueV1 value;
-        value.keycode = EMC_KEY_UNBOUND;
-        value.modifiers = 0;
+        if (row->kind == HUB_UI_ROW_KIND_KEYBIND)
+        {
+            EMC_KeybindValueV1 value;
+            value.keycode = EMC_KEY_UNBOUND;
+            value.modifiers = 0;
+            EMC_Result get_result = EMC_OK;
+            const char* message = kLogNone;
+            if (!TryReadKeybind(row, &value, &get_result, &message))
+            {
+                LogActionRefreshGetFailure(row, get_result, message);
+                continue;
+            }
+
+            row->canonical_keybind_value = value;
+            row->pending_keybind_value = value;
+            row->dirty = false;
+            row->inline_error.clear();
+            continue;
+        }
+
+        if (row->kind == HUB_UI_ROW_KIND_INT)
+        {
+            int32_t value = 0;
+            EMC_Result get_result = EMC_OK;
+            const char* message = kLogNone;
+            if (!TryReadInt(row, &value, &get_result, &message))
+            {
+                LogActionRefreshGetFailure(row, get_result, message);
+                continue;
+            }
+
+            row->canonical_int_value = value;
+            row->pending_int_value = value;
+            row->pending_int_text = FormatIntText(value);
+            row->int_text_parse_error = false;
+            row->dirty = false;
+            row->inline_error.clear();
+            continue;
+        }
+
+        float value = 0.0f;
         EMC_Result get_result = EMC_OK;
         const char* message = kLogNone;
-        if (!TryReadKeybind(row, &value, &get_result, &message))
+        if (!TryReadFloat(row, &value, &get_result, &message))
         {
             LogActionRefreshGetFailure(row, get_result, message);
             continue;
         }
 
-        row->canonical_keybind_value = value;
-        row->pending_keybind_value = value;
+        row->canonical_float_value = value;
+        row->pending_float_value = value;
+        row->pending_float_text = FormatFloatText(value, row->float_display_decimals);
+        row->float_text_parse_error = false;
         row->dirty = false;
         row->inline_error.clear();
     }
@@ -504,15 +915,34 @@ void __cdecl BuildSessionRow(
 
     if (setting_view->kind != HUB_REGISTRY_SETTING_KIND_BOOL
         && setting_view->kind != HUB_REGISTRY_SETTING_KIND_KEYBIND
+        && setting_view->kind != HUB_REGISTRY_SETTING_KIND_INT
+        && setting_view->kind != HUB_REGISTRY_SETTING_KIND_FLOAT
         && setting_view->kind != HUB_REGISTRY_SETTING_KIND_ACTION)
     {
         return;
     }
 
     HubUiSettingRow* row = new HubUiSettingRow();
-    row->kind = setting_view->kind == HUB_REGISTRY_SETTING_KIND_BOOL
-        ? HUB_UI_ROW_KIND_BOOL
-        : (setting_view->kind == HUB_REGISTRY_SETTING_KIND_KEYBIND ? HUB_UI_ROW_KIND_KEYBIND : HUB_UI_ROW_KIND_ACTION);
+    if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_BOOL)
+    {
+        row->kind = HUB_UI_ROW_KIND_BOOL;
+    }
+    else if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_KEYBIND)
+    {
+        row->kind = HUB_UI_ROW_KIND_KEYBIND;
+    }
+    else if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_INT)
+    {
+        row->kind = HUB_UI_ROW_KIND_INT;
+    }
+    else if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_FLOAT)
+    {
+        row->kind = HUB_UI_ROW_KIND_FLOAT;
+    }
+    else
+    {
+        row->kind = HUB_UI_ROW_KIND_ACTION;
+    }
     row->namespace_id = namespace_view->namespace_id;
     row->namespace_display_name = namespace_view->namespace_display_name;
     row->mod_id = mod_view->mod_id;
@@ -531,6 +961,25 @@ void __cdecl BuildSessionRow(
     row->canonical_keybind_value.modifiers = 0;
     row->pending_keybind_value.keycode = EMC_KEY_UNBOUND;
     row->pending_keybind_value.modifiers = 0;
+    row->get_int = setting_view->get_int;
+    row->set_int = setting_view->set_int;
+    row->int_min_value = setting_view->int_min_value;
+    row->int_max_value = setting_view->int_max_value;
+    row->int_step = setting_view->int_step;
+    row->canonical_int_value = 0;
+    row->pending_int_value = 0;
+    row->pending_int_text = "0";
+    row->int_text_parse_error = false;
+    row->get_float = setting_view->get_float;
+    row->set_float = setting_view->set_float;
+    row->float_min_value = setting_view->float_min_value;
+    row->float_max_value = setting_view->float_max_value;
+    row->float_step = setting_view->float_step;
+    row->float_display_decimals = setting_view->float_display_decimals;
+    row->canonical_float_value = 0.0f;
+    row->pending_float_value = 0.0f;
+    row->pending_float_text = FormatFloatText(0.0f, row->float_display_decimals);
+    row->float_text_parse_error = false;
     row->on_action = setting_view->on_action;
     row->action_flags = setting_view->action_flags;
     row->dirty = false;
@@ -612,6 +1061,55 @@ void HubUi_PerformInitialSync()
             row->pending_keybind_value = value;
             row->dirty = false;
             row->inline_error.clear();
+            continue;
+        }
+
+        if (row->kind == HUB_UI_ROW_KIND_INT)
+        {
+            int32_t value = 0;
+            EMC_Result get_result = EMC_OK;
+            const char* message = kLogNone;
+            if (!TryReadInt(row, &value, &get_result, &message))
+            {
+                row->dirty = false;
+                row->int_text_parse_error = false;
+                row->pending_int_text.clear();
+                row->inline_error = kUnavailableMessage;
+                LogUiGetFailure(row, get_result, message);
+                continue;
+            }
+
+            row->canonical_int_value = value;
+            row->pending_int_value = value;
+            row->pending_int_text = FormatIntText(value);
+            row->int_text_parse_error = false;
+            row->dirty = false;
+            row->inline_error.clear();
+            continue;
+        }
+
+        if (row->kind == HUB_UI_ROW_KIND_FLOAT)
+        {
+            float value = 0.0f;
+            EMC_Result get_result = EMC_OK;
+            const char* message = kLogNone;
+            if (!TryReadFloat(row, &value, &get_result, &message))
+            {
+                row->dirty = false;
+                row->float_text_parse_error = false;
+                row->pending_float_text.clear();
+                row->inline_error = kUnavailableMessage;
+                LogUiGetFailure(row, get_result, message);
+                continue;
+            }
+
+            row->canonical_float_value = value;
+            row->pending_float_value = value;
+            row->pending_float_text = FormatFloatText(value, row->float_display_decimals);
+            row->float_text_parse_error = false;
+            row->dirty = false;
+            row->inline_error.clear();
+            continue;
         }
     }
 }
@@ -756,6 +1254,139 @@ EMC_Result HubUi_SetPendingBool(const char* namespace_id, const char* mod_id, co
 
     row->pending_bool_value = value;
     row->dirty = row->pending_bool_value != row->canonical_bool_value;
+    return EMC_OK;
+}
+
+EMC_Result HubUi_AdjustPendingIntStep(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t step_delta)
+{
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_INT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    const int64_t next_value = static_cast<int64_t>(row->pending_int_value)
+        + (static_cast<int64_t>(step_delta) * static_cast<int64_t>(row->int_step));
+    int32_t clamped = row->pending_int_value;
+    if (next_value < static_cast<int64_t>(std::numeric_limits<int32_t>::min()))
+    {
+        clamped = std::numeric_limits<int32_t>::min();
+    }
+    else if (next_value > static_cast<int64_t>(std::numeric_limits<int32_t>::max()))
+    {
+        clamped = std::numeric_limits<int32_t>::max();
+    }
+    else
+    {
+        clamped = static_cast<int32_t>(next_value);
+    }
+
+    row->pending_int_value = ClampIntValue(clamped, row->int_min_value, row->int_max_value);
+    row->pending_int_text = FormatIntText(row->pending_int_value);
+    row->int_text_parse_error = false;
+    row->inline_error.clear();
+    RecomputeIntDirty(row);
+    return EMC_OK;
+}
+
+EMC_Result HubUi_SetPendingIntFromText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    const char* text)
+{
+    if (text == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_INT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    row->pending_int_text = text;
+
+    int32_t parsed_value = 0;
+    if (!TryParseIntText(text, &parsed_value))
+    {
+        row->int_text_parse_error = true;
+        row->inline_error = kInvalidIntTextMessage;
+        RecomputeIntDirty(row);
+        return EMC_OK;
+    }
+
+    row->pending_int_value = SnapIntValueToStep(parsed_value, row->int_min_value, row->int_max_value, row->int_step);
+    row->pending_int_text = FormatIntText(row->pending_int_value);
+    row->int_text_parse_error = false;
+    row->inline_error.clear();
+    RecomputeIntDirty(row);
+    return EMC_OK;
+}
+
+EMC_Result HubUi_AdjustPendingFloatStep(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t step_delta)
+{
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_FLOAT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    const float delta = static_cast<float>(step_delta) * row->float_step;
+    row->pending_float_value = SnapFloatValueToStep(
+        row->pending_float_value + delta,
+        row->float_min_value,
+        row->float_max_value,
+        row->float_step);
+    row->pending_float_text = FormatFloatText(row->pending_float_value, row->float_display_decimals);
+    row->float_text_parse_error = false;
+    row->inline_error.clear();
+    RecomputeFloatDirty(row);
+    return EMC_OK;
+}
+
+EMC_Result HubUi_SetPendingFloatFromText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    const char* text)
+{
+    if (text == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_FLOAT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    row->pending_float_text = text;
+
+    float parsed_value = 0.0f;
+    if (!TryParseFloatText(text, &parsed_value))
+    {
+        row->float_text_parse_error = true;
+        row->inline_error = kInvalidFloatTextMessage;
+        RecomputeFloatDirty(row);
+        return EMC_OK;
+    }
+
+    row->pending_float_value = SnapFloatValueToStep(parsed_value, row->float_min_value, row->float_max_value, row->float_step);
+    row->pending_float_text = FormatFloatText(row->pending_float_value, row->float_display_decimals);
+    row->float_text_parse_error = false;
+    row->inline_error.clear();
+    RecomputeFloatDirty(row);
     return EMC_OK;
 }
 
@@ -923,6 +1554,23 @@ bool HubUi_GetRowViewByIndex(uint32_t index, HubUiRowView* out_view)
     out_view->get_keybind = row->get_keybind;
     out_view->set_keybind = row->set_keybind;
     out_view->pending_keybind_value = row->pending_keybind_value;
+    out_view->get_int = row->get_int;
+    out_view->set_int = row->set_int;
+    out_view->int_min_value = row->int_min_value;
+    out_view->int_max_value = row->int_max_value;
+    out_view->int_step = row->int_step;
+    out_view->pending_int_value = row->pending_int_value;
+    out_view->pending_int_text = row->pending_int_text.c_str();
+    out_view->int_text_parse_error = row->int_text_parse_error;
+    out_view->get_float = row->get_float;
+    out_view->set_float = row->set_float;
+    out_view->float_min_value = row->float_min_value;
+    out_view->float_max_value = row->float_max_value;
+    out_view->float_step = row->float_step;
+    out_view->float_display_decimals = row->float_display_decimals;
+    out_view->pending_float_value = row->pending_float_value;
+    out_view->pending_float_text = row->pending_float_text.c_str();
+    out_view->float_text_parse_error = row->float_text_parse_error;
     return true;
 }
 
@@ -973,5 +1621,47 @@ void HubUi_OnCommitSyncKeybind(void* token, EMC_KeybindValueV1 canonical_value)
     row->pending_keybind_value = canonical_value;
     row->dirty = false;
     row->capture_active = false;
+    row->inline_error.clear();
+}
+
+void HubUi_OnCommitSyncInt(void* token, int32_t canonical_value)
+{
+    if (token == nullptr)
+    {
+        return;
+    }
+
+    HubUiSettingRow* row = static_cast<HubUiSettingRow*>(token);
+    if (row->kind != HUB_UI_ROW_KIND_INT)
+    {
+        return;
+    }
+
+    row->canonical_int_value = canonical_value;
+    row->pending_int_value = canonical_value;
+    row->pending_int_text = FormatIntText(canonical_value);
+    row->int_text_parse_error = false;
+    row->dirty = false;
+    row->inline_error.clear();
+}
+
+void HubUi_OnCommitSyncFloat(void* token, float canonical_value)
+{
+    if (token == nullptr)
+    {
+        return;
+    }
+
+    HubUiSettingRow* row = static_cast<HubUiSettingRow*>(token);
+    if (row->kind != HUB_UI_ROW_KIND_FLOAT)
+    {
+        return;
+    }
+
+    row->canonical_float_value = canonical_value;
+    row->pending_float_value = canonical_value;
+    row->pending_float_text = FormatFloatText(canonical_value, row->float_display_decimals);
+    row->float_text_parse_error = false;
+    row->dirty = false;
     row->inline_error.clear();
 }
