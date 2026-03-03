@@ -35,7 +35,7 @@ Use `ModHubClient::Config.table_registration` for table-only registration.
 
 ```cpp
 emc::ModHubClient::Config config;
-config.table_registration = GetModHubTableRegistration();
+config.table_registration = ModHubConsumerAdapter_GetTableRegistration();
 config.should_force_attach_failure_fn = &ShouldForceAttachFailureForClient;
 client.SetConfig(config);
 ```
@@ -46,20 +46,32 @@ client.SetConfig(config);
 - `OnOptionsWindowInit()`
 - `UseHubUi()`
 
-## Scaffold Reuse
+## Phase 9 Scaffold Command
 
-Run the local scaffold command with `-WithHub`:
+Run either scaffold entrypoint:
+
+```bash
+./scripts/init-mod-template.sh --with-hub
+```
 
 ```powershell
 ./scripts/init-mod-template.ps1 -WithHub
 ```
 
-This creates a reusable table-based skeleton at:
+Generated adapter files:
 
+- `src/mod_hub_consumer_adapter.h`
 - `src/mod_hub_consumer_adapter.cpp`
 
-Template source (single schema example):
+The scaffold includes:
 
+1. A static settings-table schema for all v1 row kinds.
+2. `ModHubClient` wiring for `OnStartup` and `OnOptionsWindowInit`.
+3. `UseHubUi`/fallback helpers for duplicate-safe local-tab suppression.
+
+Template sources:
+
+- `scripts/templates/mod_hub_consumer_adapter.h.template`
 - `scripts/templates/mod_hub_consumer_adapter.cpp.template`
 
 ## Validation Script
@@ -71,3 +83,11 @@ Phase 8 harness:
 ```
 
 The harness validates all v1 row kinds, order, descriptor correctness, and failure propagation.
+
+Phase 9 scaffold harness:
+
+```powershell
+./scripts/phase9_init_mod_template_scaffold_test.ps1
+```
+
+The harness validates scaffold generation, helper/fallback wiring presence, and performs a compile smoke check when `cl.exe` is available.

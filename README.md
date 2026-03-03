@@ -43,10 +43,12 @@ After deploy, expected files:
 - If other mods use this Mod Hub integration, place `Emkejs-Mod-Core` before those consumer mods in load order.
 - Consumer mods have attach + one retry fallback logic, but loading this mod first gives the most reliable hub UI startup path.
 
-## Hub Scaffold (Phase 8)
-- Generate the standard table-based Mod Hub adapter skeleton:
+## Hub Scaffold (Phase 9)
+- Generate the standard Mod Hub adapter scaffold:
+  - `./scripts/init-mod-template.sh --with-hub`
   - `./scripts/init-mod-template.ps1 -WithHub`
 - Optional overrides:
   - `-HubNamespaceId`, `-HubNamespaceDisplayName`, `-HubModId`, `-HubModDisplayName`
-- Output file:
+- Output files:
+  - `src/mod_hub_consumer_adapter.h`
   - `src/mod_hub_consumer_adapter.cpp`
