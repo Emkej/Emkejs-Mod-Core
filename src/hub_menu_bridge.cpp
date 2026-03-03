@@ -3,6 +3,7 @@
 #include "hub_commit.h"
 #include "hub_registry.h"
 #include "hub_ui.h"
+#include "wall_b_gone_hub_bridge.h"
 
 #include <Debug.h>
 
@@ -83,9 +84,14 @@ const char* kValueButtonSkin = "Kenshi_Button1";
 const char* kTextSkin = "Kenshi_TextboxStandardText";
 const char* kEditBoxSkin = "Kenshi_EditBox";
 const char* kNoMatchesText = "No matches in this tab. Try checking other tabs?";
+const char* kWallBGoneFallbackTabName = "Wall-B-Gone";
+const char* kWallBGoneFallbackPanelName = "wall_b_gone_local_fallback_options";
+const int kWallBGoneFallbackPanelLineId = 0x574247;
+const char* kWallBGoneFallbackMessage = "Mod Hub unavailable for Wall-B-Gone. Local fallback UI active.";
 
 bool g_hub_enabled = true;
 bool g_hooks_installed = false;
+HubMenuBridgeOptionsWindowInitObserver g_options_window_init_observer = 0;
 
 FnCreateDatapanel g_fnCreateDatapanel = 0;
 FnOptionsInit g_fnOptionsInit = 0;
@@ -1111,6 +1117,53 @@ bool EnsureHubPanel(OptionsWindow* self)
     return true;
 }
 
+bool EnsureWallBGoneFallbackPanel(OptionsWindow* self)
+{
+    if (self == 0 || self->optionsTab == 0 || g_ptrKenshiGUI == 0 || g_fnCreateDatapanel == 0)
+    {
+        return false;
+    }
+
+    if (self->optionsTab->findItemWith(kWallBGoneFallbackTabName))
+    {
+        return true;
+    }
+
+    MyGUI::TabItem* fallback_tab = self->optionsTab->addItem(kWallBGoneFallbackTabName);
+    if (fallback_tab == 0)
+    {
+        ErrorLog("Emkejs-Mod-Core: failed to add Wall-B-Gone fallback tab item");
+        return false;
+    }
+
+    DatapanelGUI* fallback_panel = g_fnCreateDatapanel(g_ptrKenshiGUI, kWallBGoneFallbackPanelName, fallback_tab, false);
+    if (fallback_panel == 0)
+    {
+        ErrorLog("Emkejs-Mod-Core: failed to create Wall-B-Gone fallback datapanel");
+        return false;
+    }
+
+    fallback_panel->vfunc0xc0(kWallBGoneFallbackPanelLineId);
+    fallback_panel->vfunc0xe0(25.0f);
+
+    MyGUI::Widget* fallback_widget = fallback_panel->getWidget();
+    if (fallback_widget != 0)
+    {
+        MyGUI::TextBox* fallback_text = fallback_widget->createWidget<MyGUI::TextBox>(
+            kTextSkin,
+            MyGUI::IntCoord(24, 24, 720, 28),
+            MyGUI::Align::Default);
+        if (fallback_text != 0)
+        {
+            fallback_text->setCaption(kWallBGoneFallbackMessage);
+        }
+    }
+
+    fallback_tab->setVisible(false);
+    self->optionsTab->setItemData(fallback_tab, fallback_panel);
+    return true;
+}
+
 void OptionsWindowInitHook(OptionsWindow* self)
 {
     if (g_fnOptionsInitOrig != 0)
@@ -1122,6 +1175,11 @@ void OptionsWindowInitHook(OptionsWindow* self)
     if (!g_hub_enabled)
     {
         return;
+    }
+
+    if (!WallBGoneHubBridge_UseHubUi())
+    {
+        EnsureWallBGoneFallbackPanel(self);
     }
 
     if (!EnsureHubPanel(self))
@@ -1177,6 +1235,11 @@ bool HubMenuBridge_IsHubEnabled()
     return g_hub_enabled;
 }
 
+void HubMenuBridge_SetOptionsWindowInitObserver(HubMenuBridgeOptionsWindowInitObserver observer)
+{
+    g_options_window_init_observer = observer;
+}
+
 bool HubMenuBridge_InstallHooks(unsigned int platform, const std::string& version)
 {
     if (g_hooks_installed)
@@ -1218,6 +1281,11 @@ bool HubMenuBridge_InstallHooks(unsigned int platform, const std::string& versio
 
 void HubMenuBridge_OnOptionsWindowInit()
 {
+    if (g_options_window_init_observer != 0)
+    {
+        g_options_window_init_observer();
+    }
+
     if (!g_hub_enabled)
     {
         HubUi_SetOptionsWindowOpen(false);

@@ -3,8 +3,11 @@
 
 #include <string>
 
+typedef void (*HubMenuBridgeOptionsWindowInitObserver)();
+
 void HubMenuBridge_SetHubEnabled(bool is_enabled);
 bool HubMenuBridge_IsHubEnabled();
+void HubMenuBridge_SetOptionsWindowInitObserver(HubMenuBridgeOptionsWindowInitObserver observer);
 
 bool HubMenuBridge_InstallHooks(unsigned int platform, const std::string& version);
 
