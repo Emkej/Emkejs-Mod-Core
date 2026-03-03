@@ -4,6 +4,7 @@
 #include "hub_menu_bridge.h"
 #include "hub_registry.h"
 #include "hub_ui.h"
+#include "mod_hub_dummy_consumer.h"
 #include "wall_b_gone_hub_bridge.h"
 
 #include <Debug.h>
@@ -286,6 +287,558 @@ void EnsureModHubClientTestStateInitialized()
 
     ResetModHubClientTestState();
     g_mod_hub_client_test_state_initialized = true;
+}
+
+const int32_t kModHubClientTableTestModeSuccess = 0;
+const int32_t kModHubClientTableTestModeFailBool = 1;
+const int32_t kModHubClientTableTestModeFailKeybind = 2;
+const int32_t kModHubClientTableTestModeFailInt = 3;
+const int32_t kModHubClientTableTestModeFailFloat = 4;
+const int32_t kModHubClientTableTestModeFailAction = 5;
+const int32_t kModHubClientTableTestModeInvalidRowKind = 6;
+const int32_t kModHubClientTableTestModeNullRowDef = 7;
+
+const char* kModHubClientTableTestNamespaceId = "phase8.table_namespace";
+const char* kModHubClientTableTestNamespaceDisplayName = "Phase8 Table Namespace";
+const char* kModHubClientTableTestModId = "phase8.table_mod";
+const char* kModHubClientTableTestModDisplayName = "Phase8 Table Mod";
+
+const char* kModHubClientTableTestBoolSettingId = "phase8_bool";
+const char* kModHubClientTableTestKeybindSettingId = "phase8_keybind";
+const char* kModHubClientTableTestIntSettingId = "phase8_int";
+const char* kModHubClientTableTestFloatSettingId = "phase8_float";
+const char* kModHubClientTableTestActionSettingId = "phase8_action";
+
+int32_t g_mod_hub_client_table_test_mod_user_data = 17;
+int32_t g_mod_hub_client_table_test_bool_value = 1;
+EMC_KeybindValueV1 g_mod_hub_client_table_test_keybind_value = { 42, 0u };
+int32_t g_mod_hub_client_table_test_int_value = 10;
+float g_mod_hub_client_table_test_float_value = 2.5f;
+int32_t g_mod_hub_client_table_test_action_count = 0;
+
+EMC_Result __cdecl ModHubClientTableTestGetBool(void* user_data, int32_t* out_value)
+{
+    if (user_data == 0 || out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_value = *static_cast<int32_t*>(user_data);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestSetBool(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    (void)err_buf;
+    (void)err_buf_size;
+    if (user_data == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *static_cast<int32_t*>(user_data) = value != 0 ? 1 : 0;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestGetKeybind(void* user_data, EMC_KeybindValueV1* out_value)
+{
+    if (user_data == 0 || out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_value = *static_cast<EMC_KeybindValueV1*>(user_data);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestSetKeybind(
+    void* user_data,
+    EMC_KeybindValueV1 value,
+    char* err_buf,
+    uint32_t err_buf_size)
+{
+    (void)err_buf;
+    (void)err_buf_size;
+    if (user_data == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *static_cast<EMC_KeybindValueV1*>(user_data) = value;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestGetInt(void* user_data, int32_t* out_value)
+{
+    if (user_data == 0 || out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_value = *static_cast<int32_t*>(user_data);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestSetInt(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    (void)err_buf;
+    (void)err_buf_size;
+    if (user_data == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *static_cast<int32_t*>(user_data) = value;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestGetFloat(void* user_data, float* out_value)
+{
+    if (user_data == 0 || out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_value = *static_cast<float*>(user_data);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestSetFloat(void* user_data, float value, char* err_buf, uint32_t err_buf_size)
+{
+    (void)err_buf;
+    (void)err_buf_size;
+    if (user_data == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *static_cast<float*>(user_data) = value;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestAction(void* user_data, char* err_buf, uint32_t err_buf_size)
+{
+    (void)err_buf;
+    (void)err_buf_size;
+    if (user_data == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    int32_t* action_count = static_cast<int32_t*>(user_data);
+    *action_count += 1;
+    return EMC_OK;
+}
+
+const EMC_ModDescriptorV1 kModHubClientTableTestModDescriptor = {
+    kModHubClientTableTestNamespaceId,
+    kModHubClientTableTestNamespaceDisplayName,
+    kModHubClientTableTestModId,
+    kModHubClientTableTestModDisplayName,
+    &g_mod_hub_client_table_test_mod_user_data};
+
+const EMC_BoolSettingDefV1 kModHubClientTableTestBoolSettingDef = {
+    kModHubClientTableTestBoolSettingId,
+    "Phase8 Bool",
+    "Phase8 bool setting",
+    &g_mod_hub_client_table_test_bool_value,
+    &ModHubClientTableTestGetBool,
+    &ModHubClientTableTestSetBool};
+
+const EMC_KeybindSettingDefV1 kModHubClientTableTestKeybindSettingDef = {
+    kModHubClientTableTestKeybindSettingId,
+    "Phase8 Keybind",
+    "Phase8 keybind setting",
+    &g_mod_hub_client_table_test_keybind_value,
+    &ModHubClientTableTestGetKeybind,
+    &ModHubClientTableTestSetKeybind};
+
+const EMC_IntSettingDefV1 kModHubClientTableTestIntSettingDef = {
+    kModHubClientTableTestIntSettingId,
+    "Phase8 Int",
+    "Phase8 int setting",
+    &g_mod_hub_client_table_test_int_value,
+    0,
+    100,
+    5,
+    &ModHubClientTableTestGetInt,
+    &ModHubClientTableTestSetInt};
+
+const EMC_FloatSettingDefV1 kModHubClientTableTestFloatSettingDef = {
+    kModHubClientTableTestFloatSettingId,
+    "Phase8 Float",
+    "Phase8 float setting",
+    &g_mod_hub_client_table_test_float_value,
+    0.0f,
+    10.0f,
+    0.5f,
+    EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT,
+    &ModHubClientTableTestGetFloat,
+    &ModHubClientTableTestSetFloat};
+
+const EMC_ActionRowDefV1 kModHubClientTableTestActionSettingDef = {
+    kModHubClientTableTestActionSettingId,
+    "Phase8 Action",
+    "Phase8 action row",
+    &g_mod_hub_client_table_test_action_count,
+    EMC_ACTION_FORCE_REFRESH,
+    &ModHubClientTableTestAction};
+
+struct ModHubClientTableTestHandleToken
+{
+    int32_t value;
+};
+
+ModHubClientTableTestHandleToken g_mod_hub_client_table_test_handle_token = { 1 };
+
+EMC_ModHandle GetModHubClientTableTestHandle()
+{
+    return reinterpret_cast<EMC_ModHandle>(&g_mod_hub_client_table_test_handle_token);
+}
+
+struct ModHubClientTableTestState
+{
+    emc::ModHubClient client;
+    int32_t mode;
+
+    int32_t register_mod_calls;
+    int32_t register_bool_calls;
+    int32_t register_keybind_calls;
+    int32_t register_int_calls;
+    int32_t register_float_calls;
+    int32_t register_action_calls;
+
+    int32_t order_checks_passed;
+    int32_t descriptor_checks_passed;
+    int32_t next_expected_setting_call_index;
+};
+
+ModHubClientTableTestState g_mod_hub_client_table_test_state;
+bool g_mod_hub_client_table_test_state_initialized = false;
+
+emc::ModHubClientSettingRowV1 g_mod_hub_client_table_test_rows[5];
+emc::ModHubClientTableRegistrationV1 g_mod_hub_client_table_test_registration = {
+    &kModHubClientTableTestModDescriptor,
+    g_mod_hub_client_table_test_rows,
+    5u};
+
+void ResetModHubClientTableTestRows()
+{
+    g_mod_hub_client_table_test_rows[0].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL;
+    g_mod_hub_client_table_test_rows[0].def = &kModHubClientTableTestBoolSettingDef;
+
+    g_mod_hub_client_table_test_rows[1].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND;
+    g_mod_hub_client_table_test_rows[1].def = &kModHubClientTableTestKeybindSettingDef;
+
+    g_mod_hub_client_table_test_rows[2].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_INT;
+    g_mod_hub_client_table_test_rows[2].def = &kModHubClientTableTestIntSettingDef;
+
+    g_mod_hub_client_table_test_rows[3].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT;
+    g_mod_hub_client_table_test_rows[3].def = &kModHubClientTableTestFloatSettingDef;
+
+    g_mod_hub_client_table_test_rows[4].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
+    g_mod_hub_client_table_test_rows[4].def = &kModHubClientTableTestActionSettingDef;
+}
+
+void ResetModHubClientTableTestCapture()
+{
+    g_mod_hub_client_table_test_state.register_mod_calls = 0;
+    g_mod_hub_client_table_test_state.register_bool_calls = 0;
+    g_mod_hub_client_table_test_state.register_keybind_calls = 0;
+    g_mod_hub_client_table_test_state.register_int_calls = 0;
+    g_mod_hub_client_table_test_state.register_float_calls = 0;
+    g_mod_hub_client_table_test_state.register_action_calls = 0;
+    g_mod_hub_client_table_test_state.order_checks_passed = 1;
+    g_mod_hub_client_table_test_state.descriptor_checks_passed = 1;
+    g_mod_hub_client_table_test_state.next_expected_setting_call_index = 0;
+}
+
+bool ModHubClientTableTestModeFailsKind(int32_t kind)
+{
+    if (g_mod_hub_client_table_test_state.mode == kModHubClientTableTestModeFailBool)
+    {
+        return kind == emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL;
+    }
+    if (g_mod_hub_client_table_test_state.mode == kModHubClientTableTestModeFailKeybind)
+    {
+        return kind == emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND;
+    }
+    if (g_mod_hub_client_table_test_state.mode == kModHubClientTableTestModeFailInt)
+    {
+        return kind == emc::MOD_HUB_CLIENT_SETTING_KIND_INT;
+    }
+    if (g_mod_hub_client_table_test_state.mode == kModHubClientTableTestModeFailFloat)
+    {
+        return kind == emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT;
+    }
+    if (g_mod_hub_client_table_test_state.mode == kModHubClientTableTestModeFailAction)
+    {
+        return kind == emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
+    }
+
+    return false;
+}
+
+void ApplyModHubClientTableTestModeToRows()
+{
+    if (g_mod_hub_client_table_test_state.mode == kModHubClientTableTestModeInvalidRowKind)
+    {
+        g_mod_hub_client_table_test_rows[2].kind = 999;
+    }
+    else if (g_mod_hub_client_table_test_state.mode == kModHubClientTableTestModeNullRowDef)
+    {
+        g_mod_hub_client_table_test_rows[2].def = 0;
+    }
+}
+
+int32_t ModHubClientTableTestExpectedKindAtIndex(int32_t index)
+{
+    switch (index)
+    {
+    case 0:
+        return emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL;
+    case 1:
+        return emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND;
+    case 2:
+        return emc::MOD_HUB_CLIENT_SETTING_KIND_INT;
+    case 3:
+        return emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT;
+    case 4:
+        return emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
+    default:
+        break;
+    }
+
+    return -1;
+}
+
+void RecordModHubClientTableTestSettingCall(int32_t kind)
+{
+    const int32_t expected_kind = ModHubClientTableTestExpectedKindAtIndex(
+        g_mod_hub_client_table_test_state.next_expected_setting_call_index);
+    if (expected_kind < 0 || expected_kind != kind)
+    {
+        g_mod_hub_client_table_test_state.order_checks_passed = 0;
+    }
+
+    g_mod_hub_client_table_test_state.next_expected_setting_call_index += 1;
+}
+
+bool StringEquals(const char* actual, const char* expected)
+{
+    return actual != 0 && expected != 0 && std::strcmp(actual, expected) == 0;
+}
+
+EMC_Result __cdecl ModHubClientTableTestRegisterMod(const EMC_ModDescriptorV1* desc, EMC_ModHandle* out_handle)
+{
+    if (out_handle == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    g_mod_hub_client_table_test_state.register_mod_calls += 1;
+    if (desc == 0
+        || !StringEquals(desc->namespace_id, kModHubClientTableTestNamespaceId)
+        || !StringEquals(desc->namespace_display_name, kModHubClientTableTestNamespaceDisplayName)
+        || !StringEquals(desc->mod_id, kModHubClientTableTestModId)
+        || !StringEquals(desc->mod_display_name, kModHubClientTableTestModDisplayName)
+        || desc->mod_user_data != &g_mod_hub_client_table_test_mod_user_data)
+    {
+        g_mod_hub_client_table_test_state.descriptor_checks_passed = 0;
+        *out_handle = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_handle = GetModHubClientTableTestHandle();
+    return EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestRegisterBool(EMC_ModHandle mod, const EMC_BoolSettingDefV1* def)
+{
+    g_mod_hub_client_table_test_state.register_bool_calls += 1;
+    RecordModHubClientTableTestSettingCall(emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL);
+
+    if (mod != GetModHubClientTableTestHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kModHubClientTableTestBoolSettingId)
+        || def->get_value != &ModHubClientTableTestGetBool
+        || def->set_value != &ModHubClientTableTestSetBool
+        || def->user_data != &g_mod_hub_client_table_test_bool_value)
+    {
+        g_mod_hub_client_table_test_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return ModHubClientTableTestModeFailsKind(emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL)
+        ? EMC_ERR_INTERNAL
+        : EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestRegisterKeybind(EMC_ModHandle mod, const EMC_KeybindSettingDefV1* def)
+{
+    g_mod_hub_client_table_test_state.register_keybind_calls += 1;
+    RecordModHubClientTableTestSettingCall(emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND);
+
+    if (mod != GetModHubClientTableTestHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kModHubClientTableTestKeybindSettingId)
+        || def->get_value != &ModHubClientTableTestGetKeybind
+        || def->set_value != &ModHubClientTableTestSetKeybind
+        || def->user_data != &g_mod_hub_client_table_test_keybind_value)
+    {
+        g_mod_hub_client_table_test_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return ModHubClientTableTestModeFailsKind(emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND)
+        ? EMC_ERR_INTERNAL
+        : EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestRegisterInt(EMC_ModHandle mod, const EMC_IntSettingDefV1* def)
+{
+    g_mod_hub_client_table_test_state.register_int_calls += 1;
+    RecordModHubClientTableTestSettingCall(emc::MOD_HUB_CLIENT_SETTING_KIND_INT);
+
+    if (mod != GetModHubClientTableTestHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kModHubClientTableTestIntSettingId)
+        || def->min_value != 0
+        || def->max_value != 100
+        || def->step != 5
+        || def->get_value != &ModHubClientTableTestGetInt
+        || def->set_value != &ModHubClientTableTestSetInt
+        || def->user_data != &g_mod_hub_client_table_test_int_value)
+    {
+        g_mod_hub_client_table_test_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return ModHubClientTableTestModeFailsKind(emc::MOD_HUB_CLIENT_SETTING_KIND_INT)
+        ? EMC_ERR_INTERNAL
+        : EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestRegisterFloat(EMC_ModHandle mod, const EMC_FloatSettingDefV1* def)
+{
+    g_mod_hub_client_table_test_state.register_float_calls += 1;
+    RecordModHubClientTableTestSettingCall(emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT);
+
+    if (mod != GetModHubClientTableTestHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kModHubClientTableTestFloatSettingId)
+        || def->min_value != 0.0f
+        || def->max_value != 10.0f
+        || def->step != 0.5f
+        || def->display_decimals != EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT
+        || def->get_value != &ModHubClientTableTestGetFloat
+        || def->set_value != &ModHubClientTableTestSetFloat
+        || def->user_data != &g_mod_hub_client_table_test_float_value)
+    {
+        g_mod_hub_client_table_test_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return ModHubClientTableTestModeFailsKind(emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT)
+        ? EMC_ERR_INTERNAL
+        : EMC_OK;
+}
+
+EMC_Result __cdecl ModHubClientTableTestRegisterAction(EMC_ModHandle mod, const EMC_ActionRowDefV1* def)
+{
+    g_mod_hub_client_table_test_state.register_action_calls += 1;
+    RecordModHubClientTableTestSettingCall(emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION);
+
+    if (mod != GetModHubClientTableTestHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kModHubClientTableTestActionSettingId)
+        || def->action_flags != EMC_ACTION_FORCE_REFRESH
+        || def->on_action != &ModHubClientTableTestAction
+        || def->user_data != &g_mod_hub_client_table_test_action_count)
+    {
+        g_mod_hub_client_table_test_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return ModHubClientTableTestModeFailsKind(emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION)
+        ? EMC_ERR_INTERNAL
+        : EMC_OK;
+}
+
+const EMC_HubApiV1* GetModHubClientTableTestApi()
+{
+    static const EMC_HubApiV1 kTableApi = {
+        EMC_HUB_API_VERSION_1,
+        (uint32_t)sizeof(EMC_HubApiV1),
+        &ModHubClientTableTestRegisterMod,
+        &ModHubClientTableTestRegisterBool,
+        &ModHubClientTableTestRegisterKeybind,
+        &ModHubClientTableTestRegisterInt,
+        &ModHubClientTableTestRegisterFloat,
+        &ModHubClientTableTestRegisterAction};
+    return &kTableApi;
+}
+
+EMC_Result __cdecl ModHubClientTableTestGetApi(
+    uint32_t requested_version,
+    uint32_t caller_api_size,
+    const EMC_HubApiV1** out_api,
+    uint32_t* out_api_size)
+{
+    if (out_api == 0 || out_api_size == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_api = 0;
+    *out_api_size = 0u;
+
+    if (requested_version != EMC_HUB_API_VERSION_1)
+    {
+        return EMC_ERR_UNSUPPORTED_VERSION;
+    }
+
+    if (caller_api_size < EMC_HUB_API_V1_MIN_SIZE)
+    {
+        return EMC_ERR_API_SIZE_MISMATCH;
+    }
+
+    *out_api = GetModHubClientTableTestApi();
+    *out_api_size = (uint32_t)sizeof(EMC_HubApiV1);
+    return EMC_OK;
+}
+
+void ResetModHubClientTableTestState()
+{
+    g_mod_hub_client_table_test_state.mode = kModHubClientTableTestModeSuccess;
+    ResetModHubClientTableTestRows();
+    ResetModHubClientTableTestCapture();
+
+    emc::ModHubClient::Config config;
+    config.get_api_fn = &ModHubClientTableTestGetApi;
+    config.table_registration = &g_mod_hub_client_table_test_registration;
+    g_mod_hub_client_table_test_state.client.SetConfig(config);
+    g_mod_hub_client_table_test_state.client.Reset();
+}
+
+void EnsureModHubClientTableTestStateInitialized()
+{
+    if (g_mod_hub_client_table_test_state_initialized)
+    {
+        return;
+    }
+
+    ResetModHubClientTableTestState();
+    g_mod_hub_client_table_test_state_initialized = true;
+}
+
+void SetModHubClientTableTestMode(int32_t mode)
+{
+    g_mod_hub_client_table_test_state.mode = mode;
+    ResetModHubClientTableTestRows();
+    ApplyModHubClientTableTestModeToRows();
+    ResetModHubClientTableTestCapture();
+    g_mod_hub_client_table_test_state.client.Reset();
 }
 }
 
@@ -592,6 +1145,149 @@ extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_LastAttemptFai
 {
     EnsureModHubClientTestStateInitialized();
     return (int32_t)g_mod_hub_client_test_state.client.LastAttemptFailureResult();
+}
+
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Client_Table_Reset()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    ResetModHubClientTableTestState();
+}
+
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Client_Table_SetMode(int32_t mode)
+{
+    EnsureModHubClientTableTestStateInitialized();
+    SetModHubClientTableTestMode(mode);
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_Table_OnStartup()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    return (int32_t)g_mod_hub_client_table_test_state.client.OnStartup();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_Table_UseHubUi()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    return g_mod_hub_client_table_test_state.client.UseHubUi() ? 1 : 0;
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_Table_LastAttemptFailureResult()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    return (int32_t)g_mod_hub_client_table_test_state.client.LastAttemptFailureResult();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_Table_GetRegisterModCalls()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    return g_mod_hub_client_table_test_state.register_mod_calls;
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_Table_GetRegisterBoolCalls()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    return g_mod_hub_client_table_test_state.register_bool_calls;
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_Table_GetRegisterKeybindCalls()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    return g_mod_hub_client_table_test_state.register_keybind_calls;
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_Table_GetRegisterIntCalls()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    return g_mod_hub_client_table_test_state.register_int_calls;
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_Table_GetRegisterFloatCalls()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    return g_mod_hub_client_table_test_state.register_float_calls;
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_Table_GetRegisterActionCalls()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    return g_mod_hub_client_table_test_state.register_action_calls;
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_Table_GetOrderChecksPassed()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    return g_mod_hub_client_table_test_state.order_checks_passed;
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_Client_Table_GetDescriptorChecksPassed()
+{
+    EnsureModHubClientTableTestStateInitialized();
+    return g_mod_hub_client_table_test_state.descriptor_checks_passed;
+}
+
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_DummyConsumer_Reset()
+{
+    ModHubDummyConsumer_Reset();
+}
+
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_DummyConsumer_SetMode(int32_t mode)
+{
+    ModHubDummyConsumer_SetMode(mode);
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_OnStartup()
+{
+    return ModHubDummyConsumer_OnStartup();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_UseHubUi()
+{
+    return ModHubDummyConsumer_UseHubUi();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_LastAttemptFailureResult()
+{
+    return ModHubDummyConsumer_LastAttemptFailureResult();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterModCalls()
+{
+    return ModHubDummyConsumer_GetRegisterModCalls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterBoolCalls()
+{
+    return ModHubDummyConsumer_GetRegisterBoolCalls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterKeybindCalls()
+{
+    return ModHubDummyConsumer_GetRegisterKeybindCalls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterIntCalls()
+{
+    return ModHubDummyConsumer_GetRegisterIntCalls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterFloatCalls()
+{
+    return ModHubDummyConsumer_GetRegisterFloatCalls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterActionCalls()
+{
+    return ModHubDummyConsumer_GetRegisterActionCalls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetOrderChecksPassed()
+{
+    return ModHubDummyConsumer_GetOrderChecksPassed();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetDescriptorChecksPassed()
+{
+    return ModHubDummyConsumer_GetDescriptorChecksPassed();
 }
 
 extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_WallBGone_SetAttachFailureMode(int32_t mode)
