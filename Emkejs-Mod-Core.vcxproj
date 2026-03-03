@@ -89,12 +89,13 @@
   <ItemGroup>
     <ClCompile Include="Emkejs-Mod-Core.cpp" />
     <ClCompile Include="src\hub_exports.cpp" />
+    <ClCompile Include="src\hub_registry.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\emc\mod_hub_api.h" />
+    <ClInclude Include="src\hub_registry.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>
-

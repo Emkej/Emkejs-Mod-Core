@@ -21,9 +21,15 @@
     <ClCompile Include="src\hub_exports.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\hub_registry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\emc\mod_hub_api.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\hub_registry.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
