@@ -52,3 +52,15 @@ After deploy, expected files:
 - Output files:
   - `src/mod_hub_consumer_adapter.h`
   - `src/mod_hub_consumer_adapter.cpp`
+
+## SDK Packaging (Phase 10)
+- Build versioned SDK asset only:
+  - `./scripts/package-sdk.sh`
+  - `./scripts/package-sdk.ps1`
+- Build mod zip + SDK zip together:
+  - `./scripts/build-and-package.sh`
+  - `./scripts/build-and-package.ps1`
+- Default SDK output:
+  - `dist/Emkejs-Mod-Core-SDK-<VERSION>.zip`
+- Phase 10 validation harness:
+  - `./scripts/phase10_sdk_packaging_test.ps1`

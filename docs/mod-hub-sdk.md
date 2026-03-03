@@ -91,3 +91,43 @@ Phase 9 scaffold harness:
 ```
 
 The harness validates scaffold generation, helper/fallback wiring presence, and performs a compile smoke check when `cl.exe` is available.
+
+## Phase 10 Versioned SDK Package
+
+Create the standalone SDK release asset:
+
+```powershell
+./scripts/package-sdk.ps1
+```
+
+Or produce mod + SDK assets in one pass:
+
+```powershell
+./scripts/build-and-package.ps1
+```
+
+Default SDK asset output:
+
+- `dist/Emkejs-Mod-Core-SDK-<VERSION>.zip`
+
+SDK bundle contents:
+
+- `include/emc/mod_hub_api.h`
+- `include/emc/mod_hub_client.h`
+- `src/mod_hub_client.cpp`
+- `samples/minimal/mod_hub_consumer_adapter.h`
+- `samples/minimal/mod_hub_consumer_adapter.cpp`
+- `docs/mod-hub-sdk.md`
+- `sdk-metadata.json`
+
+Compatibility metadata (`sdk-metadata.json`) fields:
+
+- `sdk_package_version` (matches package/version file)
+- `supported_hub_api_versions` (explicit supported API version list)
+- `default_hub_api_version` (recommended request version)
+
+Phase 10 harness:
+
+```powershell
+./scripts/phase10_sdk_packaging_test.ps1
+```
