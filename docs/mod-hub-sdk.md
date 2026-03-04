@@ -19,6 +19,13 @@ Handshake constants:
 - `EMC_HUB_API_VERSION_1`
 - `EMC_HUB_API_V1_MIN_SIZE`
 
+Handshake entrypoint:
+
+- `EMC_ModHub_GetApi(uint32_t requested_version, uint32_t caller_api_size, const EMC_HubApiV1** out_api, uint32_t* out_api_size)`
+- Call with `requested_version = EMC_HUB_API_VERSION_1`.
+- Call with `caller_api_size = EMC_HUB_API_V1_MIN_SIZE`.
+- On success, `out_api` points to a valid `EMC_HubApiV1` table and `out_api_size` is at least `EMC_HUB_API_V1_MIN_SIZE`.
+
 Public result codes (`EMC_Result`):
 
 - `EMC_OK`
@@ -70,6 +77,12 @@ Deterministic helper behavior:
 - `OnStartup()`
 - `OnOptionsWindowInit()`
 - `UseHubUi()`
+
+Optional diagnostics accessors:
+
+- `IsAttachRetryPending()`
+- `HasAttachRetryAttempted()`
+- `LastAttemptFailureResult()`
 
 Soft dependency behavior:
 
@@ -134,6 +147,9 @@ void ModHubConsumerAdapter_OnOptionsWindowInit();
 
 bool ModHubConsumerAdapter_UseHubUi();
 bool ModHubConsumerAdapter_ShouldCreateLocalTab();
+bool ModHubConsumerAdapter_IsAttachRetryPending();
+bool ModHubConsumerAdapter_HasAttachRetryAttempted();
+EMC_Result ModHubConsumerAdapter_LastAttachFailureResult();
 
 const emc::ModHubClientTableRegistrationV1* ModHubConsumerAdapter_GetTableRegistration();
 
@@ -159,7 +175,7 @@ struct ExampleState
 
 ExampleState g_state = { 1, { 42, 0u }, 10, 2.5f };
 emc::ModHubClient g_client;
-bool g_configured = false;
+bool g_client_configured = false;
 
 EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
 {
@@ -347,9 +363,9 @@ const emc::ModHubClientTableRegistrationV1 kRegistration = {
     (uint32_t)(sizeof(kRows) / sizeof(kRows[0]))
 };
 
-void EnsureConfigured()
+void EnsureClientConfigured()
 {
-    if (g_configured)
+    if (g_client_configured)
     {
         return;
     }
@@ -357,31 +373,49 @@ void EnsureConfigured()
     emc::ModHubClient::Config config;
     config.table_registration = &kRegistration;
     g_client.SetConfig(config);
-    g_configured = true;
+    g_client_configured = true;
 }
 }
 
 void ModHubConsumerAdapter_OnStartup()
 {
-    EnsureConfigured();
+    EnsureClientConfigured();
     g_client.OnStartup();
 }
 
 void ModHubConsumerAdapter_OnOptionsWindowInit()
 {
-    EnsureConfigured();
+    EnsureClientConfigured();
     g_client.OnOptionsWindowInit();
 }
 
 bool ModHubConsumerAdapter_UseHubUi()
 {
-    EnsureConfigured();
+    EnsureClientConfigured();
     return g_client.UseHubUi();
 }
 
 bool ModHubConsumerAdapter_ShouldCreateLocalTab()
 {
     return !ModHubConsumerAdapter_UseHubUi();
+}
+
+bool ModHubConsumerAdapter_IsAttachRetryPending()
+{
+    EnsureClientConfigured();
+    return g_client.IsAttachRetryPending();
+}
+
+bool ModHubConsumerAdapter_HasAttachRetryAttempted()
+{
+    EnsureClientConfigured();
+    return g_client.HasAttachRetryAttempted();
+}
+
+EMC_Result ModHubConsumerAdapter_LastAttachFailureResult()
+{
+    EnsureClientConfigured();
+    return g_client.LastAttemptFailureResult();
 }
 
 const emc::ModHubClientTableRegistrationV1* ModHubConsumerAdapter_GetTableRegistration()
