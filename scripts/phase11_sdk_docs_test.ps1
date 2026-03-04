@@ -52,12 +52,23 @@ Assert-Condition -Condition (Test-Path $docsPath) -Message "Missing docs file: $
 $docsText = Get-Content -Path $docsPath -Raw
 
 $requiredSymbols = @(
+    "EMC_ModHub_GetApi",
     "EMC_HUB_API_VERSION_1",
     "EMC_HUB_API_V1_MIN_SIZE",
     "EMC_Result",
+    "EMC_OK",
+    "EMC_ERR_INVALID_ARGUMENT",
+    "EMC_ERR_UNSUPPORTED_VERSION",
+    "EMC_ERR_API_SIZE_MISMATCH",
+    "EMC_ERR_CONFLICT",
+    "EMC_ERR_NOT_FOUND",
+    "EMC_ERR_CALLBACK_FAILED",
+    "EMC_ERR_INTERNAL",
     "EMC_KeybindValueV1",
+    "EMC_KEY_UNBOUND",
     "EMC_ACTION_FORCE_REFRESH",
     "EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT",
+    "RegisterSettingsTableV1",
     "MOD_HUB_CLIENT_SETTING_KIND_BOOL",
     "MOD_HUB_CLIENT_SETTING_KIND_KEYBIND",
     "MOD_HUB_CLIENT_SETTING_KIND_INT",
@@ -65,7 +76,10 @@ $requiredSymbols = @(
     "MOD_HUB_CLIENT_SETTING_KIND_ACTION",
     "OnStartup()",
     "OnOptionsWindowInit()",
-    "UseHubUi()"
+    "UseHubUi()",
+    "IsAttachRetryPending()",
+    "HasAttachRetryAttempted()",
+    "LastAttemptFailureResult()"
 )
 
 foreach ($symbol in $requiredSymbols) {
@@ -102,6 +116,10 @@ $sourceCode = Extract-CodeBlockBetweenMarkers `
 
 Assert-Condition -Condition (-not $sourceCode.Contains("src/hub_")) -Message "Phase11 sample should not reference src/hub_* internals."
 Assert-Condition -Condition (-not $sourceCode.Contains('#include "hub_')) -Message "Phase11 sample should not include hub_* headers."
+Assert-Condition -Condition ($headerCode.Contains("ModHubConsumerAdapter_IsAttachRetryPending")) -Message "Phase11 sample header missing retry-pending accessor."
+Assert-Condition -Condition ($headerCode.Contains("ModHubConsumerAdapter_HasAttachRetryAttempted")) -Message "Phase11 sample header missing retry-attempted accessor."
+Assert-Condition -Condition ($headerCode.Contains("ModHubConsumerAdapter_LastAttachFailureResult")) -Message "Phase11 sample header missing last-failure accessor."
+Assert-Condition -Condition ($sourceCode.Contains("return !ModHubConsumerAdapter_UseHubUi();")) -Message "Phase11 sample should derive local-tab suppression from UseHubUi."
 
 if (-not $TempRoot) {
     $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "emc_phase11_sdk_docs"
