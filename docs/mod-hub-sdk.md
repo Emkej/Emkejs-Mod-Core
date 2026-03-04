@@ -567,6 +567,5 @@ Phase 17:
 ./scripts/phase17_address_ssot_guard_test.ps1
 ```
 
-The repo does not currently ship a checked-in CI workflow file, so run the
-Phase 17 guard script directly (or from local automation) until a workflow is
-added.
+The repo uses local automation for this guard path, so run the Phase 17 guard
+script directly or through the recommended local git hooks.

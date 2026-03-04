@@ -107,7 +107,7 @@ After deploy, expected files:
   - update the matching `docs/addresses/*` table in the same commit
   - pass `./scripts/phase17_address_ssot_guard_test.ps1`
   - rerun the Debug reliability smoke command when hook behavior changes
-- CI workflow files are not checked in yet, so the guard is currently enforced through the checked-in script and should be wired into local automation until a repo workflow is added.
+- Local hook automation is the intended enforcement path for this repo; the checked-in scripts and hooks are the supported guardrail path.
 
 ## Local Git Hooks (Recommended)
 - Repo-managed hooks live in:
@@ -121,4 +121,4 @@ After deploy, expected files:
   - `pre-commit` runs `./scripts/phase17_address_ssot_guard_test.ps1`
   - `pre-push` runs `./scripts/build-and-package.sh -Configuration Debug -SkipSdkPackage -RunReliabilitySmoke`
 - `pre-push` uses `KENSHI_PATH` / `KENSHI_DEFAULT_PATH` automatically when the Phase 16 smoke path needs Kenshi runtime DLLs.
-- Hooks are local automation, not a replacement for hosted CI. They can still be bypassed with `--no-verify`.
+- Hooks are the intended automation path for this repo. They can still be bypassed with `--no-verify`.
