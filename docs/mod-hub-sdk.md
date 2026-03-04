@@ -206,6 +206,7 @@ Migration note:
 - Use `samples/mod_hub_consumer_single_tu.cpp` as a public-assets-only reference sample when you want a single-file starting point.
 - Do not add per-mod options-init hook RVAs to new scaffold output; current hubs already retry through the observer path from `OnStartup()`.
 - Do not add any new consumer-local Kenshi hook RVAs; the remaining core literals are tracked in `docs/addresses/*.md` (including `docs/addresses/kenshi_1_0_65_x64.md`) and guarded by `./scripts/phase17_address_ssot_guard_test.ps1`.
+- Wall-B-Gone Phase 6 fallback matrix harness is consumer-owned in `../Wall-B-Gone/scripts/phase6_wall_b_gone_fallback_test.ps1`; the Mod-Core `scripts/phase6_wall_b_gone_fallback_test.ps1` entrypoint delegates to that harness when present.
 
 ## Minimal Consumer Sample (Phase 11)
 

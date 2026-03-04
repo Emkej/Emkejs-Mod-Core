@@ -1,9 +1,52 @@
 param(
     [Parameter(Mandatory = $true)][string]$DllPath,
-    [string]$KenshiPath = ""
+    [string]$KenshiPath = "",
+    [string]$WallDllPath = "",
+    [string]$WallRepoPath = ""
 )
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "SKIPPED: phase6_wall_b_gone_fallback_test moved to Wall-B-Gone repo (consumer-owned bridge)."
-Write-Host "PASS"
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
+$coreRepoPath = Split-Path -Parent $scriptDir
+$repoParentPath = Split-Path -Parent $coreRepoPath
+
+$candidateRepoPaths = @()
+if ($WallRepoPath) {
+    $candidateRepoPaths += $WallRepoPath
+}
+if ($repoParentPath) {
+    $candidateRepoPaths += Join-Path $repoParentPath "Wall-B-Gone"
+}
+$candidateRepoPaths = $candidateRepoPaths | Select-Object -Unique
+
+$consumerScript = ""
+foreach ($candidateRepoPath in $candidateRepoPaths) {
+    $candidateScript = Join-Path $candidateRepoPath "scripts/phase6_wall_b_gone_fallback_test.ps1"
+    if (Test-Path -LiteralPath $candidateScript) {
+        $consumerScript = $candidateScript
+        break
+    }
+}
+
+if (-not $consumerScript) {
+    $searched = $candidateRepoPaths -join "; "
+    Write-Host "SKIPPED: phase6 moved to Wall-B-Gone repo but script not found. Searched: $searched"
+    Write-Host "PASS"
+    exit 0
+}
+
+if (-not $WallDllPath) {
+    $candidateWallDll = Join-Path (Split-Path -Parent $DllPath) "Wall-B-Gone.dll"
+    if (Test-Path -LiteralPath $candidateWallDll) {
+        $WallDllPath = $candidateWallDll
+    }
+}
+
+if (-not $WallDllPath -or -not (Test-Path -LiteralPath $WallDllPath)) {
+    Write-Host "SKIPPED: Wall-B-Gone.dll not found. Provide -WallDllPath to run consumer-owned phase6 harness."
+    Write-Host "PASS"
+    exit 0
+}
+
+& $consumerScript -DllPath $WallDllPath -CoreDllPath $DllPath -KenshiPath $KenshiPath

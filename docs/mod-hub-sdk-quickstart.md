@@ -131,6 +131,11 @@ Recommended checks:
 ./scripts/phase11_sdk_docs_test.ps1
 ```
 
+Wall-B-Gone fallback matrix ownership note:
+
+- Canonical Phase 6 harness now lives in the consumer repo: `../Wall-B-Gone/scripts/phase6_wall_b_gone_fallback_test.ps1`.
+- `Emkejs-Mod-Core/scripts/phase6_wall_b_gone_fallback_test.ps1` is a delegating wrapper for convenience; it runs the consumer harness when the Wall-B-Gone repo/script and `Wall-B-Gone.dll` are available.
+
 If those phase scripts are not part of your mod repo, validate by building your plugin and confirming options UI behavior in game (hub path when attached, local fallback when hub is unavailable).
 
 For full API reference and complete sample code, see [docs/mod-hub-sdk.md](mod-hub-sdk.md).
