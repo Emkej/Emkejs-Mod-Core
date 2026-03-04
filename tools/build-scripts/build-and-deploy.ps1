@@ -51,8 +51,8 @@ $buildParams = Get-ForwardedParameters -BoundParameters $PSBoundParameters -Allo
 
 & $buildScript @buildParams
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: build.ps1 failed" -ForegroundColor Red
-    exit 1
+    Write-Host "ERROR: build.ps1 failed (exit code $LASTEXITCODE)" -ForegroundColor Red
+    exit $LASTEXITCODE
 }
 
 $deployParams = Get-ForwardedParameters -BoundParameters $PSBoundParameters -AllowedKeys @(
@@ -69,6 +69,6 @@ $deployParams = Get-ForwardedParameters -BoundParameters $PSBoundParameters -All
 
 & $deployScript @deployParams
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: deploy.ps1 failed" -ForegroundColor Red
-    exit 1
+    Write-Host "ERROR: deploy.ps1 failed (exit code $LASTEXITCODE)" -ForegroundColor Red
+    exit $LASTEXITCODE
 }

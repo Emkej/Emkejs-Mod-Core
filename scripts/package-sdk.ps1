@@ -28,6 +28,21 @@ function Get-SupportedHubApiVersions {
     return $versions
 }
 
+function Get-ApiHeaderStringDefine {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiHeaderPath,
+        [Parameter(Mandatory = $true)][string]$DefineName
+    )
+
+    foreach ($line in Get-Content -Path $ApiHeaderPath) {
+        if ($line -match ('^\s*#define\s+' + [Regex]::Escape($DefineName) + '\s+"([^"]+)"')) {
+            return $Matches[1]
+        }
+    }
+
+    throw "Required $DefineName define not found in: $ApiHeaderPath"
+}
+
 $ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
 if (-not $RepoDir) {
     $RepoDir = if ($ScriptDir) { Split-Path -Parent $ScriptDir } else { (Get-Location).Path }
@@ -132,10 +147,18 @@ Set-Content -Path (Join-Path $bundleSampleDir "mod_hub_consumer_adapter.h") -Val
 Set-Content -Path (Join-Path $bundleSampleDir "mod_hub_consumer_adapter.cpp") -Value $sampleSourceContent -NoNewline
 
 $supportedHubApiVersions = @(Get-SupportedHubApiVersions -ApiHeaderPath $apiHeaderPath)
+$canonicalGetApiExport = Get-ApiHeaderStringDefine -ApiHeaderPath $apiHeaderPath -DefineName "EMC_MOD_HUB_GET_API_EXPORT_NAME"
+$compatGetApiExport = Get-ApiHeaderStringDefine -ApiHeaderPath $apiHeaderPath -DefineName "EMC_MOD_HUB_GET_API_COMPAT_EXPORT_NAME"
+$compatRemovalTarget = Get-ApiHeaderStringDefine -ApiHeaderPath $apiHeaderPath -DefineName "EMC_MOD_HUB_GET_API_COMPAT_REMOVAL_TARGET"
 $sdkMetadata = [ordered]@{
     sdk_package_version = $Version
     supported_hub_api_versions = $supportedHubApiVersions
     default_hub_api_version = [int]$supportedHubApiVersions[0]
+    export_contract = [ordered]@{
+        canonical_get_api_export = $canonicalGetApiExport
+        compatibility_get_api_exports = @($compatGetApiExport)
+        compatibility_alias_removal_target = $compatRemovalTarget
+    }
     assets = [ordered]@{
         api_header = "include/emc/mod_hub_api.h"
         client_header = "include/emc/mod_hub_client.h"

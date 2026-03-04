@@ -19,6 +19,9 @@ extern "C" {
 #endif
 
 #define EMC_HUB_API_VERSION_1 ((uint32_t)1u)
+#define EMC_MOD_HUB_GET_API_EXPORT_NAME "EMC_ModHub_GetApi"
+#define EMC_MOD_HUB_GET_API_COMPAT_EXPORT_NAME "EMC_ModHub_GetApi_v1_compat"
+#define EMC_MOD_HUB_GET_API_COMPAT_REMOVAL_TARGET "v1.2.0"
 
 typedef int32_t EMC_Result;
 
@@ -140,6 +143,13 @@ typedef struct EMC_HubApiV1
 #define EMC_HUB_API_V1_MIN_SIZE ((uint32_t)sizeof(EMC_HubApiV1))
 
 EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_GetApi(
+    uint32_t requested_version,
+    uint32_t caller_api_size,
+    const EMC_HubApiV1** out_api,
+    uint32_t* out_api_size);
+
+/* Temporary compatibility alias. Scheduled for removal after EMC_MOD_HUB_GET_API_COMPAT_REMOVAL_TARGET. */
+EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_GetApi_v1_compat(
     uint32_t requested_version,
     uint32_t caller_api_size,
     const EMC_HubApiV1** out_api,

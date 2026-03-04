@@ -27,6 +27,17 @@ Optional parameters:
 - `-Configuration "Release"`
 - `-Platform "x64"`
 
+### Deploy troubleshooting (Phase 12)
+- Deploy now performs a lock preflight before any file copy into the target mod folder.
+- If the destination DLL is in use, deploy fails early with exit code `32` and prints:
+  - the target DLL path
+  - suspected process name/PID when detectable
+  - concrete next steps to release the lock and retry
+- Typical fix:
+  - close Kenshi (and any tool/debugger loading the DLL)
+  - stop the listed PID if shown
+  - rerun `.\scripts\build-deploy.ps1` or `.\scripts\build-and-deploy.ps1`
+
 ## Deploy layout
 Mod data folder name: `Emkejs-Mod-Core`
 
@@ -66,3 +77,9 @@ After deploy, expected files:
   - `dist/Emkejs-Mod-Core-SDK-<VERSION>.zip`
 - Phase 10 validation harness:
   - `./scripts/phase10_sdk_packaging_test.ps1`
+
+## Reliability Harnesses (v1.1)
+- Phase 12 deploy lock preflight harness:
+  - `./scripts/phase12_deploy_lock_preflight_test.ps1`
+- Phase 13 export contract stability harness:
+  - `./scripts/phase13_export_contract_stability_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`

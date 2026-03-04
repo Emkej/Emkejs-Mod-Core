@@ -1,14 +1,192 @@
 #include "emc/mod_hub_client.h"
 
+#if defined(_WIN32)
+#include <Windows.h>
+#include <TlHelp32.h>
+#endif
+
 namespace
 {
+#if defined(EMC_ENABLE_TEST_EXPORTS)
+const int32_t kDefaultLookupModeAuto = 0;
+const int32_t kDefaultLookupModeAliasOnly = 1;
+const int32_t kDefaultLookupModeMissing = 2;
+#endif
+
+#if defined(_WIN32)
+const char* kDefaultGetApiAliasExportNames[] = {
+    EMC_MOD_HUB_GET_API_COMPAT_EXPORT_NAME };
+
+struct DefaultGetApiResolverState
+{
+    emc::ModHubClientGetApiFn fn;
+    bool initialized;
+#if defined(EMC_ENABLE_TEST_EXPORTS)
+    int32_t lookup_mode;
+#endif
+};
+
+DefaultGetApiResolverState g_default_get_api_resolver_state = {
+    0,
+    false,
+#if defined(EMC_ENABLE_TEST_EXPORTS)
+    kDefaultLookupModeAuto
+#endif
+};
+
+void ResetDefaultGetApiResolverCache()
+{
+    g_default_get_api_resolver_state.fn = 0;
+    g_default_get_api_resolver_state.initialized = false;
+}
+
+emc::ModHubClientGetApiFn ResolveGetApiFromModule(HMODULE module, bool allow_canonical, bool allow_alias)
+{
+    if (module == 0)
+    {
+        return 0;
+    }
+
+    if (allow_canonical)
+    {
+        FARPROC proc = GetProcAddress(module, EMC_MOD_HUB_GET_API_EXPORT_NAME);
+        if (proc != 0)
+        {
+            return reinterpret_cast<emc::ModHubClientGetApiFn>(proc);
+        }
+    }
+
+    if (!allow_alias)
+    {
+        return 0;
+    }
+
+    for (size_t alias_index = 0u;
+         alias_index < sizeof(kDefaultGetApiAliasExportNames) / sizeof(kDefaultGetApiAliasExportNames[0]);
+         ++alias_index)
+    {
+        FARPROC proc = GetProcAddress(module, kDefaultGetApiAliasExportNames[alias_index]);
+        if (proc != 0)
+        {
+            return reinterpret_cast<emc::ModHubClientGetApiFn>(proc);
+        }
+    }
+
+    return 0;
+}
+
+emc::ModHubClientGetApiFn ResolveGetApiFromLoadedModules(HMODULE skip_module, bool allow_canonical, bool allow_alias)
+{
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, GetCurrentProcessId());
+    if (snapshot == INVALID_HANDLE_VALUE)
+    {
+        return 0;
+    }
+
+    MODULEENTRY32 module_entry;
+    module_entry.dwSize = sizeof(module_entry);
+    if (!Module32First(snapshot, &module_entry))
+    {
+        CloseHandle(snapshot);
+        return 0;
+    }
+
+    do
+    {
+        HMODULE module = module_entry.hModule;
+        if (module == skip_module)
+        {
+            continue;
+        }
+
+        emc::ModHubClientGetApiFn fn = ResolveGetApiFromModule(module, allow_canonical, allow_alias);
+        if (fn != 0)
+        {
+            CloseHandle(snapshot);
+            return fn;
+        }
+    } while (Module32Next(snapshot, &module_entry));
+
+    CloseHandle(snapshot);
+    return 0;
+}
+
+emc::ModHubClientGetApiFn ResolveDefaultGetApiFn()
+{
+    bool allow_canonical = true;
+    bool allow_alias = true;
+
+#if defined(EMC_ENABLE_TEST_EXPORTS)
+    if (g_default_get_api_resolver_state.lookup_mode == kDefaultLookupModeAliasOnly)
+    {
+        allow_canonical = false;
+        allow_alias = true;
+    }
+    else if (g_default_get_api_resolver_state.lookup_mode == kDefaultLookupModeMissing)
+    {
+        allow_canonical = false;
+        allow_alias = false;
+    }
+#endif
+
+    if (!allow_canonical && !allow_alias)
+    {
+        return 0;
+    }
+
+    HMODULE self_module = 0;
+    if (GetModuleHandleExA(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCSTR>(&ResolveDefaultGetApiFn),
+            &self_module) != 0)
+    {
+        emc::ModHubClientGetApiFn fn = ResolveGetApiFromModule(self_module, allow_canonical, allow_alias);
+        if (fn != 0)
+        {
+            return fn;
+        }
+    }
+
+    return ResolveGetApiFromLoadedModules(self_module, allow_canonical, allow_alias);
+}
+
+emc::ModHubClientGetApiFn GetDefaultGetApiFn()
+{
+    if (!g_default_get_api_resolver_state.initialized)
+    {
+        g_default_get_api_resolver_state.fn = ResolveDefaultGetApiFn();
+        g_default_get_api_resolver_state.initialized = true;
+    }
+
+    return g_default_get_api_resolver_state.fn;
+}
+#endif
+
 EMC_Result DefaultGetApi(
     uint32_t requested_version,
     uint32_t caller_api_size,
     const EMC_HubApiV1** out_api,
     uint32_t* out_api_size)
 {
+#if defined(_WIN32)
+    if (out_api == 0 || out_api_size == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_api = 0;
+    *out_api_size = 0u;
+
+    const emc::ModHubClientGetApiFn get_api_fn = GetDefaultGetApiFn();
+    if (get_api_fn == 0)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    return get_api_fn(requested_version, caller_api_size, out_api, out_api_size);
+#else
     return EMC_ModHub_GetApi(requested_version, caller_api_size, out_api, out_api_size);
+#endif
 }
 
 EMC_Result RegisterSettingsRow(
@@ -257,3 +435,42 @@ ModHubClient::AttemptResult ModHubClient::AttemptAttachAndRegister(bool is_retry
     return ATTACH_SUCCESS;
 }
 }
+
+#if defined(EMC_ENABLE_TEST_EXPORTS)
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Client_DefaultLookup_SetMode(int32_t mode)
+{
+#if defined(_WIN32)
+    int32_t resolved_mode = kDefaultLookupModeAuto;
+    if (mode == kDefaultLookupModeAliasOnly)
+    {
+        resolved_mode = kDefaultLookupModeAliasOnly;
+    }
+    else if (mode == kDefaultLookupModeMissing)
+    {
+        resolved_mode = kDefaultLookupModeMissing;
+    }
+
+    g_default_get_api_resolver_state.lookup_mode = resolved_mode;
+    ResetDefaultGetApiResolverCache();
+#else
+    (void)mode;
+#endif
+}
+
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Client_DefaultLookup_Reset()
+{
+#if defined(_WIN32)
+    g_default_get_api_resolver_state.lookup_mode = kDefaultLookupModeAuto;
+    ResetDefaultGetApiResolverCache();
+#endif
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_Client_DefaultLookup_CallGetApi(
+    uint32_t requested_version,
+    uint32_t caller_api_size,
+    const EMC_HubApiV1** out_api,
+    uint32_t* out_api_size)
+{
+    return DefaultGetApi(requested_version, caller_api_size, out_api, out_api_size);
+}
+#endif

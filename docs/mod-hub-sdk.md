@@ -28,6 +28,14 @@ Handshake entrypoint:
 - Call with `caller_api_size = EMC_HUB_API_V1_MIN_SIZE`.
 - On success, `out_api` points to a valid `EMC_HubApiV1` table and `out_api_size` is at least `EMC_HUB_API_V1_MIN_SIZE`.
 
+Export stability policy (Phase 13):
+
+- Canonical export symbol is `EMC_ModHub_GetApi` (`EMC_MOD_HUB_GET_API_EXPORT_NAME`).
+- Helper lookup tries canonical first, then compatibility aliases.
+- Current temporary alias: `EMC_ModHub_GetApi_v1_compat` (`EMC_MOD_HUB_GET_API_COMPAT_EXPORT_NAME`).
+- Alias removal target: `EMC_MOD_HUB_GET_API_COMPAT_REMOVAL_TARGET` (`v1.2.0`).
+- Alias usage emits one deprecation warning event per process: `event=hub_get_api_alias_deprecated`.
+
 Public result codes (`EMC_Result`):
 
 - `EMC_OK`
@@ -114,6 +122,7 @@ event=hub_setting_registration_conflict namespace=<id> mod=<id> setting=<id> res
 event=hub_action_failure namespace=<id> mod=<id> setting=<id> result=<code> message=<text>
 event=hub_action_refresh_get_failure namespace=<id> mod=<id> setting=<id> result=<code> message=<text>
 event=hub_commit_get_failure namespace=<id> mod=<id> setting=<id> result=<code> message=<text>
+event=hub_get_api_alias_deprecated alias=<symbol> canonical=EMC_ModHub_GetApi removal_target=<release>
 ```
 
 ## Phase 9 Scaffold Command
@@ -470,3 +479,11 @@ Phase 11:
 ```powershell
 ./scripts/phase11_sdk_docs_test.ps1
 ```
+
+Phase 13:
+
+```powershell
+./scripts/phase13_export_contract_stability_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```
+
+Use `-KenshiPath` when Kenshi runtime DLLs are not already on `PATH`.

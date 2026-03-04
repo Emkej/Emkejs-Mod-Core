@@ -8,6 +8,7 @@
 #include "wall_b_gone_hub_bridge.h"
 
 #include <Debug.h>
+#include <Windows.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -17,6 +18,8 @@ namespace
 {
 const char* kLogNone = "none";
 const char* kEnvDisableRegistryAttach = "EMC_HUB_DISABLE_REGISTRY_ATTACH";
+const char* kGetApiAliasRemovalTarget = EMC_MOD_HUB_GET_API_COMPAT_REMOVAL_TARGET;
+int32_t g_get_api_alias_warning_count = 0;
 #if defined(EMC_ENABLE_TEST_EXPORTS)
 bool g_registry_attach_override_set = false;
 bool g_registry_attach_override_enabled = true;
@@ -73,6 +76,71 @@ void ClearRegistryAttachOverride()
     g_registry_attach_override_enabled = true;
 }
 #endif
+
+void LogGetApiAliasDeprecatedOnce(const char* alias_name)
+{
+    if (g_get_api_alias_warning_count > 0)
+    {
+        return;
+    }
+
+    g_get_api_alias_warning_count = 1;
+    (void)alias_name;
+
+    auto ToLowerAscii = [](char value) -> char {
+        if (value >= 'A' && value <= 'Z')
+        {
+            return static_cast<char>(value + ('a' - 'A'));
+        }
+        return value;
+    };
+
+    auto EqualsIgnoreCaseAscii = [&](const char* left, const char* right) -> bool {
+        if (left == 0 || right == 0)
+        {
+            return false;
+        }
+
+        size_t index = 0u;
+        while (left[index] != '\0' && right[index] != '\0')
+        {
+            if (ToLowerAscii(left[index]) != ToLowerAscii(right[index]))
+            {
+                return false;
+            }
+
+            ++index;
+        }
+
+        return left[index] == '\0' && right[index] == '\0';
+    };
+
+    char process_path[MAX_PATH];
+    process_path[0] = '\0';
+    DWORD process_path_len = GetModuleFileNameA(0, process_path, MAX_PATH);
+    if (process_path_len == 0 || process_path_len >= MAX_PATH)
+    {
+        return;
+    }
+
+    const char* process_name = process_path;
+    for (DWORD index = 0u; index < process_path_len; ++index)
+    {
+        if (process_path[index] == '\\' || process_path[index] == '/')
+        {
+            process_name = process_path + index + 1u;
+        }
+    }
+
+    const bool is_kenshi_process = EqualsIgnoreCaseAscii(process_name, "kenshi_x64.exe")
+        || EqualsIgnoreCaseAscii(process_name, "kenshi.exe");
+    if (!is_kenshi_process)
+    {
+        return;
+    }
+
+    ErrorLog("event=hub_get_api_alias_deprecated alias=EMC_ModHub_GetApi_v1_compat canonical=EMC_ModHub_GetApi removal_target=v1.2.0");
+}
 
 void LogRegistrationRejected(const char* api_name, const char* reason, EMC_Result result, const char* message)
 {
@@ -879,6 +947,16 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_GetApi(
     return EMC_OK;
 }
 
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_GetApi_v1_compat(
+    uint32_t requested_version,
+    uint32_t caller_api_size,
+    const EMC_HubApiV1** out_api,
+    uint32_t* out_api_size)
+{
+    LogGetApiAliasDeprecatedOnce(EMC_MOD_HUB_GET_API_COMPAT_EXPORT_NAME);
+    return EMC_ModHub_GetApi(requested_version, caller_api_size, out_api, out_api_size);
+}
+
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_WallBGone_UseHubUi()
 {
     return WallBGoneHubBridge_UseHubUi() ? 1 : 0;
@@ -899,6 +977,16 @@ extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_SetRegistryAttachEnabled
     }
 
     SetRegistryAttachOverride(is_enabled != 0);
+}
+
+extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_ResetGetApiAliasWarningCount()
+{
+    g_get_api_alias_warning_count = 0;
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_GetApiAliasWarningCount()
+{
+    return g_get_api_alias_warning_count;
 }
 
 extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Menu_SetHubEnabled(int32_t is_enabled)

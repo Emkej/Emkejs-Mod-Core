@@ -76,6 +76,12 @@ try {
     Assert-Condition -Condition ($metadata.sdk_package_version -eq $sdkVersion) -Message "sdk_package_version mismatch in metadata."
     Assert-Condition -Condition ($metadata.assets.integration_doc -eq "docs/mod-hub-sdk.md") -Message "Metadata integration_doc path mismatch."
     Assert-Condition -Condition ($metadata.assets.quickstart_doc -eq "docs/mod-hub-sdk-quickstart.md") -Message "Metadata quickstart_doc path mismatch."
+    Assert-Condition -Condition ($null -ne $metadata.export_contract) -Message "Metadata export_contract block is missing."
+    Assert-Condition -Condition ($metadata.export_contract.canonical_get_api_export -eq "EMC_ModHub_GetApi") -Message "Metadata canonical_get_api_export mismatch."
+    $compatExports = @($metadata.export_contract.compatibility_get_api_exports)
+    Assert-Condition -Condition ($compatExports.Count -ge 1) -Message "Metadata compatibility_get_api_exports is empty."
+    Assert-Condition -Condition ($compatExports -contains "EMC_ModHub_GetApi_v1_compat") -Message "Metadata compatibility alias export missing."
+    Assert-Condition -Condition ($metadata.export_contract.compatibility_alias_removal_target -eq "v1.2.0") -Message "Metadata compatibility_alias_removal_target mismatch."
 
     $supported = @($metadata.supported_hub_api_versions)
     Assert-Condition -Condition ($supported.Count -ge 1) -Message "supported_hub_api_versions is empty."

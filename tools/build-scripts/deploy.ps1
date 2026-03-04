@@ -52,6 +52,40 @@ if (-not (Test-Path $resolved.KenshiModPath)) {
     Write-Host "Created mod directory: $($resolved.KenshiModPath)" -ForegroundColor Gray
 }
 
+$destDllPath = Join-Path $resolved.KenshiModPath $resolved.DllName
+$preflight = Test-DeployTargetPreflight -TargetPath $destDllPath -KenshiPath $resolved.KenshiPath
+if (-not $preflight.CanProceed) {
+    Write-Host "ERROR: Deploy preflight failed. Destination DLL cannot be replaced." -ForegroundColor Red
+    Write-Host "Target path: $($preflight.TargetPath)" -ForegroundColor Yellow
+
+    if ($preflight.FailureReason -eq "in_use") {
+        if ($preflight.SuspectedProcesses.Count -gt 0) {
+            Write-Host "Suspected locking process(es):" -ForegroundColor Yellow
+            foreach ($proc in $preflight.SuspectedProcesses) {
+                Write-Host "  - $($proc.Name) (PID $($proc.Id))" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "Suspected locking process(es): unavailable" -ForegroundColor Yellow
+        }
+
+        Write-Host "Next steps:" -ForegroundColor Yellow
+        Write-Host "  1) Close Kenshi and any tooling that may load this DLL." -ForegroundColor Yellow
+        Write-Host "  2) If a PID is listed above, stop that process first." -ForegroundColor Yellow
+        Write-Host "  3) Retry deploy after the lock is released." -ForegroundColor Yellow
+    } else {
+        Write-Host "Reason: Destination DLL is not writable." -ForegroundColor Yellow
+        Write-Host "Next steps:" -ForegroundColor Yellow
+        Write-Host "  1) Verify write permissions on the target mod folder." -ForegroundColor Yellow
+        Write-Host "  2) Retry deploy." -ForegroundColor Yellow
+    }
+
+    if ($preflight.Details) {
+        Write-Host "Details: $($preflight.Details)" -ForegroundColor Red
+    }
+
+    exit $preflight.ExitCode
+}
+
 if (-not (Test-Path $resolved.ModDir) -and (Test-Path $initTemplateScript)) {
     Write-Host "Local mod template folder missing. Initializing baseline template..." -ForegroundColor Yellow
     try {
@@ -70,7 +104,6 @@ if (Test-Path $resolved.ModDir) {
     Write-Host "Only DLL will be copied." -ForegroundColor Yellow
 }
 
-$destDllPath = Join-Path $resolved.KenshiModPath $resolved.DllName
 try {
     Copy-Item -Path $resolved.DllPath -Destination $destDllPath -Force
 } catch {

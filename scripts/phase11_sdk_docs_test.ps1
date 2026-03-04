@@ -56,8 +56,12 @@ $quickstartDocsText = Get-Content -Path $quickstartDocsPath -Raw
 
 $requiredSymbols = @(
     "EMC_ModHub_GetApi",
+    "EMC_ModHub_GetApi_v1_compat",
     "EMC_HUB_API_VERSION_1",
     "EMC_HUB_API_V1_MIN_SIZE",
+    "EMC_MOD_HUB_GET_API_EXPORT_NAME",
+    "EMC_MOD_HUB_GET_API_COMPAT_EXPORT_NAME",
+    "EMC_MOD_HUB_GET_API_COMPAT_REMOVAL_TARGET",
     "EMC_Result",
     "EMC_OK",
     "EMC_ERR_INVALID_ARGUMENT",
@@ -100,7 +104,8 @@ $requiredLogEvents = @(
     "event=hub_setting_registration_conflict",
     "event=hub_action_failure",
     "event=hub_action_refresh_get_failure",
-    "event=hub_commit_get_failure"
+    "event=hub_commit_get_failure",
+    "event=hub_get_api_alias_deprecated"
 )
 
 foreach ($eventName in $requiredLogEvents) {
