@@ -162,6 +162,14 @@ emc::ModHubClientGetApiFn GetDefaultGetApiFn()
 }
 #endif
 
+bool HasOptionsWindowInitObserverSupport(const EMC_HubApiV1* api, uint32_t api_size)
+{
+    return api != 0
+        && api_size >= EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE
+        && api->register_options_window_init_observer != 0
+        && api->unregister_options_window_init_observer != 0;
+}
+
 EMC_Result DefaultGetApi(
     uint32_t requested_version,
     uint32_t caller_api_size,
@@ -299,12 +307,21 @@ ModHubClient::Config::Config()
 }
 
 ModHubClient::ModHubClient()
+    : observer_api_(0)
+    , options_window_init_observer_registered_(false)
 {
     Reset();
 }
 
 ModHubClient::ModHubClient(const Config& config)
     : config_(config)
+    , observer_api_(0)
+    , options_window_init_observer_registered_(false)
+{
+    Reset();
+}
+
+ModHubClient::~ModHubClient()
 {
     Reset();
 }
@@ -312,6 +329,7 @@ ModHubClient::ModHubClient(const Config& config)
 void ModHubClient::SetConfig(const Config& config)
 {
     config_ = config;
+    Reset();
 }
 
 const ModHubClient::Config& ModHubClient::GetConfig() const
@@ -321,10 +339,13 @@ const ModHubClient::Config& ModHubClient::GetConfig() const
 
 void ModHubClient::Reset()
 {
+    UnregisterOptionsWindowInitObserverIfNeeded();
     use_hub_ui_ = false;
     attach_retry_pending_ = false;
     attach_retry_attempted_ = false;
     last_attempt_failure_result_ = EMC_OK;
+    observer_api_ = 0;
+    options_window_init_observer_registered_ = false;
 }
 
 ModHubClient::AttemptResult ModHubClient::OnStartup()
@@ -349,7 +370,9 @@ ModHubClient::AttemptResult ModHubClient::OnOptionsWindowInit()
 
     attach_retry_attempted_ = true;
     attach_retry_pending_ = false;
-    return AttemptAttachAndRegister(true);
+    const AttemptResult result = AttemptAttachAndRegister(true);
+    UnregisterOptionsWindowInitObserverIfNeeded();
+    return result;
 }
 
 bool ModHubClient::UseHubUi() const
@@ -372,6 +395,49 @@ EMC_Result ModHubClient::LastAttemptFailureResult() const
     return last_attempt_failure_result_;
 }
 
+void ModHubClient::RegisterOptionsWindowInitObserverIfAvailable(const EMC_HubApiV1* api, uint32_t api_size)
+{
+    if (options_window_init_observer_registered_ || !HasOptionsWindowInitObserverSupport(api, api_size))
+    {
+        return;
+    }
+
+    if (api->register_options_window_init_observer(&ModHubClient::OnOptionsWindowInitObserverThunk, this) != EMC_OK)
+    {
+        return;
+    }
+
+    observer_api_ = api;
+    options_window_init_observer_registered_ = true;
+}
+
+void ModHubClient::UnregisterOptionsWindowInitObserverIfNeeded()
+{
+    if (!options_window_init_observer_registered_ || observer_api_ == 0)
+    {
+        return;
+    }
+
+    if (observer_api_->unregister_options_window_init_observer != 0)
+    {
+        observer_api_->unregister_options_window_init_observer(&ModHubClient::OnOptionsWindowInitObserverThunk, this);
+    }
+
+    observer_api_ = 0;
+    options_window_init_observer_registered_ = false;
+}
+
+void __cdecl ModHubClient::OnOptionsWindowInitObserverThunk(void* user_data)
+{
+    if (user_data == 0)
+    {
+        return;
+    }
+
+    ModHubClient* client = static_cast<ModHubClient*>(user_data);
+    client->OnOptionsWindowInit();
+}
+
 ModHubClient::AttemptResult ModHubClient::AttemptAttachAndRegister(bool is_retry)
 {
     if (config_.register_fn == 0 && config_.table_registration == 0)
@@ -379,17 +445,6 @@ ModHubClient::AttemptResult ModHubClient::AttemptAttachAndRegister(bool is_retry
         use_hub_ui_ = false;
         last_attempt_failure_result_ = EMC_ERR_INVALID_ARGUMENT;
         return INVALID_CONFIGURATION;
-    }
-
-    if (config_.should_force_attach_failure_fn != 0)
-    {
-        EMC_Result forced_result = EMC_ERR_INTERNAL;
-        if (config_.should_force_attach_failure_fn(config_.attach_failure_user_data, is_retry, &forced_result))
-        {
-            use_hub_ui_ = false;
-            last_attempt_failure_result_ = forced_result;
-            return ATTACH_FAILED;
-        }
     }
 
     const ModHubClientGetApiFn get_api_fn = config_.get_api_fn != 0 ? config_.get_api_fn : &DefaultGetApi;
@@ -414,6 +469,22 @@ ModHubClient::AttemptResult ModHubClient::AttemptAttachAndRegister(bool is_retry
         return ATTACH_FAILED;
     }
 
+    if (!is_retry)
+    {
+        RegisterOptionsWindowInitObserverIfAvailable(api, api_size);
+    }
+
+    if (config_.should_force_attach_failure_fn != 0)
+    {
+        EMC_Result forced_result = EMC_ERR_INTERNAL;
+        if (config_.should_force_attach_failure_fn(config_.attach_failure_user_data, is_retry, &forced_result))
+        {
+            use_hub_ui_ = false;
+            last_attempt_failure_result_ = forced_result;
+            return ATTACH_FAILED;
+        }
+    }
+
     EMC_Result register_result = EMC_ERR_INVALID_ARGUMENT;
     if (config_.table_registration != 0)
     {
@@ -425,11 +496,13 @@ ModHubClient::AttemptResult ModHubClient::AttemptAttachAndRegister(bool is_retry
     }
     if (register_result != EMC_OK)
     {
+        UnregisterOptionsWindowInitObserverIfNeeded();
         use_hub_ui_ = false;
         last_attempt_failure_result_ = register_result;
         return REGISTRATION_FAILED;
     }
 
+    UnregisterOptionsWindowInitObserverIfNeeded();
     use_hub_ui_ = true;
     last_attempt_failure_result_ = EMC_OK;
     return ATTACH_SUCCESS;

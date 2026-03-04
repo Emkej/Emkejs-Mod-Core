@@ -59,6 +59,7 @@ $requiredSymbols = @(
     "EMC_ModHub_GetApi_v1_compat",
     "EMC_HUB_API_VERSION_1",
     "EMC_HUB_API_V1_MIN_SIZE",
+    "EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE",
     "EMC_MOD_HUB_GET_API_EXPORT_NAME",
     "EMC_MOD_HUB_GET_API_COMPAT_EXPORT_NAME",
     "EMC_MOD_HUB_GET_API_COMPAT_REMOVAL_TARGET",
@@ -71,6 +72,9 @@ $requiredSymbols = @(
     "EMC_ERR_NOT_FOUND",
     "EMC_ERR_CALLBACK_FAILED",
     "EMC_ERR_INTERNAL",
+    "EMC_OptionsWindowInitObserverFn",
+    "register_options_window_init_observer",
+    "unregister_options_window_init_observer",
     "EMC_KeybindValueV1",
     "EMC_KEY_UNBOUND",
     "EMC_ACTION_FORCE_REFRESH",
@@ -94,6 +98,8 @@ foreach ($symbol in $requiredSymbols) {
 }
 
 Assert-Condition -Condition ($docsText.Contains("mod-hub-sdk-quickstart.md")) -Message "docs/mod-hub-sdk.md should reference the quick-start guide."
+Assert-Condition -Condition ($docsText.Contains("legacy compatibility fallback")) -Message "docs/mod-hub-sdk.md should describe the legacy options-init fallback."
+Assert-Condition -Condition ($docsText.Contains("Callbacks run on the main thread")) -Message "docs/mod-hub-sdk.md should document the observer callback thread contract."
 
 $requiredLogEvents = @(
     "event=hub_commit_failure",
@@ -119,7 +125,8 @@ $requiredQuickstartSymbols = @(
     "HubModId",
     "ModHubConsumerAdapter_OnStartup()",
     "ModHubConsumerAdapter_OnOptionsWindowInit()",
-    "ModHubConsumerAdapter_ShouldCreateLocalTab()"
+    "ModHubConsumerAdapter_ShouldCreateLocalTab()",
+    "no per-mod options-init RVA hook is required"
 )
 
 foreach ($symbol in $requiredQuickstartSymbols) {
@@ -143,6 +150,7 @@ Assert-Condition -Condition (-not $sourceCode.Contains('#include "hub_')) -Messa
 Assert-Condition -Condition ($headerCode.Contains("ModHubConsumerAdapter_IsAttachRetryPending")) -Message "Phase11 sample header missing retry-pending accessor."
 Assert-Condition -Condition ($headerCode.Contains("ModHubConsumerAdapter_HasAttachRetryAttempted")) -Message "Phase11 sample header missing retry-attempted accessor."
 Assert-Condition -Condition ($headerCode.Contains("ModHubConsumerAdapter_LastAttachFailureResult")) -Message "Phase11 sample header missing last-failure accessor."
+Assert-Condition -Condition ($headerCode.Contains("older hub builds that do not expose observer registration")) -Message "Phase11 sample header should describe legacy observer fallback wiring."
 Assert-Condition -Condition ($sourceCode.Contains("return !ModHubConsumerAdapter_UseHubUi();")) -Message "Phase11 sample should derive local-tab suppression from UseHubUi."
 
 if (-not $TempRoot) {

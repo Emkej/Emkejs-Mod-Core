@@ -478,7 +478,9 @@ const EMC_HubApiV1* GetTestApi()
         &TestRegisterKeybind,
         &TestRegisterInt,
         &TestRegisterFloat,
-        &TestRegisterAction};
+        &TestRegisterAction,
+        0,
+        0};
     return &kApi;
 }
 

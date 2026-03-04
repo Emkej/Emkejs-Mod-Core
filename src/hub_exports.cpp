@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#include <vector>
 
 namespace
 {
@@ -20,6 +21,18 @@ const char* kLogNone = "none";
 const char* kEnvDisableRegistryAttach = "EMC_HUB_DISABLE_REGISTRY_ATTACH";
 const char* kGetApiAliasRemovalTarget = EMC_MOD_HUB_GET_API_COMPAT_REMOVAL_TARGET;
 int32_t g_get_api_alias_warning_count = 0;
+
+struct OptionsWindowInitObserverEntry
+{
+    EMC_OptionsWindowInitObserverFn observer_fn;
+    void* user_data;
+    bool active;
+};
+
+std::vector<OptionsWindowInitObserverEntry> g_options_window_init_observers;
+bool g_options_window_init_observer_dispatch_installed = false;
+bool g_options_window_init_observer_notify_active = false;
+
 #if defined(EMC_ENABLE_TEST_EXPORTS)
 bool g_registry_attach_override_set = false;
 bool g_registry_attach_override_enabled = true;
@@ -61,6 +74,146 @@ bool IsRegistryAttachEnabled()
 #endif
 
     return !IsEnvTruthy(std::getenv(kEnvDisableRegistryAttach));
+}
+
+bool MatchesOptionsWindowInitObserver(
+    const OptionsWindowInitObserverEntry& entry,
+    EMC_OptionsWindowInitObserverFn observer_fn,
+    void* user_data)
+{
+    return entry.active
+        && entry.observer_fn == observer_fn
+        && entry.user_data == user_data;
+}
+
+void PruneInactiveOptionsWindowInitObservers()
+{
+    if (g_options_window_init_observer_notify_active)
+    {
+        return;
+    }
+
+    for (size_t index = 0u; index < g_options_window_init_observers.size();)
+    {
+        if (g_options_window_init_observers[index].active)
+        {
+            ++index;
+            continue;
+        }
+
+        g_options_window_init_observers.erase(g_options_window_init_observers.begin() + index);
+    }
+}
+
+void NotifyRegisteredOptionsWindowInitObservers()
+{
+    if (g_options_window_init_observer_notify_active)
+    {
+        return;
+    }
+
+    g_options_window_init_observer_notify_active = true;
+
+    for (size_t index = 0u; index < g_options_window_init_observers.size(); ++index)
+    {
+        const OptionsWindowInitObserverEntry& entry = g_options_window_init_observers[index];
+        if (!entry.active || entry.observer_fn == 0)
+        {
+            continue;
+        }
+
+        entry.observer_fn(entry.user_data);
+    }
+
+    g_options_window_init_observer_notify_active = false;
+    PruneInactiveOptionsWindowInitObservers();
+}
+
+void EnsureOptionsWindowInitObserverDispatchInstalled()
+{
+    if (g_options_window_init_observer_dispatch_installed)
+    {
+        return;
+    }
+
+    HubMenuBridge_SetOptionsWindowInitObserver(&NotifyRegisteredOptionsWindowInitObservers);
+    g_options_window_init_observer_dispatch_installed = true;
+}
+
+EMC_Result __cdecl RegisterOptionsWindowInitObserverEntry(
+    EMC_OptionsWindowInitObserverFn observer_fn,
+    void* user_data)
+{
+    if (observer_fn == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (g_options_window_init_observer_notify_active)
+    {
+        return EMC_ERR_CONFLICT;
+    }
+
+    EnsureOptionsWindowInitObserverDispatchInstalled();
+
+    for (size_t index = 0u; index < g_options_window_init_observers.size(); ++index)
+    {
+        if (MatchesOptionsWindowInitObserver(g_options_window_init_observers[index], observer_fn, user_data))
+        {
+            return EMC_ERR_CONFLICT;
+        }
+    }
+
+    OptionsWindowInitObserverEntry entry;
+    entry.observer_fn = observer_fn;
+    entry.user_data = user_data;
+    entry.active = true;
+    g_options_window_init_observers.push_back(entry);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl UnregisterOptionsWindowInitObserverEntry(
+    EMC_OptionsWindowInitObserverFn observer_fn,
+    void* user_data)
+{
+    if (observer_fn == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    for (size_t index = 0u; index < g_options_window_init_observers.size(); ++index)
+    {
+        OptionsWindowInitObserverEntry& entry = g_options_window_init_observers[index];
+        if (!MatchesOptionsWindowInitObserver(entry, observer_fn, user_data))
+        {
+            continue;
+        }
+
+        if (g_options_window_init_observer_notify_active)
+        {
+            entry.active = false;
+            return EMC_OK;
+        }
+
+        g_options_window_init_observers.erase(g_options_window_init_observers.begin() + index);
+        return EMC_OK;
+    }
+
+    return EMC_ERR_NOT_FOUND;
+}
+
+int32_t GetActiveOptionsWindowInitObserverCount()
+{
+    int32_t count = 0;
+    for (size_t index = 0u; index < g_options_window_init_observers.size(); ++index)
+    {
+        if (g_options_window_init_observers[index].active)
+        {
+            count += 1;
+        }
+    }
+
+    return count;
 }
 
 #if defined(EMC_ENABLE_TEST_EXPORTS)
@@ -247,13 +400,16 @@ const EMC_HubApiV1 kHubApiV1 = {
     &RegisterKeybindSettingEntry,
     &RegisterIntSettingEntry,
     &RegisterFloatSettingEntry,
-    &RegisterActionRowEntry};
+    &RegisterActionRowEntry,
+    &RegisterOptionsWindowInitObserverEntry,
+    &UnregisterOptionsWindowInitObserverEntry};
 
 #if defined(EMC_ENABLE_TEST_EXPORTS)
 const int32_t kModHubClientTestGetApiModeSuccess = 0;
 const int32_t kModHubClientTestGetApiModeReturnFailure = 1;
 const int32_t kModHubClientTestGetApiModeNullApi = 2;
 const int32_t kModHubClientTestGetApiModeShortApiSize = 3;
+const int32_t kModHubClientTestGetApiModeLegacyNoObserver = 4;
 
 const int32_t kModHubClientTestForceAttachNone = 0;
 const int32_t kModHubClientTestForceAttachStartupOnly = 1;
@@ -295,6 +451,10 @@ EMC_Result __cdecl ModHubClientTestGetApi(
     case kModHubClientTestGetApiModeShortApiSize:
         *out_api = &kHubApiV1;
         *out_api_size = EMC_HUB_API_V1_MIN_SIZE > 0u ? EMC_HUB_API_V1_MIN_SIZE - 1u : 0u;
+        return EMC_OK;
+    case kModHubClientTestGetApiModeLegacyNoObserver:
+        *out_api = &kHubApiV1;
+        *out_api_size = EMC_HUB_API_V1_MIN_SIZE;
         return EMC_OK;
     default:
         break;
@@ -850,7 +1010,9 @@ const EMC_HubApiV1* GetModHubClientTableTestApi()
         &ModHubClientTableTestRegisterKeybind,
         &ModHubClientTableTestRegisterInt,
         &ModHubClientTableTestRegisterFloat,
-        &ModHubClientTableTestRegisterAction};
+        &ModHubClientTableTestRegisterAction,
+        0,
+        0};
     return &kTableApi;
 }
 
@@ -997,6 +1159,11 @@ extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Menu_SetHubEnabled(int32
 extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Menu_OpenOptionsWindow()
 {
     HubMenuBridge_OnOptionsWindowInit();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_GetOptionsWindowInitObserverCount()
+{
+    return GetActiveOptionsWindowInitObserverCount();
 }
 
 extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Menu_SaveOptionsWindow()

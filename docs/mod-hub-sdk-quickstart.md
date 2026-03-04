@@ -68,8 +68,10 @@ Use your existing get/set callbacks in row definitions; the helper performs dete
 Call into the adapter from your plugin lifecycle:
 
 - Startup: `ModHubConsumerAdapter_OnStartup()`
-- Options window init: `ModHubConsumerAdapter_OnOptionsWindowInit()`
+- Options window init (legacy hub compatibility only): `ModHubConsumerAdapter_OnOptionsWindowInit()`
 - Local UI fallback gate: `ModHubConsumerAdapter_ShouldCreateLocalTab()` (or `!ModHubConsumerAdapter_UseHubUi()`)
+
+Current hub builds register the retry observer from `ModHubConsumerAdapter_OnStartup()`, so no per-mod options-init RVA hook is required unless you need compatibility with older hubs.
 
 If hub attach/registration fails, helper fallback keeps your local UI path active.
 

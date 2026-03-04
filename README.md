@@ -83,3 +83,5 @@ After deploy, expected files:
   - `./scripts/phase12_deploy_lock_preflight_test.ps1`
 - Phase 13 export contract stability harness:
   - `./scripts/phase13_export_contract_stability_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
+- Phase 14 options-init observer harness:
+  - `./scripts/phase14_options_init_observer_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`

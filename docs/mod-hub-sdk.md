@@ -20,6 +20,7 @@ Handshake constants:
 
 - `EMC_HUB_API_VERSION_1`
 - `EMC_HUB_API_V1_MIN_SIZE`
+- `EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE`
 
 Handshake entrypoint:
 
@@ -27,6 +28,15 @@ Handshake entrypoint:
 - Call with `requested_version = EMC_HUB_API_VERSION_1`.
 - Call with `caller_api_size = EMC_HUB_API_V1_MIN_SIZE`.
 - On success, `out_api` points to a valid `EMC_HubApiV1` table and `out_api_size` is at least `EMC_HUB_API_V1_MIN_SIZE`.
+
+Observer extension (Phase 14):
+
+- Callback type: `EMC_OptionsWindowInitObserverFn`.
+- Feature-detect the observer extension with `out_api_size >= EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE`.
+- When present, `EMC_HubApiV1` also exposes:
+  - `register_options_window_init_observer`
+  - `unregister_options_window_init_observer`
+- Callbacks run on the main thread during the options-window-init lifecycle point and must be non-reentrant.
 
 Export stability policy (Phase 13):
 
@@ -80,7 +90,7 @@ Deterministic helper behavior:
 2. Row registration in table order.
 3. Fail-fast on first non-`EMC_OK`.
 
-## Helper Integration (Phase 7 SSOT)
+## Helper Integration (Phase 7 / Phase 14 SSOT)
 
 `ModHubClient` entrypoints:
 
@@ -97,8 +107,10 @@ Optional diagnostics accessors:
 Soft dependency behavior:
 
 1. Startup attach attempt runs in `OnStartup()`.
-2. Exactly one retry is allowed in `OnOptionsWindowInit()` after attach failure.
-3. If registration fails after attach, helper returns fallback state (`UseHubUi() == false`).
+2. If observer registration is available, `OnStartup()` auto-registers one hub-owned options-window-init observer for retry.
+3. Exactly one retry is allowed after attach failure, delivered by either the hub-owned observer or explicit `OnOptionsWindowInit()`.
+4. `OnOptionsWindowInit()` remains a legacy compatibility fallback for older hub builds that only expose `EMC_HUB_API_V1_MIN_SIZE`.
+5. If registration fails after attach, helper returns fallback state (`UseHubUi() == false`).
 
 Minimal wiring:
 
@@ -152,6 +164,11 @@ Header snippet:
 #define MOD_HUB_CONSUMER_ADAPTER_H
 
 #include "emc/mod_hub_client.h"
+
+// Integration wiring:
+// 1) Call ModHubConsumerAdapter_OnStartup() from startPlugin.
+// 2) Call ModHubConsumerAdapter_OnOptionsWindowInit() only when you need legacy compatibility with older hub builds that do not expose observer registration.
+// 3) Guard local tab creation with ModHubConsumerAdapter_ShouldCreateLocalTab().
 
 void ModHubConsumerAdapter_OnStartup();
 void ModHubConsumerAdapter_OnOptionsWindowInit();
@@ -487,3 +504,9 @@ Phase 13:
 ```
 
 Use `-KenshiPath` when Kenshi runtime DLLs are not already on `PATH`.
+
+Phase 14:
+
+```powershell
+./scripts/phase14_options_init_observer_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```

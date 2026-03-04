@@ -61,6 +61,7 @@ typedef EMC_Result(__cdecl* EMC_GetFloatCallback)(void* user_data, float* out_va
 typedef EMC_Result(__cdecl* EMC_SetFloatCallback)(void* user_data, float value, char* err_buf, uint32_t err_buf_size);
 
 typedef EMC_Result(__cdecl* EMC_ActionRowCallback)(void* user_data, char* err_buf, uint32_t err_buf_size);
+typedef void(__cdecl* EMC_OptionsWindowInitObserverFn)(void* user_data);
 
 typedef struct EMC_ModDescriptorV1
 {
@@ -138,9 +139,13 @@ typedef struct EMC_HubApiV1
     EMC_Result(__cdecl* register_int_setting)(EMC_ModHandle mod, const EMC_IntSettingDefV1* def);
     EMC_Result(__cdecl* register_float_setting)(EMC_ModHandle mod, const EMC_FloatSettingDefV1* def);
     EMC_Result(__cdecl* register_action_row)(EMC_ModHandle mod, const EMC_ActionRowDefV1* def);
+    EMC_Result(__cdecl* register_options_window_init_observer)(EMC_OptionsWindowInitObserverFn observer_fn, void* user_data);
+    EMC_Result(__cdecl* unregister_options_window_init_observer)(EMC_OptionsWindowInitObserverFn observer_fn, void* user_data);
 } EMC_HubApiV1;
 
-#define EMC_HUB_API_V1_MIN_SIZE ((uint32_t)sizeof(EMC_HubApiV1))
+#define EMC_HUB_API_V1_MIN_SIZE ((uint32_t)56u)
+#define EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE \
+    ((uint32_t)(offsetof(EMC_HubApiV1, unregister_options_window_init_observer) + sizeof(void*)))
 
 EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_GetApi(
     uint32_t requested_version,
@@ -231,7 +236,7 @@ EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, user_data, 24);
 EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, action_flags, 32);
 EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, on_action, 40);
 
-EMC_ABI_ASSERT_SIZE(EMC_HubApiV1, 56);
+EMC_ABI_ASSERT_SIZE(EMC_HubApiV1, 72);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, api_version, 0);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, api_size, 4);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_mod, 8);
@@ -240,6 +245,8 @@ EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_keybind_setting, 24);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_int_setting, 32);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_float_setting, 40);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_action_row, 48);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_options_window_init_observer, 56);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, unregister_options_window_init_observer, 64);
 
 #undef EMC_ABI_ASSERT_OFFSET
 #undef EMC_ABI_ASSERT_SIZE

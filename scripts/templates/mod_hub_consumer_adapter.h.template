@@ -5,7 +5,7 @@
 
 // Integration wiring:
 // 1) Call ModHubConsumerAdapter_OnStartup() from startPlugin.
-// 2) Call ModHubConsumerAdapter_OnOptionsWindowInit() from your options-window-init hook.
+// 2) Call ModHubConsumerAdapter_OnOptionsWindowInit() only when you need legacy compatibility with older hub builds that do not expose observer registration.
 // 3) Guard local tab creation with ModHubConsumerAdapter_ShouldCreateLocalTab().
 
 void ModHubConsumerAdapter_OnStartup();
