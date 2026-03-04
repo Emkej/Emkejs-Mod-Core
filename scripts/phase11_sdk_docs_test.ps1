@@ -50,6 +50,9 @@ if (-not (Test-Path $RepoRoot)) {
 $docsPath = Join-Path $RepoRoot "docs\mod-hub-sdk.md"
 Assert-Condition -Condition (Test-Path $docsPath) -Message "Missing docs file: $docsPath"
 $docsText = Get-Content -Path $docsPath -Raw
+$quickstartDocsPath = Join-Path $RepoRoot "docs\mod-hub-sdk-quickstart.md"
+Assert-Condition -Condition (Test-Path $quickstartDocsPath) -Message "Missing quick-start docs file: $quickstartDocsPath"
+$quickstartDocsText = Get-Content -Path $quickstartDocsPath -Raw
 
 $requiredSymbols = @(
     "EMC_ModHub_GetApi",
@@ -86,6 +89,8 @@ foreach ($symbol in $requiredSymbols) {
     Assert-Condition -Condition ($docsText.Contains($symbol)) -Message "docs/mod-hub-sdk.md missing symbol: $symbol"
 }
 
+Assert-Condition -Condition ($docsText.Contains("mod-hub-sdk-quickstart.md")) -Message "docs/mod-hub-sdk.md should reference the quick-start guide."
+
 $requiredLogEvents = @(
     "event=hub_commit_failure",
     "event=hub_commit_summary",
@@ -100,6 +105,20 @@ $requiredLogEvents = @(
 
 foreach ($eventName in $requiredLogEvents) {
     Assert-Condition -Condition ($docsText.Contains($eventName)) -Message "docs/mod-hub-sdk.md missing log event: $eventName"
+}
+
+$requiredQuickstartSymbols = @(
+    "init-mod-template.ps1 -WithHub",
+    "init-mod-template.sh --with-hub",
+    "HubNamespaceId",
+    "HubModId",
+    "ModHubConsumerAdapter_OnStartup()",
+    "ModHubConsumerAdapter_OnOptionsWindowInit()",
+    "ModHubConsumerAdapter_ShouldCreateLocalTab()"
+)
+
+foreach ($symbol in $requiredQuickstartSymbols) {
+    Assert-Condition -Condition ($quickstartDocsText.Contains($symbol)) -Message "docs/mod-hub-sdk-quickstart.md missing symbol: $symbol"
 }
 
 $headerCode = Extract-CodeBlockBetweenMarkers `

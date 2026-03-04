@@ -54,6 +54,7 @@ $apiHeaderPath = Join-Path $ctx.RepoDir "include\emc\mod_hub_api.h"
 $clientHeaderPath = Join-Path $ctx.RepoDir "include\emc\mod_hub_client.h"
 $clientSourcePath = Join-Path $ctx.RepoDir "src\mod_hub_client.cpp"
 $sdkDocPath = Join-Path $ctx.RepoDir "docs\mod-hub-sdk.md"
+$sdkQuickstartDocPath = Join-Path $ctx.RepoDir "docs\mod-hub-sdk-quickstart.md"
 $sampleHeaderTemplatePath = Join-Path $ctx.RepoDir "scripts\templates\mod_hub_consumer_adapter.h.template"
 $sampleSourceTemplatePath = Join-Path $ctx.RepoDir "scripts\templates\mod_hub_consumer_adapter.cpp.template"
 
@@ -62,6 +63,7 @@ foreach ($requiredPath in @(
         $clientHeaderPath,
         $clientSourcePath,
         $sdkDocPath,
+        $sdkQuickstartDocPath,
         $sampleHeaderTemplatePath,
         $sampleSourceTemplatePath)) {
     if (-not (Test-Path $requiredPath)) {
@@ -110,6 +112,7 @@ Copy-Item -Path $apiHeaderPath -Destination (Join-Path $bundleIncludeDir "mod_hu
 Copy-Item -Path $clientHeaderPath -Destination (Join-Path $bundleIncludeDir "mod_hub_client.h") -Force
 Copy-Item -Path $clientSourcePath -Destination (Join-Path $bundleSrcDir "mod_hub_client.cpp") -Force
 Copy-Item -Path $sdkDocPath -Destination (Join-Path $bundleDocsDir "mod-hub-sdk.md") -Force
+Copy-Item -Path $sdkQuickstartDocPath -Destination (Join-Path $bundleDocsDir "mod-hub-sdk-quickstart.md") -Force
 
 $sampleTokens = [ordered]@{
     "__NAMESPACE_ID__" = "example.mod_hub"
@@ -140,6 +143,7 @@ $sdkMetadata = [ordered]@{
         minimal_sample_header = "samples/minimal/mod_hub_consumer_adapter.h"
         minimal_sample_source = "samples/minimal/mod_hub_consumer_adapter.cpp"
         integration_doc = "docs/mod-hub-sdk.md"
+        quickstart_doc = "docs/mod-hub-sdk-quickstart.md"
     }
 }
 $sdkMetadata | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $bundleRoot "sdk-metadata.json")

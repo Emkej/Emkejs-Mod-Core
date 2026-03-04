@@ -61,6 +61,7 @@ try {
         "samples\minimal\mod_hub_consumer_adapter.h",
         "samples\minimal\mod_hub_consumer_adapter.cpp",
         "docs\mod-hub-sdk.md",
+        "docs\mod-hub-sdk-quickstart.md",
         "sdk-metadata.json",
         "VERSION"
     )
@@ -73,6 +74,8 @@ try {
     $metadataPath = Join-Path $bundleDir.FullName "sdk-metadata.json"
     $metadata = Get-Content -Path $metadataPath -Raw | ConvertFrom-Json
     Assert-Condition -Condition ($metadata.sdk_package_version -eq $sdkVersion) -Message "sdk_package_version mismatch in metadata."
+    Assert-Condition -Condition ($metadata.assets.integration_doc -eq "docs/mod-hub-sdk.md") -Message "Metadata integration_doc path mismatch."
+    Assert-Condition -Condition ($metadata.assets.quickstart_doc -eq "docs/mod-hub-sdk-quickstart.md") -Message "Metadata quickstart_doc path mismatch."
 
     $supported = @($metadata.supported_hub_api_versions)
     Assert-Condition -Condition ($supported.Count -ge 1) -Message "supported_hub_api_versions is empty."
