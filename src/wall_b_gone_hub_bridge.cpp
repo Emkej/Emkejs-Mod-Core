@@ -214,16 +214,6 @@ void LogFallback(const char* reason, EMC_Result result)
     ErrorLog(line.str().c_str());
 }
 
-void LogAttachSuccess(const char* phase)
-{
-    std::ostringstream line;
-    line << kPluginName
-         << " INFO: event=wall_b_gone_hub_attach_success"
-         << " phase=" << SafeLogValue(phase)
-         << " use_hub_ui=1";
-    DebugLog(line.str().c_str());
-}
-
 void LogConfigWarning(const char* reason, const char* detail)
 {
     std::ostringstream line;
@@ -1157,22 +1147,9 @@ void WallBGoneHubBridge_OnPluginStart()
     ConfigureHubClient();
 
     const emc::ModHubClient::AttemptResult result = g_mod_hub_client.OnStartup();
-    if (result == emc::ModHubClient::ATTACH_SUCCESS)
-    {
-        LogAttachSuccess("startup");
-    }
-    else if (result == emc::ModHubClient::ATTACH_FAILED)
+    if (result == emc::ModHubClient::ATTACH_FAILED)
     {
         LogAttachFailure("startup", g_mod_hub_client.LastAttemptFailureResult(), "get_api_failed");
-
-        if (g_mod_hub_client.IsAttachRetryPending())
-        {
-            std::ostringstream line;
-            line << kPluginName
-                 << " INFO: event=wall_b_gone_hub_retry_scheduled"
-                 << " hook=OptionsWindowInit";
-            DebugLog(line.str().c_str());
-        }
     }
     else if (result == emc::ModHubClient::REGISTRATION_FAILED)
     {
@@ -1196,11 +1173,7 @@ void WallBGoneHubBridge_OnOptionsWindowInit()
     }
 
     const emc::ModHubClient::AttemptResult result = g_mod_hub_client.OnOptionsWindowInit();
-    if (result == emc::ModHubClient::ATTACH_SUCCESS)
-    {
-        LogAttachSuccess("options_init_retry");
-    }
-    else if (result == emc::ModHubClient::ATTACH_FAILED)
+    if (result == emc::ModHubClient::ATTACH_FAILED)
     {
         LogAttachFailure("options_init_retry", g_mod_hub_client.LastAttemptFailureResult(), "get_api_failed");
         LogFallback("attach_retry_failed", g_mod_hub_client.LastAttemptFailureResult());

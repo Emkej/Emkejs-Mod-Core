@@ -17,8 +17,10 @@ namespace
 {
 const char* kLogNone = "none";
 const char* kEnvDisableRegistryAttach = "EMC_HUB_DISABLE_REGISTRY_ATTACH";
+#if defined(EMC_ENABLE_TEST_EXPORTS)
 bool g_registry_attach_override_set = false;
 bool g_registry_attach_override_enabled = true;
+#endif
 
 const char* SafeLogValue(const char* value)
 {
@@ -48,14 +50,17 @@ bool IsEnvTruthy(const char* value)
 
 bool IsRegistryAttachEnabled()
 {
+#if defined(EMC_ENABLE_TEST_EXPORTS)
     if (g_registry_attach_override_set)
     {
         return g_registry_attach_override_enabled;
     }
+#endif
 
     return !IsEnvTruthy(std::getenv(kEnvDisableRegistryAttach));
 }
 
+#if defined(EMC_ENABLE_TEST_EXPORTS)
 void SetRegistryAttachOverride(bool enabled)
 {
     g_registry_attach_override_set = true;
@@ -67,6 +72,7 @@ void ClearRegistryAttachOverride()
     g_registry_attach_override_set = false;
     g_registry_attach_override_enabled = true;
 }
+#endif
 
 void LogRegistrationRejected(const char* api_name, const char* reason, EMC_Result result, const char* message)
 {
@@ -175,6 +181,7 @@ const EMC_HubApiV1 kHubApiV1 = {
     &RegisterFloatSettingEntry,
     &RegisterActionRowEntry};
 
+#if defined(EMC_ENABLE_TEST_EXPORTS)
 const int32_t kModHubClientTestGetApiModeSuccess = 0;
 const int32_t kModHubClientTestGetApiModeReturnFailure = 1;
 const int32_t kModHubClientTestGetApiModeNullApi = 2;
@@ -840,6 +847,7 @@ void SetModHubClientTableTestMode(int32_t mode)
     ResetModHubClientTableTestCapture();
     g_mod_hub_client_table_test_state.client.Reset();
 }
+#endif
 }
 
 extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_GetApi(
@@ -876,6 +884,7 @@ extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_WallBGone_UseHubUi()
     return WallBGoneHubBridge_UseHubUi() ? 1 : 0;
 }
 
+#if defined(EMC_ENABLE_TEST_EXPORTS)
 extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_SetRegistrationLocked(int32_t is_locked)
 {
     HubRegistry_SetRegistrationLocked(is_locked != 0);
@@ -1324,3 +1333,4 @@ extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_WallBGone_HasAttachRe
 {
     return WallBGoneHubBridge_HasAttachRetryAttempted() ? 1 : 0;
 }
+#endif
