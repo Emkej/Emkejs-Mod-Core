@@ -13,6 +13,8 @@ param(
     [string]$ZipName = "",
     [string]$Version = "",
     [switch]$SkipSdkPackage,
+    [switch]$RunReliabilitySmoke,
+    [string]$SmokeKenshiPath = "",
     [string]$SdkOutDir = "",
     [string]$SdkZipName = "",
     [string]$SdkVersion = ""
@@ -36,6 +38,34 @@ if (Test-Path $LoadEnvScript) {
     . $LoadEnvScript -RepoDir $RepoDir
 }
 
+$CommonScript = Join-Path $SharedRoot "kenshi-common.ps1"
+if (-not (Test-Path $CommonScript)) {
+    Write-Host "ERROR: Shared helper script not found: $CommonScript" -ForegroundColor Red
+    exit 1
+}
+. $CommonScript
+
+$BuildContext = $null
+if ($RunReliabilitySmoke) {
+    $BuildContext = Resolve-KenshiBuildContext `
+        -BoundParameters $PSBoundParameters `
+        -RepoDir $RepoDir `
+        -ModName $ModName `
+        -ProjectFileName $ProjectFileName `
+        -OutputSubdir $OutputSubdir `
+        -DllName $DllName `
+        -ModFileName $ModFileName `
+        -ConfigFileName $ConfigFileName `
+        -Configuration $Configuration `
+        -Platform $Platform `
+        -PlatformToolset $PlatformToolset
+
+    if ($BuildContext.Configuration -ne "Debug") {
+        Write-Host "ERROR: -RunReliabilitySmoke requires -Configuration Debug." -ForegroundColor Red
+        exit 1
+    }
+}
+
 $Forward = @{}
 foreach ($k in @('ModName','ProjectFileName','OutputSubdir','Configuration','Platform','PlatformToolset','DllName','ModFileName','ConfigFileName','OutDir','ZipName','Version')) {
     if ($PSBoundParameters.ContainsKey($k)) { $Forward[$k] = (Get-Variable -Name $k -ValueOnly) }
@@ -44,6 +74,36 @@ foreach ($k in @('ModName','ProjectFileName','OutputSubdir','Configuration','Pla
 & $SharedScript @Forward
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
+}
+
+if ($RunReliabilitySmoke) {
+    if ($null -eq $BuildContext) {
+        throw "Build context was not resolved for reliability smoke."
+    }
+
+    $SmokeScript = Join-Path $ScriptDir "phase16_hub_attach_reliability_smoke_test.ps1"
+    if (-not (Test-Path $SmokeScript)) {
+        Write-Host "ERROR: Reliability smoke script not found: $SmokeScript" -ForegroundColor Red
+        exit 1
+    }
+
+    $ResolvedSmokeKenshiPath = Resolve-KenshiValue -CurrentValue $SmokeKenshiPath -EnvVar "KENSHI_PATH"
+    if (-not $ResolvedSmokeKenshiPath) {
+        $ResolvedSmokeKenshiPath = Resolve-KenshiValue -EnvVar "KENSHI_DEFAULT_PATH"
+    }
+
+    $SmokeParams = @{
+        DllPath = $BuildContext.DllPath
+    }
+
+    if ($ResolvedSmokeKenshiPath) {
+        $SmokeParams.KenshiPath = $ResolvedSmokeKenshiPath
+    }
+
+    & $SmokeScript @SmokeParams
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
 }
 
 if ($SkipSdkPackage) {

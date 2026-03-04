@@ -24,7 +24,7 @@ for arg in "$@"; do
   fi
 
   case "$arg" in
-    -ProjectFileName|-OutputSubdir|-OutDir|-SdkOutDir)
+    -ProjectFileName|-OutputSubdir|-OutDir|-SdkOutDir|-SmokeKenshiPath)
       ARGS+=("$arg")
       EXPECT_PATH=1
       ;;

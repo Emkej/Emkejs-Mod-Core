@@ -73,6 +73,8 @@ After deploy, expected files:
 - Build mod zip + SDK zip together:
   - `./scripts/build-and-package.sh`
   - `./scripts/build-and-package.ps1`
+- Run the Debug reliability smoke matrix through the build wrapper:
+  - `./scripts/build-and-package.ps1 -Configuration Debug -SkipSdkPackage -RunReliabilitySmoke [-SmokeKenshiPath <path-to-Kenshi>]`
 - Default SDK output:
   - `dist/Emkejs-Mod-Core-SDK-<VERSION>.zip`
 - Phase 10 validation harness:
@@ -87,3 +89,6 @@ After deploy, expected files:
   - `./scripts/phase14_options_init_observer_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
 - Phase 15 scaffold + single-TU sample harness:
   - `./scripts/phase15_scaffold_single_tu_test.ps1`
+- Phase 16 reliability smoke matrix harness:
+  - `./scripts/phase16_hub_attach_reliability_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
+- Use `-KenshiPath` / `-SmokeKenshiPath` when Kenshi runtime DLLs are not already on `PATH`.

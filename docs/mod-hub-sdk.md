@@ -494,6 +494,14 @@ Build mod zip + SDK zip together:
 ./scripts/build-and-package.ps1
 ```
 
+Run the Debug reliability smoke matrix through the standard build wrapper:
+
+```powershell
+./scripts/build-and-package.ps1 -Configuration Debug -SkipSdkPackage -RunReliabilitySmoke [-SmokeKenshiPath <path-to-Kenshi>]
+```
+
+Use `-SmokeKenshiPath` when Kenshi runtime DLLs are not already on `PATH`.
+
 Default SDK zip:
 
 - `dist/Emkejs-Mod-Core-SDK-<VERSION>.zip`
@@ -543,3 +551,11 @@ Phase 15:
 ```powershell
 ./scripts/phase15_scaffold_single_tu_test.ps1
 ```
+
+Phase 16:
+
+```powershell
+./scripts/phase16_hub_attach_reliability_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>] [-RepeatCount 2]
+```
+
+Use `-KenshiPath` when Kenshi runtime DLLs are not already on `PATH`.

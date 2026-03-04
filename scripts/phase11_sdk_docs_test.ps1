@@ -102,6 +102,8 @@ Assert-Condition -Condition ($docsText.Contains("legacy compatibility fallback")
 Assert-Condition -Condition ($docsText.Contains("Callbacks run on the main thread")) -Message "docs/mod-hub-sdk.md should document the observer callback thread contract."
 Assert-Condition -Condition ($docsText.Contains("samples/single-tu/mod_hub_consumer_single_tu.cpp")) -Message "docs/mod-hub-sdk.md should reference the packaged single-TU sample asset."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase15_scaffold_single_tu_test.ps1")) -Message "docs/mod-hub-sdk.md should reference the phase15 scaffold validation harness."
+Assert-Condition -Condition ($docsText.Contains("./scripts/build-and-package.ps1 -Configuration Debug -SkipSdkPackage -RunReliabilitySmoke [-SmokeKenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should document the Debug reliability smoke build wrapper command."
+Assert-Condition -Condition ($docsText.Contains("./scripts/phase16_hub_attach_reliability_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>] [-RepeatCount 2]")) -Message "docs/mod-hub-sdk.md should reference the phase16 reliability smoke harness."
 Assert-Condition -Condition ($docsText.Contains("Existing scaffold output remains valid.")) -Message "docs/mod-hub-sdk.md should include scaffold migration notes."
 
 $requiredLogEvents = @(
