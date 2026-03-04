@@ -1322,6 +1322,23 @@ EMC_Result HubUi_SetPendingIntFromText(
     }
 
     row->pending_int_value = SnapIntValueToStep(parsed_value, row->int_min_value, row->int_max_value, row->int_step);
+    row->int_text_parse_error = false;
+    row->inline_error.clear();
+    RecomputeIntDirty(row);
+    return EMC_OK;
+}
+
+EMC_Result HubUi_NormalizePendingIntText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id)
+{
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_INT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
     row->pending_int_text = FormatIntText(row->pending_int_value);
     row->int_text_parse_error = false;
     row->inline_error.clear();
@@ -1383,6 +1400,23 @@ EMC_Result HubUi_SetPendingFloatFromText(
     }
 
     row->pending_float_value = SnapFloatValueToStep(parsed_value, row->float_min_value, row->float_max_value, row->float_step);
+    row->float_text_parse_error = false;
+    row->inline_error.clear();
+    RecomputeFloatDirty(row);
+    return EMC_OK;
+}
+
+EMC_Result HubUi_NormalizePendingFloatText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id)
+{
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_FLOAT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
     row->pending_float_text = FormatFloatText(row->pending_float_value, row->float_display_decimals);
     row->float_text_parse_error = false;
     row->inline_error.clear();

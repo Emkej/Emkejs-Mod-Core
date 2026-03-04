@@ -79,8 +79,10 @@ bool HubUi_DoesSettingMatchNamespaceSearch(
 EMC_Result HubUi_SetPendingBool(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t value);
 EMC_Result HubUi_AdjustPendingIntStep(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t step_delta);
 EMC_Result HubUi_SetPendingIntFromText(const char* namespace_id, const char* mod_id, const char* setting_id, const char* text);
+EMC_Result HubUi_NormalizePendingIntText(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_AdjustPendingFloatStep(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t step_delta);
 EMC_Result HubUi_SetPendingFloatFromText(const char* namespace_id, const char* mod_id, const char* setting_id, const char* text);
+EMC_Result HubUi_NormalizePendingFloatText(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_BeginKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_CancelKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_ApplyCapturedKeycode(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t keycode);

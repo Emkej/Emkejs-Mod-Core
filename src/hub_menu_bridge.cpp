@@ -548,6 +548,82 @@ void OnHubSearchTextChanged(MyGUI::EditBox* sender)
     }
 }
 
+void NormalizeHubIntEditText(MyGUI::EditBox* sender)
+{
+    if (sender == 0)
+    {
+        return;
+    }
+
+    const std::string namespace_id = sender->getUserString("emc_ns");
+    const std::string mod_id = sender->getUserString("emc_mod");
+    const std::string setting_id = sender->getUserString("emc_setting");
+    if (namespace_id.empty() || mod_id.empty() || setting_id.empty())
+    {
+        return;
+    }
+
+    HubUiRowView before_row;
+    const bool have_before_row = TryFindRowViewById(namespace_id, mod_id, setting_id, &before_row);
+    const std::string previous_text = have_before_row && before_row.pending_int_text != 0 ? before_row.pending_int_text : "";
+    const bool previous_error = have_before_row ? before_row.int_text_parse_error : false;
+
+    if (HubUi_NormalizePendingIntText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str()) != EMC_OK)
+    {
+        return;
+    }
+
+    HubUiRowView after_row;
+    if (!TryFindRowViewById(namespace_id, mod_id, setting_id, &after_row))
+    {
+        return;
+    }
+
+    const std::string normalized_text = after_row.pending_int_text != 0 ? after_row.pending_int_text : "";
+    if (previous_error || previous_text != normalized_text)
+    {
+        sender->setOnlyText(normalized_text);
+    }
+}
+
+void NormalizeHubFloatEditText(MyGUI::EditBox* sender)
+{
+    if (sender == 0)
+    {
+        return;
+    }
+
+    const std::string namespace_id = sender->getUserString("emc_ns");
+    const std::string mod_id = sender->getUserString("emc_mod");
+    const std::string setting_id = sender->getUserString("emc_setting");
+    if (namespace_id.empty() || mod_id.empty() || setting_id.empty())
+    {
+        return;
+    }
+
+    HubUiRowView before_row;
+    const bool have_before_row = TryFindRowViewById(namespace_id, mod_id, setting_id, &before_row);
+    const std::string previous_text = have_before_row && before_row.pending_float_text != 0 ? before_row.pending_float_text : "";
+    const bool previous_error = have_before_row ? before_row.float_text_parse_error : false;
+
+    if (HubUi_NormalizePendingFloatText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str()) != EMC_OK)
+    {
+        return;
+    }
+
+    HubUiRowView after_row;
+    if (!TryFindRowViewById(namespace_id, mod_id, setting_id, &after_row))
+    {
+        return;
+    }
+
+    const std::string normalized_text = after_row.pending_float_text != 0 ? after_row.pending_float_text : "";
+    if (previous_error || previous_text != normalized_text)
+    {
+        sender->setOnlyText(normalized_text);
+    }
+}
+
 void OnHubIntTextChanged(MyGUI::EditBox* sender)
 {
     if (sender == 0)
@@ -573,10 +649,17 @@ void OnHubIntTextChanged(MyGUI::EditBox* sender)
         return;
     }
 
-    if (HubUi_SetPendingIntFromText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), text.c_str()) == EMC_OK)
-    {
-        RebuildHubPanelWidgets();
-    }
+    HubUi_SetPendingIntFromText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), text.c_str());
+}
+
+void OnHubIntEditAccepted(MyGUI::EditBox* sender)
+{
+    NormalizeHubIntEditText(sender);
+}
+
+void OnHubIntEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
+{
+    NormalizeHubIntEditText(sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0);
 }
 
 void OnHubFloatTextChanged(MyGUI::EditBox* sender)
@@ -604,10 +687,17 @@ void OnHubFloatTextChanged(MyGUI::EditBox* sender)
         return;
     }
 
-    if (HubUi_SetPendingFloatFromText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), text.c_str()) == EMC_OK)
-    {
-        RebuildHubPanelWidgets();
-    }
+    HubUi_SetPendingFloatFromText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), text.c_str());
+}
+
+void OnHubFloatEditAccepted(MyGUI::EditBox* sender)
+{
+    NormalizeHubFloatEditText(sender);
+}
+
+void OnHubFloatEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
+{
+    NormalizeHubFloatEditText(sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0);
 }
 
 void OnHubButtonClicked(MyGUI::Widget* sender)
@@ -666,6 +756,20 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
         return;
     }
 
+    if (action == "int_step_dec_10")
+    {
+        HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), -10);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "int_step_dec_5")
+    {
+        HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), -5);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
     if (action == "int_step_dec")
     {
         HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), -1);
@@ -676,6 +780,20 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     if (action == "int_step_inc")
     {
         HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), 1);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "int_step_inc_5")
+    {
+        HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), 5);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "int_step_inc_10")
+    {
+        HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), 10);
         RebuildHubPanelWidgets();
         return;
     }
@@ -721,6 +839,63 @@ void CreateInlineErrorLabel(MyGUI::Widget* parent, int x, int y, int width, cons
     error_text->setTextColour(MyGUI::Colour(1.0f, 0.3f, 0.3f, 1.0f));
 }
 
+std::string FormatHubRangeFloatValue(float value, uint32_t display_decimals)
+{
+    std::ostringstream stream;
+    stream.setf(std::ios::fixed, std::ios::floatfield);
+    stream.precision(static_cast<std::streamsize>(display_decimals));
+    stream << value;
+    return stream.str();
+}
+
+std::string BuildNumericRangeHint(const HubUiRowView& row)
+{
+    std::ostringstream hint;
+    hint << "Allowed range: ";
+
+    if (row.kind == HUB_UI_ROW_KIND_INT)
+    {
+        hint << row.int_min_value << " to " << row.int_max_value;
+        return hint.str();
+    }
+
+    if (row.kind == HUB_UI_ROW_KIND_FLOAT)
+    {
+        hint << FormatHubRangeFloatValue(row.float_min_value, row.float_display_decimals)
+             << " to "
+             << FormatHubRangeFloatValue(row.float_max_value, row.float_display_decimals);
+        return hint.str();
+    }
+
+    return std::string();
+}
+
+void CreateNumericRangeHintLabel(MyGUI::Widget* parent, int x, int y, int width, const HubUiRowView& row)
+{
+    if (parent == 0)
+    {
+        return;
+    }
+
+    const std::string hint = BuildNumericRangeHint(row);
+    if (hint.empty())
+    {
+        return;
+    }
+
+    MyGUI::TextBox* hint_text = CreateTrackedWidget<MyGUI::TextBox>(
+        parent,
+        kTextSkin,
+        MyGUI::IntCoord(x, y, width, 18));
+    if (hint_text == 0)
+    {
+        return;
+    }
+
+    hint_text->setCaption(hint);
+    hint_text->setTextColour(MyGUI::Colour(0.65f, 0.65f, 0.65f, 1.0f));
+}
+
 void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUiRowView& row, int* out_next_y)
 {
     if (parent == 0 || out_next_y == 0)
@@ -729,7 +904,15 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
     }
 
     const int label_x = 34;
-    const int label_width = panel_width - 290;
+    int label_width = panel_width - 290;
+    if (row.kind == HUB_UI_ROW_KIND_INT)
+    {
+        label_width = panel_width - 430;
+    }
+    if (label_width < 140)
+    {
+        label_width = 140;
+    }
     const int value_x = panel_width - 240;
     const int row_height = 34;
 
@@ -781,37 +964,100 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
     }
     else if (row.kind == HUB_UI_ROW_KIND_INT)
     {
+        const int button_width = 44;
+        const int button_height = 34;
+        const int button_gap = 4;
+        const int value_box_width = 96;
+        const int group_width = (button_width * 6) + (button_gap * 6) + value_box_width;
+        int control_x = panel_width - 24 - group_width;
+        if (control_x < value_x - 190)
+        {
+            control_x = value_x - 190;
+        }
+
+        MyGUI::Button* minus_ten_button = CreateTrackedWidget<MyGUI::Button>(
+            parent,
+            kValueButtonSkin,
+            MyGUI::IntCoord(control_x, y, button_width, button_height));
+        if (minus_ten_button != 0)
+        {
+            minus_ten_button->setCaption("-10");
+            minus_ten_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(minus_ten_button, "int_step_dec_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+        }
+        control_x += button_width + button_gap;
+
+        MyGUI::Button* minus_five_button = CreateTrackedWidget<MyGUI::Button>(
+            parent,
+            kValueButtonSkin,
+            MyGUI::IntCoord(control_x, y, button_width, button_height));
+        if (minus_five_button != 0)
+        {
+            minus_five_button->setCaption("-5");
+            minus_five_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(minus_five_button, "int_step_dec_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+        }
+        control_x += button_width + button_gap;
+
         MyGUI::Button* minus_button = CreateTrackedWidget<MyGUI::Button>(
             parent,
             kValueButtonSkin,
-            MyGUI::IntCoord(value_x - 70, y, 40, 30));
+            MyGUI::IntCoord(control_x, y, button_width, button_height));
         if (minus_button != 0)
         {
             minus_button->setCaption("-");
             minus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(minus_button, "int_step_dec", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
         }
+        control_x += button_width + button_gap;
 
         MyGUI::EditBox* value_box = CreateTrackedSearchBox(
             parent,
-            MyGUI::IntCoord(value_x - 22, y, 120, 30));
+            MyGUI::IntCoord(control_x, y, value_box_width, button_height));
         if (value_box != 0)
         {
             value_box->setEditMultiLine(false);
             value_box->setOnlyText(row.pending_int_text != 0 ? row.pending_int_text : "");
             AttachHubIdentity(value_box, row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             value_box->eventEditTextChange += MyGUI::newDelegate(&OnHubIntTextChanged);
+            value_box->eventEditSelectAccept += MyGUI::newDelegate(&OnHubIntEditAccepted);
+            value_box->eventKeyLostFocus += MyGUI::newDelegate(&OnHubIntEditLostFocus);
         }
+        control_x += value_box_width + button_gap;
 
         MyGUI::Button* plus_button = CreateTrackedWidget<MyGUI::Button>(
             parent,
             kValueButtonSkin,
-            MyGUI::IntCoord(value_x + 106, y, 40, 30));
+            MyGUI::IntCoord(control_x, y, button_width, button_height));
         if (plus_button != 0)
         {
             plus_button->setCaption("+");
             plus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(plus_button, "int_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+        }
+        control_x += button_width + button_gap;
+
+        MyGUI::Button* plus_five_button = CreateTrackedWidget<MyGUI::Button>(
+            parent,
+            kValueButtonSkin,
+            MyGUI::IntCoord(control_x, y, button_width, button_height));
+        if (plus_five_button != 0)
+        {
+            plus_five_button->setCaption("+5");
+            plus_five_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(plus_five_button, "int_step_inc_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+        }
+        control_x += button_width + button_gap;
+
+        MyGUI::Button* plus_ten_button = CreateTrackedWidget<MyGUI::Button>(
+            parent,
+            kValueButtonSkin,
+            MyGUI::IntCoord(control_x, y, button_width, button_height));
+        if (plus_ten_button != 0)
+        {
+            plus_ten_button->setCaption("+10");
+            plus_ten_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(plus_ten_button, "int_step_inc_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_FLOAT)
@@ -819,7 +1065,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
         MyGUI::Button* minus_button = CreateTrackedWidget<MyGUI::Button>(
             parent,
             kValueButtonSkin,
-            MyGUI::IntCoord(value_x - 70, y, 40, 30));
+            MyGUI::IntCoord(value_x - 78, y, 44, 34));
         if (minus_button != 0)
         {
             minus_button->setCaption("-");
@@ -829,19 +1075,21 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
 
         MyGUI::EditBox* value_box = CreateTrackedSearchBox(
             parent,
-            MyGUI::IntCoord(value_x - 22, y, 120, 30));
+            MyGUI::IntCoord(value_x - 28, y, 124, 34));
         if (value_box != 0)
         {
             value_box->setEditMultiLine(false);
             value_box->setOnlyText(row.pending_float_text != 0 ? row.pending_float_text : "");
             AttachHubIdentity(value_box, row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             value_box->eventEditTextChange += MyGUI::newDelegate(&OnHubFloatTextChanged);
+            value_box->eventEditSelectAccept += MyGUI::newDelegate(&OnHubFloatEditAccepted);
+            value_box->eventKeyLostFocus += MyGUI::newDelegate(&OnHubFloatEditLostFocus);
         }
 
         MyGUI::Button* plus_button = CreateTrackedWidget<MyGUI::Button>(
             parent,
             kValueButtonSkin,
-            MyGUI::IntCoord(value_x + 106, y, 40, 30));
+            MyGUI::IntCoord(value_x + 102, y, 44, 34));
         if (plus_button != 0)
         {
             plus_button->setCaption("+");
@@ -864,6 +1112,12 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
     }
 
     int next_y = y + row_height;
+    if (row.kind == HUB_UI_ROW_KIND_INT || row.kind == HUB_UI_ROW_KIND_FLOAT)
+    {
+        CreateNumericRangeHintLabel(parent, label_x + 12, next_y, panel_width - 80, row);
+        next_y += 20;
+    }
+
     if (row.inline_error != 0 && row.inline_error[0] != '\0' && std::strcmp(row.inline_error, "none") != 0)
     {
         CreateInlineErrorLabel(parent, label_x + 12, next_y, panel_width - 80, row.inline_error);
