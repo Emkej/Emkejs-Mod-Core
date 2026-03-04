@@ -47,7 +47,9 @@ function Get-DefaultBoolScaffoldReplacements {
     $stateFields = "    int32_t enabled;"
     $stateInitializers = "    1,"
     $accessors = @"
-EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
+typedef int32_t ExampleModState::*BoolField;
+
+EMC_Result GetBoolSettingValue(void* user_data, int32_t* out_value, BoolField field)
 {
     if (user_data == 0 || out_value == 0)
     {
@@ -55,11 +57,16 @@ EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
     }
 
     ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    *out_value = state->enabled;
+    *out_value = (state->*field) != 0 ? 1 : 0;
     return EMC_OK;
 }
 
-EMC_Result __cdecl SetEnabled(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
+EMC_Result SetBoolSettingValue(
+    void* user_data,
+    int32_t value,
+    char* err_buf,
+    uint32_t err_buf_size,
+    BoolField field)
 {
     if (user_data == 0)
     {
@@ -67,14 +74,31 @@ EMC_Result __cdecl SetEnabled(void* user_data, int32_t value, char* err_buf, uin
         return EMC_ERR_INVALID_ARGUMENT;
     }
 
+    if (value != 0 && value != 1)
+    {
+        WriteErrorMessage(err_buf, err_buf_size, "invalid_bool");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
     ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    const int32_t previous_value = state->enabled;
-    state->enabled = value != 0 ? 1 : 0;
+    int32_t& target = state->*field;
+    const int32_t previous_value = target;
+    target = value;
 
     // TODO: Persist the updated value. If persistence fails, restore previous_value and return an error.
     (void)previous_value;
     WriteErrorMessage(err_buf, err_buf_size, 0);
     return EMC_OK;
+}
+
+EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
+{
+    return GetBoolSettingValue(user_data, out_value, &ExampleModState::enabled);
+}
+
+EMC_Result __cdecl SetEnabled(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    return SetBoolSettingValue(user_data, value, err_buf, err_buf_size, &ExampleModState::enabled);
 }
 "@
 
