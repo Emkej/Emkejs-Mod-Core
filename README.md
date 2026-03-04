@@ -108,3 +108,17 @@ After deploy, expected files:
   - pass `./scripts/phase17_address_ssot_guard_test.ps1`
   - rerun the Debug reliability smoke command when hook behavior changes
 - CI workflow files are not checked in yet, so the guard is currently enforced through the checked-in script and should be wired into local automation until a repo workflow is added.
+
+## Local Git Hooks (Recommended)
+- Repo-managed hooks live in:
+  - `.githooks/`
+- Install them for this clone:
+  - `./scripts/install-git-hooks.sh`
+  - `./scripts/install-git-hooks.ps1`
+- Manual equivalent:
+  - `git config core.hooksPath .githooks`
+- Included hooks:
+  - `pre-commit` runs `./scripts/phase17_address_ssot_guard_test.ps1`
+  - `pre-push` runs `./scripts/build-and-package.sh -Configuration Debug -SkipSdkPackage -RunReliabilitySmoke`
+- `pre-push` uses `KENSHI_PATH` / `KENSHI_DEFAULT_PATH` automatically when the Phase 16 smoke path needs Kenshi runtime DLLs.
+- Hooks are local automation, not a replacement for hosted CI. They can still be bypassed with `--no-verify`.
