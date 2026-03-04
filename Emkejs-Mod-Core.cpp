@@ -1,19 +1,15 @@
 #include <Debug.h>
 
 #include "src/hub_menu_bridge.h"
-#include "src/wall_b_gone_hub_bridge.h"
 
 #include <kenshi/Kenshi.h>
 
 #include <Windows.h>
 
-#include <sstream>
 #include <string>
 
 namespace
 {
-const char* kPluginName = "Emkejs-Mod-Core";
-
 bool IsSupportedVersion(KenshiLib::BinaryVersion& versionInfo)
 {
     const unsigned int platform = versionInfo.GetPlatform();
@@ -44,15 +40,7 @@ __declspec(dllexport) void startPlugin()
         return;
     }
 
-    HubMenuBridge_SetOptionsWindowInitObserver(&WallBGoneHubBridge_OnOptionsWindowInit);
-    WallBGoneHubBridge_OnPluginStart();
-
-    std::stringstream info;
-    info << kPluginName
-         << " INFO: startup complete"
-         << " use_hub_ui=" << (WallBGoneHubBridge_UseHubUi() ? 1 : 0)
-         << " retry_pending=" << (WallBGoneHubBridge_IsAttachRetryPending() ? 1 : 0);
-    DebugLog(info.str().c_str());
+    DebugLog("Emkejs-Mod-Core INFO: startup complete");
 }
 
 BOOL APIENTRY DllMain(HMODULE, DWORD, LPVOID)

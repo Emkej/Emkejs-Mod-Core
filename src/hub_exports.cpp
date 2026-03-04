@@ -5,7 +5,6 @@
 #include "hub_registry.h"
 #include "hub_ui.h"
 #include "mod_hub_dummy_consumer.h"
-#include "wall_b_gone_hub_bridge.h"
 
 #include <Debug.h>
 #include <Windows.h>
@@ -1205,11 +1204,6 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_GetApi_v1_compat(
     return EMC_ModHub_GetApi(requested_version, caller_api_size, out_api, out_api_size);
 }
 
-extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_WallBGone_UseHubUi()
-{
-    return WallBGoneHubBridge_UseHubUi() ? 1 : 0;
-}
-
 #if defined(EMC_ENABLE_TEST_EXPORTS)
 extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_SetRegistrationLocked(int32_t is_locked)
 {
@@ -1725,40 +1719,5 @@ extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetOrde
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetDescriptorChecksPassed()
 {
     return ModHubDummyConsumer_GetDescriptorChecksPassed();
-}
-
-extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_WallBGone_SetAttachFailureMode(int32_t mode)
-{
-    WallBGoneHubBridge_Test_SetAttachFailureMode(mode);
-}
-
-extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_WallBGone_ResetRuntimeState()
-{
-    WallBGoneHubBridge_Test_ResetRuntimeState();
-}
-
-extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_WallBGone_RunStartupAttach()
-{
-    WallBGoneHubBridge_OnPluginStart();
-}
-
-extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_WallBGone_OnOptionsWindowInit()
-{
-    WallBGoneHubBridge_OnOptionsWindowInit();
-}
-
-extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_WallBGone_UseHubUi()
-{
-    return WallBGoneHubBridge_UseHubUi() ? 1 : 0;
-}
-
-extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_WallBGone_IsAttachRetryPending()
-{
-    return WallBGoneHubBridge_IsAttachRetryPending() ? 1 : 0;
-}
-
-extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_WallBGone_HasAttachRetryAttempted()
-{
-    return WallBGoneHubBridge_HasAttachRetryAttempted() ? 1 : 0;
 }
 #endif
