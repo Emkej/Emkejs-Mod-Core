@@ -38,6 +38,7 @@ map_flag() {
     --hub-namespace-display-name) echo "-HubNamespaceDisplayName" ;;
     --hub-mod-id) echo "-HubModId" ;;
     --hub-mod-display-name) echo "-HubModDisplayName" ;;
+    --hub-bool-setting) echo "-HubBoolSetting" ;;
     *) echo "" ;;
   esac
 }
@@ -54,17 +55,26 @@ map_inline_flag() {
     --hub-namespace-display-name=*) echo "-HubNamespaceDisplayName=${1#*=}" ;;
     --hub-mod-id=*) echo "-HubModId=${1#*=}" ;;
     --hub-mod-display-name=*) echo "-HubModDisplayName=${1#*=}" ;;
+    --hub-bool-setting=*) echo "-HubBoolSetting=${1#*=}" ;;
     *) echo "" ;;
   esac
 }
 
 ARGS=()
+BOOL_SETTINGS=()
 EXPECT_PATH=0
+EXPECT_BOOL_SETTING=0
 HAS_KENSHI_PATH=0
 for arg in "$@"; do
   if [[ "$EXPECT_PATH" -eq 1 ]]; then
     ARGS+=("$(normalize_path "$arg")")
     EXPECT_PATH=0
+    continue
+  fi
+
+  if [[ "$EXPECT_BOOL_SETTING" -eq 1 ]]; then
+    BOOL_SETTINGS+=("$arg")
+    EXPECT_BOOL_SETTING=0
     continue
   fi
 
@@ -80,9 +90,13 @@ for arg in "$@"; do
 
   mapped="$(map_flag "$arg")"
   if [[ -n "$mapped" ]]; then
-    ARGS+=("$mapped")
     if [[ "$mapped" == "-RepoDir" || "$mapped" == "-KenshiPath" ]]; then
+      ARGS+=("$mapped")
       EXPECT_PATH=1
+    elif [[ "$mapped" == "-HubBoolSetting" ]]; then
+      EXPECT_BOOL_SETTING=1
+    else
+      ARGS+=("$mapped")
     fi
     if [[ "$mapped" == "-KenshiPath" ]]; then
       HAS_KENSHI_PATH=1
@@ -100,6 +114,8 @@ for arg in "$@"; do
         ARGS+=("-KenshiPath=$(normalize_path "$value")")
         HAS_KENSHI_PATH=1
       fi
+    elif [[ "$mapped_inline" == -HubBoolSetting=* ]]; then
+      BOOL_SETTINGS+=("${mapped_inline#*=}")
     else
       ARGS+=("$mapped_inline")
     fi
@@ -110,6 +126,9 @@ for arg in "$@"; do
   if [[ "$arg" == "-RepoDir" || "$arg" == "-KenshiPath" ]]; then
     EXPECT_PATH=1
   fi
+  if [[ "$arg" == "-HubBoolSetting" ]]; then
+    EXPECT_BOOL_SETTING=1
+  fi
   if [[ "$arg" == "-KenshiPath" ]]; then
     HAS_KENSHI_PATH=1
   fi
@@ -117,6 +136,12 @@ done
 
 if [[ "$CONVERT_PATHS" -eq 0 && "$HAS_KENSHI_PATH" -eq 0 ]]; then
   ARGS+=("-KenshiPath" ".")
+fi
+
+if [[ "${#BOOL_SETTINGS[@]}" -gt 0 ]]; then
+  joined_bool_settings="$(IFS=,; printf '%s' "${BOOL_SETTINGS[*]}")"
+  ARGS+=("-HubBoolSetting")
+  ARGS+=("$joined_bool_settings")
 fi
 
 PS_SCRIPT="$(normalize_path "$PS_SCRIPT")"

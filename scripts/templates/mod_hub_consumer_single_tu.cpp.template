@@ -6,14 +6,14 @@ namespace
 {
 struct ExampleModState
 {
-    int32_t enabled;
+__BOOL_STATE_FIELDS__
     EMC_KeybindValueV1 hotkey;
     int32_t count;
     float radius;
 };
 
 ExampleModState g_state = {
-    1,
+__BOOL_STATE_INITIALIZERS__
     { 42, 0u },
     10,
     2.5f };
@@ -44,30 +44,7 @@ void WriteErrorMessage(char* err_buf, uint32_t err_buf_size, const char* message
     err_buf[index] = '\0';
 }
 
-EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
-{
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    *out_value = state->enabled;
-    return EMC_OK;
-}
-
-EMC_Result __cdecl SetEnabled(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
-{
-    if (user_data == 0)
-    {
-        WriteErrorMessage(err_buf, err_buf_size, "invalid_state");
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    state->enabled = value != 0 ? 1 : 0;
-    return EMC_OK;
-}
+__BOOL_ACCESSORS__
 
 EMC_Result __cdecl GetHotkey(void* user_data, EMC_KeybindValueV1* out_value)
 {
@@ -158,13 +135,7 @@ const EMC_ModDescriptorV1 kModDescriptor = {
     "__MOD_DISPLAY_NAME__",
     &g_state };
 
-const EMC_BoolSettingDefV1 kBoolSetting = {
-    "enabled",
-    "Enabled",
-    "Enable the feature",
-    &g_state,
-    &GetEnabled,
-    &SetEnabled };
+__BOOL_SETTING_DEFS__
 
 const EMC_KeybindSettingDefV1 kKeybindSetting = {
     "hotkey",
@@ -206,7 +177,7 @@ const EMC_ActionRowDefV1 kActionRow = {
     &RefreshNow };
 
 const emc::ModHubClientSettingRowV1 kRows[] = {
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kBoolSetting },
+__BOOL_ROW_ENTRIES__
     { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, &kKeybindSetting },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, &kIntSetting },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, &kFloatSetting },

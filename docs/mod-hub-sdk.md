@@ -168,6 +168,21 @@ Additional generated file:
 
 - `samples/mod_hub_consumer_single_tu.cpp`
 
+Optional bool-setting skeleton generation:
+
+```bash
+./scripts/init-mod-template.sh --with-hub --hub-bool-setting show_overlay --hub-bool-setting auto_save
+```
+
+```powershell
+./scripts/init-mod-template.ps1 -WithHub -HubBoolSetting "show_overlay", "auto_save"
+```
+
+This replaces the default single bool example with generated bool state fields,
+get/set callbacks, setting definitions, and row entries. Generated setters also
+include a small persistence/rollback TODO scaffold so the repetitive save-fail
+pattern is harder to miss.
+
 Migration note:
 
 - Existing scaffold output remains valid.

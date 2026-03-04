@@ -62,6 +62,7 @@ After deploy, expected files:
   - [`docs/mod-hub-sdk-quickstart.md`](docs/mod-hub-sdk-quickstart.md)
 - Optional overrides:
   - `-HubNamespaceId`, `-HubNamespaceDisplayName`, `-HubModId`, `-HubModDisplayName`
+  - `-HubBoolSetting "show_overlay","auto_save"` to generate bool-setting callback/registration skeletons
 - Output files:
   - `src/mod_hub_consumer_adapter.h`
   - `src/mod_hub_consumer_adapter.cpp`

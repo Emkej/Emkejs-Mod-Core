@@ -35,6 +35,20 @@ That also generates:
 
 Use the `samples/mod_hub_consumer_single_tu.cpp` file as a single-file reference only; keep the adapter files as the default integration path.
 
+If your mod mostly needs simple bool toggles, you can also generate the bool
+callback/registration skeletons directly:
+
+```bash
+./scripts/init-mod-template.sh --with-hub --hub-bool-setting show_overlay --hub-bool-setting auto_save
+```
+
+```powershell
+./scripts/init-mod-template.ps1 -WithHub -HubBoolSetting "show_overlay", "auto_save"
+```
+
+Generated bool setters include a TODO placeholder for the common
+"persist-and-rollback-on-failure" path.
+
 ## 2) Set your namespace and mod IDs
 
 Use stable identity values for your mod:

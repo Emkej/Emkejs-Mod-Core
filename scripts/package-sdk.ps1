@@ -43,6 +43,62 @@ function Get-ApiHeaderStringDefine {
     throw "Required $DefineName define not found in: $ApiHeaderPath"
 }
 
+function Get-DefaultBoolScaffoldReplacements {
+    $stateFields = "    int32_t enabled;"
+    $stateInitializers = "    1,"
+    $accessors = @"
+EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
+{
+    if (user_data == 0 || out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    ExampleModState* state = static_cast<ExampleModState*>(user_data);
+    *out_value = state->enabled;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetEnabled(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    if (user_data == 0)
+    {
+        WriteErrorMessage(err_buf, err_buf_size, "invalid_state");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    ExampleModState* state = static_cast<ExampleModState*>(user_data);
+    const int32_t previous_value = state->enabled;
+    state->enabled = value != 0 ? 1 : 0;
+
+    // TODO: Persist the updated value. If persistence fails, restore previous_value and return an error.
+    (void)previous_value;
+    WriteErrorMessage(err_buf, err_buf_size, 0);
+    return EMC_OK;
+}
+"@
+
+    $settingDefs = @"
+const EMC_BoolSettingDefV1 kBoolSettingEnabled = {
+    "enabled",
+    "Enabled",
+    "Generated bool setting for Enabled.",
+    &g_state,
+    &GetEnabled,
+    &SetEnabled };
+"@
+
+    $rowEntries = "    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kBoolSettingEnabled },"
+
+    return [ordered]@{
+        "__BOOL_STATE_FIELDS__" = $stateFields
+        "__BOOL_STATE_INITIALIZERS__" = $stateInitializers
+        "__BOOL_ACCESSORS__" = $accessors
+        "__BOOL_SETTING_DEFS__" = $settingDefs
+        "__BOOL_ROW_ENTRIES__" = $rowEntries
+    }
+}
+
 $ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
 if (-not $RepoDir) {
     $RepoDir = if ($ScriptDir) { Split-Path -Parent $ScriptDir } else { (Get-Location).Path }
@@ -146,6 +202,12 @@ foreach ($token in $sampleTokens.Keys) {
     $sampleHeaderContent = $sampleHeaderContent.Replace($token, $sampleTokens[$token])
     $sampleSourceContent = $sampleSourceContent.Replace($token, $sampleTokens[$token])
     $singleTuSampleContent = $singleTuSampleContent.Replace($token, $sampleTokens[$token])
+}
+
+$defaultBoolReplacements = Get-DefaultBoolScaffoldReplacements
+foreach ($token in $defaultBoolReplacements.Keys) {
+    $sampleSourceContent = $sampleSourceContent.Replace($token, $defaultBoolReplacements[$token])
+    $singleTuSampleContent = $singleTuSampleContent.Replace($token, $defaultBoolReplacements[$token])
 }
 
 Set-Content -Path (Join-Path $bundleSampleDir "mod_hub_consumer_adapter.h") -Value $sampleHeaderContent -NoNewline

@@ -101,6 +101,8 @@ Assert-Condition -Condition ($docsText.Contains("mod-hub-sdk-quickstart.md")) -M
 Assert-Condition -Condition ($docsText.Contains("legacy compatibility fallback")) -Message "docs/mod-hub-sdk.md should describe the legacy options-init fallback."
 Assert-Condition -Condition ($docsText.Contains("Callbacks run on the main thread")) -Message "docs/mod-hub-sdk.md should document the observer callback thread contract."
 Assert-Condition -Condition ($docsText.Contains("samples/single-tu/mod_hub_consumer_single_tu.cpp")) -Message "docs/mod-hub-sdk.md should reference the packaged single-TU sample asset."
+Assert-Condition -Condition ($docsText.Contains('--hub-bool-setting show_overlay --hub-bool-setting auto_save')) -Message "docs/mod-hub-sdk.md should document shell bool-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('-HubBoolSetting "show_overlay", "auto_save"')) -Message "docs/mod-hub-sdk.md should document PowerShell bool-setting scaffold generation."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase15_scaffold_single_tu_test.ps1")) -Message "docs/mod-hub-sdk.md should reference the phase15 scaffold validation harness."
 Assert-Condition -Condition ($docsText.Contains("./scripts/build-and-package.ps1 -Configuration Debug -SkipSdkPackage -RunReliabilitySmoke [-SmokeKenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should document the Debug reliability smoke build wrapper command."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase16_hub_attach_reliability_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>] [-RepeatCount 2]")) -Message "docs/mod-hub-sdk.md should reference the phase16 reliability smoke harness."
@@ -130,8 +132,10 @@ $requiredQuickstartSymbols = @(
     "init-mod-template.sh --with-hub",
     "-WithHubSingleTuSample",
     "--with-hub-single-tu-sample",
+    "--hub-bool-setting show_overlay --hub-bool-setting auto_save",
     "HubNamespaceId",
     "HubModId",
+    "HubBoolSetting",
     "ModHubConsumerAdapter_OnStartup()",
     "ModHubConsumerAdapter_OnOptionsWindowInit()",
     "ModHubConsumerAdapter_ShouldCreateLocalTab()",

@@ -53,6 +53,7 @@ try {
         -KenshiPath "" `
         -WithHub `
         -WithHubSingleTuSample `
+        -HubBoolSetting "show_overlay", "auto_save" `
         -HubNamespaceId "phase15.scaffold" `
         -HubNamespaceDisplayName "Phase15 Scaffold" `
         -HubModId "phase15_consumer" `
@@ -73,6 +74,13 @@ try {
     Assert-Condition -Condition ($source.Contains("config.table_registration = &kRegistration;")) -Message "Source missing table-registration helper wiring."
     Assert-Condition -Condition ($singleTu.Contains("ModHubSingleTuSample_OnStartup")) -Message "Single-TU sample missing startup wiring."
     Assert-Condition -Condition ($singleTu.Contains("WriteErrorMessage")) -Message "Single-TU sample missing error-buffer helper utility."
+    Assert-Condition -Condition ($source.Contains("GetShowOverlay")) -Message "Scaffold adapter missing generated show_overlay getter."
+    Assert-Condition -Condition ($source.Contains("SetAutoSave")) -Message "Scaffold adapter missing generated auto_save setter."
+    Assert-Condition -Condition ($source.Contains('const EMC_BoolSettingDefV1 kBoolSettingShowOverlay')) -Message "Scaffold adapter missing generated bool setting definition."
+    Assert-Condition -Condition (-not $source.Contains('const EMC_BoolSettingDefV1 kBoolSetting =')) -Message "Scaffold adapter should replace the legacy single bool definition when custom bool settings are requested."
+    Assert-Condition -Condition ($singleTu.Contains("GetShowOverlay")) -Message "Single-TU sample missing generated show_overlay getter."
+    Assert-Condition -Condition ($singleTu.Contains("SetAutoSave")) -Message "Single-TU sample missing generated auto_save setter."
+    Assert-Condition -Condition ($singleTu.Contains("previous_value")) -Message "Generated bool setter should include persistence rollback placeholder state."
 
     foreach ($text in @($source, $singleTu)) {
         Assert-Condition -Condition (-not $text.Contains("src/hub_")) -Message "Scaffold output should not reference hub internals (src/hub_*)."
@@ -80,6 +88,34 @@ try {
         Assert-Condition -Condition (-not $text.Contains("KenshiLib::")) -Message "Scaffold output should not depend on per-consumer Kenshi hook APIs."
         Assert-Condition -Condition (-not $text.Contains("AddHook(")) -Message "Scaffold output should not install consumer hook stubs."
         Assert-Condition -Condition (-not $text.Contains("GetRealAddress(")) -Message "Scaffold output should not require consumer RVA lookup."
+    }
+
+    $bash = Get-Command "bash" -ErrorAction SilentlyContinue
+    if (($null -ne $bash) -and (-not $IsWindows)) {
+        $shellInitScript = Join-Path $RepoRoot "scripts/init-mod-template.sh"
+        $shellRepo = Join-Path $runRoot "shell-consumer"
+        New-Item -ItemType Directory -Path $shellRepo -Force | Out-Null
+
+        & $bash.Source $shellInitScript `
+            "--repo-dir" $shellRepo `
+            "--mod-name" "Phase15ShellConsumer" `
+            "--dll-name" "Phase15ShellConsumer.dll" `
+            "--mod-file-name" "Phase15ShellConsumer.mod" `
+            "--kenshi-path" "." `
+            "--with-hub" `
+            "--hub-bool-setting" "show_overlay" `
+            "--hub-bool-setting" "auto_save" | Out-Null
+
+        Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "Shell wrapper failed to generate Hub scaffold."
+
+        $shellSourcePath = Join-Path $shellRepo "src/mod_hub_consumer_adapter.cpp"
+        $shellConfigPath = Join-Path $shellRepo "Phase15ShellConsumer/RE_Kenshi.json"
+        Assert-Condition -Condition (Test-Path $shellSourcePath) -Message "Shell wrapper missing scaffold adapter source."
+        Assert-Condition -Condition (Test-Path $shellConfigPath) -Message "Shell wrapper should keep RE_Kenshi.json at the default path."
+
+        $shellSource = Get-Content -Path $shellSourcePath -Raw
+        Assert-Condition -Condition ($shellSource.Contains("GetShowOverlay")) -Message "Shell wrapper missing generated show_overlay getter."
+        Assert-Condition -Condition ($shellSource.Contains("SetAutoSave")) -Message "Shell wrapper missing generated auto_save setter."
     }
 
     $includePath = Join-Path $RepoRoot "include"

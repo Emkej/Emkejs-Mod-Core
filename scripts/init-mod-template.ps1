@@ -11,7 +11,8 @@ param(
     [string]$HubNamespaceId = "",
     [string]$HubNamespaceDisplayName = "",
     [string]$HubModId = "",
-    [string]$HubModDisplayName = ""
+    [string]$HubModDisplayName = "",
+    [string[]]$HubBoolSetting = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -72,6 +73,215 @@ if (-not $WithHub) {
     exit 0
 }
 
+function Assert-HubBoolSettingIdentifier {
+    param(
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+
+    if (-not $Value) {
+        throw "Hub bool setting identifiers must not be empty."
+    }
+
+    if ($Value -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
+        throw "Invalid -HubBoolSetting value '$Value'. Use C-style identifiers only (letters, digits, underscore; cannot start with a digit)."
+    }
+}
+
+function Convert-HubTokenToWords {
+    param(
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+
+    $normalized = $Value -creplace '([a-z0-9])([A-Z])', '$1 $2'
+    $normalized = $normalized -replace '[_\s]+', ' '
+    $normalized = $normalized.Trim()
+    if (-not $normalized) {
+        return @()
+    }
+
+    return @($normalized -split '\s+')
+}
+
+function Convert-HubTokenToDisplayName {
+    param(
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+
+    $words = Convert-HubTokenToWords -Value $Value
+    if ($words.Count -eq 0) {
+        return "Setting"
+    }
+
+    $displayWords = foreach ($word in $words) {
+        if ($word.Length -eq 1) {
+            $word.ToUpperInvariant()
+        }
+        else {
+            $word.Substring(0, 1).ToUpperInvariant() + $word.Substring(1).ToLowerInvariant()
+        }
+    }
+
+    return ($displayWords -join " ")
+}
+
+function Convert-HubTokenToPascalCase {
+    param(
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+
+    $words = Convert-HubTokenToWords -Value $Value
+    if ($words.Count -eq 0) {
+        return "Setting"
+    }
+
+    $segments = foreach ($word in $words) {
+        if ($word.Length -eq 1) {
+            $word.ToUpperInvariant()
+        }
+        else {
+            $word.Substring(0, 1).ToUpperInvariant() + $word.Substring(1)
+        }
+    }
+
+    return ($segments -join "")
+}
+
+function New-HubBoolScaffoldSections {
+    param(
+        [string[]]$RequestedSettingIds = @()
+    )
+
+    $settingIds = @()
+    if ($RequestedSettingIds.Count -gt 0) {
+        $settingIds = $RequestedSettingIds
+    }
+    else {
+        $settingIds = @("enabled")
+    }
+
+    $settings = New-Object System.Collections.Generic.List[object]
+    $seenIds = @{}
+    $seenFunctionSuffixes = @{}
+    for ($index = 0; $index -lt $settingIds.Count; ++$index) {
+        $settingId = [string]$settingIds[$index]
+        Assert-HubBoolSettingIdentifier -Value $settingId
+
+        $normalizedKey = $settingId.ToLowerInvariant()
+        if ($seenIds.ContainsKey($normalizedKey)) {
+            throw "Duplicate -HubBoolSetting value '$settingId'."
+        }
+        $seenIds[$normalizedKey] = $true
+
+        $functionSuffix = Convert-HubTokenToPascalCase -Value $settingId
+        $functionKey = $functionSuffix.ToLowerInvariant()
+        if ($seenFunctionSuffixes.ContainsKey($functionKey)) {
+            throw "Bool setting '$settingId' collides with another generated function name."
+        }
+        $seenFunctionSuffixes[$functionKey] = $true
+
+        $displayName = Convert-HubTokenToDisplayName -Value $settingId
+        $defaultValue = if ($index -eq 0) { 1 } else { 0 }
+
+        $settings.Add([pscustomobject]@{
+            SettingId = $settingId
+            FieldName = $settingId
+            DisplayName = $displayName
+            FunctionSuffix = $functionSuffix
+            ConstantName = "kBoolSetting$functionSuffix"
+            Description = "Generated bool setting for $displayName."
+            DefaultValue = $defaultValue
+        })
+    }
+
+    $stateFields = ($settings | ForEach-Object {
+        "    int32_t $($_.FieldName);"
+    }) -join [Environment]::NewLine
+
+    $stateInitializers = ($settings | ForEach-Object {
+        "    $($_.DefaultValue),"
+    }) -join [Environment]::NewLine
+
+    $boolAccessors = ($settings | ForEach-Object {
+@"
+EMC_Result __cdecl Get$($_.FunctionSuffix)(void* user_data, int32_t* out_value)
+{
+    if (user_data == 0 || out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    ExampleModState* state = static_cast<ExampleModState*>(user_data);
+    *out_value = state->$($_.FieldName);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl Set$($_.FunctionSuffix)(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    if (user_data == 0)
+    {
+        WriteErrorMessage(err_buf, err_buf_size, "invalid_state");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    ExampleModState* state = static_cast<ExampleModState*>(user_data);
+    const int32_t previous_value = state->$($_.FieldName);
+    state->$($_.FieldName) = value != 0 ? 1 : 0;
+
+    // TODO: Persist the updated value. If persistence fails, restore previous_value and return an error.
+    (void)previous_value;
+    WriteErrorMessage(err_buf, err_buf_size, 0);
+    return EMC_OK;
+}
+"@
+    }) -join ([Environment]::NewLine + [Environment]::NewLine)
+
+    $boolSettingDefs = ($settings | ForEach-Object {
+@"
+const EMC_BoolSettingDefV1 $($_.ConstantName) = {
+    "$($_.SettingId)",
+    "$($_.DisplayName)",
+    "$($_.Description)",
+    &g_state,
+    &Get$($_.FunctionSuffix),
+    &Set$($_.FunctionSuffix) };
+"@
+    }) -join ([Environment]::NewLine + [Environment]::NewLine)
+
+    $boolRowEntries = ($settings | ForEach-Object {
+        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &$($_.ConstantName) },"
+    }) -join [Environment]::NewLine
+
+    return [pscustomobject]@{
+        StateFields = $stateFields
+        StateInitializers = $stateInitializers
+        Accessors = $boolAccessors
+        SettingDefs = $boolSettingDefs
+        RowEntries = $boolRowEntries
+    }
+}
+
+function Expand-HubBoolSettingValues {
+    param(
+        [string[]]$Values = @()
+    )
+
+    $expanded = New-Object System.Collections.Generic.List[string]
+    foreach ($value in $Values) {
+        if ($null -eq $value) {
+            continue
+        }
+
+        foreach ($token in ($value -split ',')) {
+            $trimmed = $token.Trim()
+            if ($trimmed.Length -gt 0) {
+                [void]$expanded.Add($trimmed)
+            }
+        }
+    }
+
+    return ,$expanded.ToArray()
+}
+
 $CommonScript = Join-Path $LocalRepoDir "tools\build-scripts\kenshi-common.ps1"
 if (-not (Test-Path $CommonScript)) {
     Write-Host "ERROR: Shared helper not found: $CommonScript" -ForegroundColor Red
@@ -95,6 +305,9 @@ if (-not $HubNamespaceId) { $HubNamespaceId = "example.$safeModToken" }
 if (-not $HubNamespaceDisplayName) { $HubNamespaceDisplayName = "$($resolved.ModName) Namespace" }
 if (-not $HubModId) { $HubModId = $safeModToken }
 if (-not $HubModDisplayName) { $HubModDisplayName = $resolved.ModName }
+
+$HubBoolSetting = Expand-HubBoolSettingValues -Values $HubBoolSetting
+$boolSections = New-HubBoolScaffoldSections -RequestedSettingIds $HubBoolSetting
 
 $srcDir = Join-Path $RepoDir "src"
 if (-not (Test-Path $srcDir)) {
@@ -141,6 +354,11 @@ foreach ($spec in $templateSpecs) {
     $content = $content.Replace("__NAMESPACE_DISPLAY_NAME__", $HubNamespaceDisplayName)
     $content = $content.Replace("__MOD_ID__", $HubModId)
     $content = $content.Replace("__MOD_DISPLAY_NAME__", $HubModDisplayName)
+    $content = $content.Replace("__BOOL_STATE_FIELDS__", $boolSections.StateFields)
+    $content = $content.Replace("__BOOL_STATE_INITIALIZERS__", $boolSections.StateInitializers)
+    $content = $content.Replace("__BOOL_ACCESSORS__", $boolSections.Accessors)
+    $content = $content.Replace("__BOOL_SETTING_DEFS__", $boolSections.SettingDefs)
+    $content = $content.Replace("__BOOL_ROW_ENTRIES__", $boolSections.RowEntries)
     $content | Set-Content -Path $spec.DestinationPath -NoNewline
     Write-Host "Created Hub scaffold: $($spec.DestinationPath)" -ForegroundColor Gray
     $createdCount += 1
