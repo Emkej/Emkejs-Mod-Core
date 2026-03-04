@@ -564,6 +564,14 @@ Phase 11:
 ./scripts/phase11_sdk_docs_test.ps1
 ```
 
+Phase 5:
+
+```powershell
+./scripts/phase5_numeric_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```
+
+This harness validates numeric snap/clamp behavior and pending-text normalization semantics.
+
 Phase 13:
 
 ```powershell

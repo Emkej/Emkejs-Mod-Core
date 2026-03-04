@@ -83,6 +83,9 @@ After deploy, expected files:
   - `./scripts/phase10_sdk_packaging_test.ps1`
 
 ## Reliability Harnesses (v1.1)
+- Phase 5 numeric harness:
+  - `./scripts/phase5_numeric_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
+  - Verifies numeric snap/clamp behavior plus pending-text normalization semantics (text remains user-entered until normalize, then canonicalizes).
 - Phase 12 deploy lock preflight harness:
   - `./scripts/phase12_deploy_lock_preflight_test.ps1`
 - Phase 13 export contract stability harness:
