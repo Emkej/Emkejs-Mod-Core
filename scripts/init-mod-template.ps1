@@ -7,6 +7,7 @@ param(
     [string]$ConfigFileName = "RE_Kenshi.json",
     [string]$KenshiPath = "",
     [switch]$WithHub,
+    [switch]$WithHubSingleTuSample,
     [string]$HubNamespaceId = "",
     [string]$HubNamespaceDisplayName = "",
     [string]$HubModId = "",
@@ -110,6 +111,18 @@ $templateSpecs = @(
         DestinationPath = Join-Path $srcDir "mod_hub_consumer_adapter.cpp"
     }
 )
+
+if ($WithHubSingleTuSample) {
+    $sampleDir = Join-Path $RepoDir "samples"
+    if (-not (Test-Path $sampleDir)) {
+        New-Item -ItemType Directory -Path $sampleDir -Force | Out-Null
+    }
+
+    $templateSpecs += @{
+        TemplatePath = Join-Path $LocalRepoDir "scripts\templates\mod_hub_consumer_single_tu.cpp.template"
+        DestinationPath = Join-Path $sampleDir "mod_hub_consumer_single_tu.cpp"
+    }
+}
 
 $createdCount = 0
 foreach ($spec in $templateSpecs) {

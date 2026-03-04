@@ -154,7 +154,34 @@ Generated files:
 - `src/mod_hub_consumer_adapter.h`
 - `src/mod_hub_consumer_adapter.cpp`
 
+Optional richer preset:
+
+```bash
+./scripts/init-mod-template.sh --with-hub --with-hub-single-tu-sample
+```
+
+```powershell
+./scripts/init-mod-template.ps1 -WithHub -WithHubSingleTuSample
+```
+
+Additional generated file:
+
+- `samples/mod_hub_consumer_single_tu.cpp`
+
+Migration note:
+
+- Existing scaffold output remains valid.
+- Keep `src/mod_hub_consumer_adapter.*` as the default integration path.
+- Use `samples/mod_hub_consumer_single_tu.cpp` as a public-assets-only reference sample when you want a single-file starting point.
+- Do not add per-mod options-init hook RVAs to new scaffold output; current hubs already retry through the observer path from `OnStartup()`.
+
 ## Minimal Consumer Sample (Phase 11)
+
+Packaged SDK sample assets:
+
+- `samples/minimal/mod_hub_consumer_adapter.h`
+- `samples/minimal/mod_hub_consumer_adapter.cpp`
+- `samples/single-tu/mod_hub_consumer_single_tu.cpp`
 
 Header snippet:
 
@@ -509,4 +536,10 @@ Phase 14:
 
 ```powershell
 ./scripts/phase14_options_init_observer_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```
+
+Phase 15:
+
+```powershell
+./scripts/phase15_scaffold_single_tu_test.ps1
 ```

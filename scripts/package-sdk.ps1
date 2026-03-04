@@ -72,6 +72,7 @@ $sdkDocPath = Join-Path $ctx.RepoDir "docs\mod-hub-sdk.md"
 $sdkQuickstartDocPath = Join-Path $ctx.RepoDir "docs\mod-hub-sdk-quickstart.md"
 $sampleHeaderTemplatePath = Join-Path $ctx.RepoDir "scripts\templates\mod_hub_consumer_adapter.h.template"
 $sampleSourceTemplatePath = Join-Path $ctx.RepoDir "scripts\templates\mod_hub_consumer_adapter.cpp.template"
+$singleTuSampleTemplatePath = Join-Path $ctx.RepoDir "scripts\templates\mod_hub_consumer_single_tu.cpp.template"
 
 foreach ($requiredPath in @(
         $apiHeaderPath,
@@ -80,7 +81,8 @@ foreach ($requiredPath in @(
         $sdkDocPath,
         $sdkQuickstartDocPath,
         $sampleHeaderTemplatePath,
-        $sampleSourceTemplatePath)) {
+        $sampleSourceTemplatePath,
+        $singleTuSampleTemplatePath)) {
     if (-not (Test-Path $requiredPath)) {
         Write-Host "ERROR: Required SDK asset missing: $requiredPath" -ForegroundColor Red
         exit 1
@@ -118,8 +120,9 @@ $bundleIncludeDir = Join-Path $bundleRoot "include\emc"
 $bundleSrcDir = Join-Path $bundleRoot "src"
 $bundleDocsDir = Join-Path $bundleRoot "docs"
 $bundleSampleDir = Join-Path $bundleRoot "samples\minimal"
+$bundleSingleTuSampleDir = Join-Path $bundleRoot "samples\single-tu"
 
-foreach ($dir in @($bundleIncludeDir, $bundleSrcDir, $bundleDocsDir, $bundleSampleDir)) {
+foreach ($dir in @($bundleIncludeDir, $bundleSrcDir, $bundleDocsDir, $bundleSampleDir, $bundleSingleTuSampleDir)) {
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
 }
 
@@ -138,13 +141,16 @@ $sampleTokens = [ordered]@{
 
 $sampleHeaderContent = Get-Content -Path $sampleHeaderTemplatePath -Raw
 $sampleSourceContent = Get-Content -Path $sampleSourceTemplatePath -Raw
+$singleTuSampleContent = Get-Content -Path $singleTuSampleTemplatePath -Raw
 foreach ($token in $sampleTokens.Keys) {
     $sampleHeaderContent = $sampleHeaderContent.Replace($token, $sampleTokens[$token])
     $sampleSourceContent = $sampleSourceContent.Replace($token, $sampleTokens[$token])
+    $singleTuSampleContent = $singleTuSampleContent.Replace($token, $sampleTokens[$token])
 }
 
 Set-Content -Path (Join-Path $bundleSampleDir "mod_hub_consumer_adapter.h") -Value $sampleHeaderContent -NoNewline
 Set-Content -Path (Join-Path $bundleSampleDir "mod_hub_consumer_adapter.cpp") -Value $sampleSourceContent -NoNewline
+Set-Content -Path (Join-Path $bundleSingleTuSampleDir "mod_hub_consumer_single_tu.cpp") -Value $singleTuSampleContent -NoNewline
 
 $supportedHubApiVersions = @(Get-SupportedHubApiVersions -ApiHeaderPath $apiHeaderPath)
 $canonicalGetApiExport = Get-ApiHeaderStringDefine -ApiHeaderPath $apiHeaderPath -DefineName "EMC_MOD_HUB_GET_API_EXPORT_NAME"
@@ -165,6 +171,7 @@ $sdkMetadata = [ordered]@{
         client_source = "src/mod_hub_client.cpp"
         minimal_sample_header = "samples/minimal/mod_hub_consumer_adapter.h"
         minimal_sample_source = "samples/minimal/mod_hub_consumer_adapter.cpp"
+        single_tu_sample_source = "samples/single-tu/mod_hub_consumer_single_tu.cpp"
         integration_doc = "docs/mod-hub-sdk.md"
         quickstart_doc = "docs/mod-hub-sdk-quickstart.md"
     }

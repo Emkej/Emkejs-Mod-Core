@@ -59,8 +59,10 @@ try {
 
     $headerPath = Join-Path $scaffoldRepo "src\mod_hub_consumer_adapter.h"
     $sourcePath = Join-Path $scaffoldRepo "src\mod_hub_consumer_adapter.cpp"
+    $singleTuPath = Join-Path $scaffoldRepo "samples\mod_hub_consumer_single_tu.cpp"
     Assert-Condition -Condition (Test-Path $headerPath) -Message "Missing scaffold header: $headerPath"
     Assert-Condition -Condition (Test-Path $sourcePath) -Message "Missing scaffold source: $sourcePath"
+    Assert-Condition -Condition (-not (Test-Path $singleTuPath)) -Message "Default scaffold should stay unchanged unless -WithHubSingleTuSample is requested."
 
     $header = Get-Content -Path $headerPath -Raw
     $source = Get-Content -Path $sourcePath -Raw

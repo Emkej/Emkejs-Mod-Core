@@ -19,6 +19,22 @@ This generates:
 - `src/mod_hub_consumer_adapter.h`
 - `src/mod_hub_consumer_adapter.cpp`
 
+Optional richer preset:
+
+```bash
+./scripts/init-mod-template.sh --with-hub --with-hub-single-tu-sample
+```
+
+```powershell
+./scripts/init-mod-template.ps1 -WithHub -WithHubSingleTuSample
+```
+
+That also generates:
+
+- `samples/mod_hub_consumer_single_tu.cpp`
+
+Use the `samples/mod_hub_consumer_single_tu.cpp` file as a single-file reference only; keep the adapter files as the default integration path.
+
 ## 2) Set your namespace and mod IDs
 
 Use stable identity values for your mod:
@@ -81,6 +97,7 @@ Recommended checks:
 
 ```powershell
 ./scripts/phase9_init_mod_template_scaffold_test.ps1
+./scripts/phase15_scaffold_single_tu_test.ps1
 ./scripts/phase11_sdk_docs_test.ps1
 ```
 

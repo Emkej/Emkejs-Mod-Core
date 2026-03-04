@@ -100,6 +100,9 @@ foreach ($symbol in $requiredSymbols) {
 Assert-Condition -Condition ($docsText.Contains("mod-hub-sdk-quickstart.md")) -Message "docs/mod-hub-sdk.md should reference the quick-start guide."
 Assert-Condition -Condition ($docsText.Contains("legacy compatibility fallback")) -Message "docs/mod-hub-sdk.md should describe the legacy options-init fallback."
 Assert-Condition -Condition ($docsText.Contains("Callbacks run on the main thread")) -Message "docs/mod-hub-sdk.md should document the observer callback thread contract."
+Assert-Condition -Condition ($docsText.Contains("samples/single-tu/mod_hub_consumer_single_tu.cpp")) -Message "docs/mod-hub-sdk.md should reference the packaged single-TU sample asset."
+Assert-Condition -Condition ($docsText.Contains("./scripts/phase15_scaffold_single_tu_test.ps1")) -Message "docs/mod-hub-sdk.md should reference the phase15 scaffold validation harness."
+Assert-Condition -Condition ($docsText.Contains("Existing scaffold output remains valid.")) -Message "docs/mod-hub-sdk.md should include scaffold migration notes."
 
 $requiredLogEvents = @(
     "event=hub_commit_failure",
@@ -121,12 +124,15 @@ foreach ($eventName in $requiredLogEvents) {
 $requiredQuickstartSymbols = @(
     "init-mod-template.ps1 -WithHub",
     "init-mod-template.sh --with-hub",
+    "-WithHubSingleTuSample",
+    "--with-hub-single-tu-sample",
     "HubNamespaceId",
     "HubModId",
     "ModHubConsumerAdapter_OnStartup()",
     "ModHubConsumerAdapter_OnOptionsWindowInit()",
     "ModHubConsumerAdapter_ShouldCreateLocalTab()",
-    "no per-mod options-init RVA hook is required"
+    "no per-mod options-init RVA hook is required",
+    "samples/mod_hub_consumer_single_tu.cpp"
 )
 
 foreach ($symbol in $requiredQuickstartSymbols) {

@@ -73,6 +73,11 @@ for arg in "$@"; do
     continue
   fi
 
+  if [[ "$arg" == "--with-hub-single-tu-sample" ]]; then
+    ARGS+=("-WithHubSingleTuSample")
+    continue
+  fi
+
   mapped="$(map_flag "$arg")"
   if [[ -n "$mapped" ]]; then
     ARGS+=("$mapped")
