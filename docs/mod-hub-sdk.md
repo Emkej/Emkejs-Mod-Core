@@ -2,6 +2,8 @@
 
 Consumer-facing SDK reference for integrating with `Emkejs-Mod-Core` Mod Hub.
 
+Need the shortest integration path first? Start with [Mod Hub SDK Quick Start](mod-hub-sdk-quickstart.md).
+
 ## SDK SSOT
 
 Canonical SDK surfaces:

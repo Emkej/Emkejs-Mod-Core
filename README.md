@@ -47,6 +47,8 @@ After deploy, expected files:
 - Generate the standard Mod Hub adapter scaffold:
   - `./scripts/init-mod-template.sh --with-hub`
   - `./scripts/init-mod-template.ps1 -WithHub`
+- Quick-start integration guide:
+  - [`docs/mod-hub-sdk-quickstart.md`](docs/mod-hub-sdk-quickstart.md)
 - Optional overrides:
   - `-HubNamespaceId`, `-HubNamespaceDisplayName`, `-HubModId`, `-HubModDisplayName`
 - Output files:
