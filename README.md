@@ -91,4 +91,20 @@ After deploy, expected files:
   - `./scripts/phase15_scaffold_single_tu_test.ps1`
 - Phase 16 reliability smoke matrix harness:
   - `./scripts/phase16_hub_attach_reliability_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
+- Phase 17 address SSOT guard:
+  - `./scripts/phase17_address_ssot_guard_test.ps1`
 - Use `-KenshiPath` / `-SmokeKenshiPath` when Kenshi runtime DLLs are not already on `PATH`.
+
+## Address SSOT (Phase 17)
+- Current address SSOT tables:
+  - `docs/addresses/kenshi_1_0_65_x64.md`
+  - `docs/addresses/kenshi_1_0_68_x64.md`
+  - `docs/addresses/kenshi_1_0_65_x86.md`
+  - `docs/addresses/kenshi_1_0_68_x86.md`
+- While hub-owned game hooks still exist, hard-coded hook RVAs are restricted to:
+  - `src/hub_menu_bridge.cpp`
+- Any address change must:
+  - update the matching `docs/addresses/*` table in the same commit
+  - pass `./scripts/phase17_address_ssot_guard_test.ps1`
+  - rerun the Debug reliability smoke command when hook behavior changes
+- CI workflow files are not checked in yet, so the guard is currently enforced through the checked-in script and should be wired into local automation until a repo workflow is added.

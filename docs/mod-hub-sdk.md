@@ -174,6 +174,7 @@ Migration note:
 - Keep `src/mod_hub_consumer_adapter.*` as the default integration path.
 - Use `samples/mod_hub_consumer_single_tu.cpp` as a public-assets-only reference sample when you want a single-file starting point.
 - Do not add per-mod options-init hook RVAs to new scaffold output; current hubs already retry through the observer path from `OnStartup()`.
+- Do not add any new consumer-local Kenshi hook RVAs; the remaining core literals are tracked in `docs/addresses/*.md` (including `docs/addresses/kenshi_1_0_65_x64.md`) and guarded by `./scripts/phase17_address_ssot_guard_test.ps1`.
 
 ## Minimal Consumer Sample (Phase 11)
 
@@ -559,3 +560,13 @@ Phase 16:
 ```
 
 Use `-KenshiPath` when Kenshi runtime DLLs are not already on `PATH`.
+
+Phase 17:
+
+```powershell
+./scripts/phase17_address_ssot_guard_test.ps1
+```
+
+The repo does not currently ship a checked-in CI workflow file, so run the
+Phase 17 guard script directly (or from local automation) until a workflow is
+added.
