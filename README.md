@@ -98,6 +98,9 @@ After deploy, expected files:
   - `./scripts/phase16_hub_attach_reliability_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
 - Phase 17 address SSOT guard:
   - `./scripts/phase17_address_ssot_guard_test.ps1`
+- Phase 18 dummy-consumer menu smoke harness:
+  - `./scripts/phase18_dummy_consumer_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
+  - Verifies registration count plus one bool commit, one int commit, and bad-value rejection paths.
 - Use `-KenshiPath` / `-SmokeKenshiPath` when Kenshi runtime DLLs are not already on `PATH`.
 
 ## Address SSOT (Phase 17)

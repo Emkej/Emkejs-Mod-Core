@@ -119,6 +119,37 @@ bool TryGetRowViewById(
     return false;
 }
 
+struct CountSettingsForModContext
+{
+    const char* namespace_id;
+    const char* mod_id;
+    int32_t count;
+};
+
+void __cdecl CountSettingsForModVisitor(
+    const HubRegistryNamespaceView* namespace_view,
+    const HubRegistryModView* mod_view,
+    const HubRegistrySettingView* setting_view,
+    void* user_data)
+{
+    if (namespace_view == 0 || mod_view == 0 || setting_view == 0 || user_data == 0)
+    {
+        return;
+    }
+
+    CountSettingsForModContext* context = static_cast<CountSettingsForModContext*>(user_data);
+    if (context->namespace_id == 0 || context->mod_id == 0)
+    {
+        return;
+    }
+
+    if (std::strcmp(namespace_view->namespace_id, context->namespace_id) == 0
+        && std::strcmp(mod_view->mod_id, context->mod_id) == 0)
+    {
+        context->count += 1;
+    }
+}
+
 bool IsRegistryAttachEnabled()
 {
 #if defined(EMC_ENABLE_TEST_EXPORTS)
@@ -1443,6 +1474,23 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_DoesSettingMatc
 
     *out_matches = matches ? 1 : 0;
     return EMC_OK;
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_UI_CountSettingsForMod(
+    const char* namespace_id,
+    const char* mod_id)
+{
+    if (namespace_id == 0 || mod_id == 0 || namespace_id[0] == '\0' || mod_id[0] == '\0')
+    {
+        return -1;
+    }
+
+    CountSettingsForModContext context = {
+        namespace_id,
+        mod_id,
+        0 };
+    HubRegistry_ForEachSettingInOrder(&CountSettingsForModVisitor, &context);
+    return context.count;
 }
 
 extern "C" EMC_MOD_HUB_API void __cdecl EMC_ModHub_Test_Commit_GetLastSummary(

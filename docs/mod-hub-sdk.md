@@ -606,5 +606,13 @@ Phase 17:
 ./scripts/phase17_address_ssot_guard_test.ps1
 ```
 
+Phase 18:
+
+```powershell
+./scripts/phase18_dummy_consumer_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```
+
+This smoke harness validates registration count and one bool/int commit path, plus bad-value rejection behavior.
+
 The repo uses local automation for this guard path, so run the Phase 17 guard
 script directly or through the recommended local git hooks.

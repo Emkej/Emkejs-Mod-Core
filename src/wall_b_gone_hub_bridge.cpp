@@ -719,28 +719,54 @@ bool SaveStateToConfig()
         UpsertConfigProperty(&props, kConfigKeyDismantleHotkeyModifiers, value.str());
     }
 
-    std::ofstream out(path.c_str(), std::ios::binary | std::ios::trunc);
+    std::ostringstream serialized;
+    serialized << "{\n";
+    for (size_t i = 0u; i < props.size(); ++i)
+    {
+        serialized << "  \"" << props[i].key << "\": " << props[i].value;
+        if (i + 1u < props.size())
+        {
+            serialized << ",";
+        }
+        serialized << "\n";
+    }
+    serialized << "}\n";
+
+    std::ostringstream temp_path_builder;
+    temp_path_builder << path
+                      << ".tmp."
+                      << static_cast<unsigned long>(GetCurrentProcessId())
+                      << "."
+                      << static_cast<unsigned long>(GetTickCount());
+    const std::string temp_path = temp_path_builder.str();
+
+    std::ofstream out(temp_path.c_str(), std::ios::binary | std::ios::trunc);
     if (!out.is_open())
     {
-        LogConfigWarning("open_failed", path.c_str());
+        LogConfigWarning("open_temp_failed", temp_path.c_str());
         return false;
     }
 
-    out << "{\n";
-    for (size_t i = 0u; i < props.size(); ++i)
-    {
-        out << "  \"" << props[i].key << "\": " << props[i].value;
-        if (i + 1u < props.size())
-        {
-            out << ",";
-        }
-        out << "\n";
-    }
-    out << "}\n";
+    out << serialized.str();
 
     if (!out.good())
     {
-        LogConfigWarning("write_failed", path.c_str());
+        LogConfigWarning("write_temp_failed", temp_path.c_str());
+        out.close();
+        DeleteFileA(temp_path.c_str());
+        return false;
+    }
+
+    out.flush();
+    out.close();
+    if (!MoveFileExA(temp_path.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+    {
+        std::ostringstream detail;
+        detail << "target=" << path
+               << " temp=" << temp_path
+               << " winerr=" << static_cast<unsigned long>(GetLastError());
+        LogConfigWarning("atomic_replace_failed", detail.str().c_str());
+        DeleteFileA(temp_path.c_str());
         return false;
     }
 

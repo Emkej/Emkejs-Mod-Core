@@ -112,6 +112,8 @@ Assert-Condition -Condition ($docsText.Contains("pending-text normalization sema
 Assert-Condition -Condition ($docsText.Contains("./scripts/build-and-package.ps1 -Configuration Debug -SkipSdkPackage -RunReliabilitySmoke [-SmokeKenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should document the Debug reliability smoke build wrapper command."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase16_hub_attach_reliability_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>] [-RepeatCount 2]")) -Message "docs/mod-hub-sdk.md should reference the phase16 reliability smoke harness."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase17_address_ssot_guard_test.ps1")) -Message "docs/mod-hub-sdk.md should reference the phase17 address SSOT guard."
+Assert-Condition -Condition ($docsText.Contains("./scripts/phase18_dummy_consumer_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase18 dummy-consumer smoke harness."
+Assert-Condition -Condition ($docsText.Contains("registration count and one bool/int commit path")) -Message "docs/mod-hub-sdk.md should describe phase18 smoke coverage."
 Assert-Condition -Condition ($docsText.Contains("docs/addresses/kenshi_1_0_65_x64.md")) -Message "docs/mod-hub-sdk.md should reference the Phase 17 address SSOT table."
 Assert-Condition -Condition ($docsText.Contains("Existing scaffold output remains valid.")) -Message "docs/mod-hub-sdk.md should include scaffold migration notes."
 
