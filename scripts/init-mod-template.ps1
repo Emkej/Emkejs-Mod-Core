@@ -12,6 +12,7 @@ param(
     [string]$HubNamespaceDisplayName = "",
     [string]$HubModId = "",
     [string]$HubModDisplayName = "",
+    [string]$HubSettingsManifest = "",
     [string[]]$HubBoolSetting = @()
 )
 
@@ -282,6 +283,56 @@ function Expand-HubBoolSettingValues {
     return ,$expanded.ToArray()
 }
 
+function Get-HubBoolSettingsFromManifest {
+    param(
+        [string]$Path = ""
+    )
+
+    if (-not $Path) {
+        return @()
+    }
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Hub settings manifest not found: $Path"
+    }
+
+    try {
+        $rawManifest = Get-Content -LiteralPath $Path -Raw
+        $manifest = ConvertFrom-Json -InputObject $rawManifest
+    }
+    catch {
+        throw "Failed to parse -HubSettingsManifest '$Path': $($_.Exception.Message)"
+    }
+
+    if ($null -eq $manifest) {
+        return @()
+    }
+
+    $property = $manifest.PSObject.Properties['bool_settings']
+    if ($null -eq $property) {
+        return @()
+    }
+
+    $rawValue = $property.Value
+    if ($null -eq $rawValue) {
+        return @()
+    }
+
+    $boolSettings = New-Object System.Collections.Generic.List[string]
+    if ($rawValue -is [System.Array]) {
+        foreach ($item in $rawValue) {
+            if ($null -ne $item) {
+                [void]$boolSettings.Add([string]$item)
+            }
+        }
+    }
+    else {
+        [void]$boolSettings.Add([string]$rawValue)
+    }
+
+    return ,$boolSettings.ToArray()
+}
+
 $CommonScript = Join-Path $LocalRepoDir "tools\build-scripts\kenshi-common.ps1"
 if (-not (Test-Path $CommonScript)) {
     Write-Host "ERROR: Shared helper not found: $CommonScript" -ForegroundColor Red
@@ -306,7 +357,15 @@ if (-not $HubNamespaceDisplayName) { $HubNamespaceDisplayName = "$($resolved.Mod
 if (-not $HubModId) { $HubModId = $safeModToken }
 if (-not $HubModDisplayName) { $HubModDisplayName = $resolved.ModName }
 
-$HubBoolSetting = Expand-HubBoolSettingValues -Values $HubBoolSetting
+$requestedHubBoolSettings = New-Object System.Collections.Generic.List[string]
+foreach ($settingId in (Get-HubBoolSettingsFromManifest -Path $HubSettingsManifest)) {
+    [void]$requestedHubBoolSettings.Add($settingId)
+}
+foreach ($settingId in $HubBoolSetting) {
+    [void]$requestedHubBoolSettings.Add($settingId)
+}
+
+$HubBoolSetting = Expand-HubBoolSettingValues -Values $requestedHubBoolSettings.ToArray()
 $boolSections = New-HubBoolScaffoldSections -RequestedSettingIds $HubBoolSetting
 
 $srcDir = Join-Path $RepoDir "src"

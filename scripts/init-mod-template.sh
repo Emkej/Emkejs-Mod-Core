@@ -38,6 +38,7 @@ map_flag() {
     --hub-namespace-display-name) echo "-HubNamespaceDisplayName" ;;
     --hub-mod-id) echo "-HubModId" ;;
     --hub-mod-display-name) echo "-HubModDisplayName" ;;
+    --hub-settings-manifest) echo "-HubSettingsManifest" ;;
     --hub-bool-setting) echo "-HubBoolSetting" ;;
     *) echo "" ;;
   esac
@@ -55,6 +56,7 @@ map_inline_flag() {
     --hub-namespace-display-name=*) echo "-HubNamespaceDisplayName=${1#*=}" ;;
     --hub-mod-id=*) echo "-HubModId=${1#*=}" ;;
     --hub-mod-display-name=*) echo "-HubModDisplayName=${1#*=}" ;;
+    --hub-settings-manifest=*) echo "-HubSettingsManifest=${1#*=}" ;;
     --hub-bool-setting=*) echo "-HubBoolSetting=${1#*=}" ;;
     *) echo "" ;;
   esac
@@ -90,7 +92,7 @@ for arg in "$@"; do
 
   mapped="$(map_flag "$arg")"
   if [[ -n "$mapped" ]]; then
-    if [[ "$mapped" == "-RepoDir" || "$mapped" == "-KenshiPath" ]]; then
+    if [[ "$mapped" == "-RepoDir" || "$mapped" == "-KenshiPath" || "$mapped" == "-HubSettingsManifest" ]]; then
       ARGS+=("$mapped")
       EXPECT_PATH=1
     elif [[ "$mapped" == "-HubBoolSetting" ]]; then
@@ -106,10 +108,12 @@ for arg in "$@"; do
 
   mapped_inline="$(map_inline_flag "$arg")"
   if [[ -n "$mapped_inline" ]]; then
-    if [[ "$mapped_inline" == -RepoDir=* || "$mapped_inline" == -KenshiPath=* ]]; then
+    if [[ "$mapped_inline" == -RepoDir=* || "$mapped_inline" == -KenshiPath=* || "$mapped_inline" == -HubSettingsManifest=* ]]; then
       value="${mapped_inline#*=}"
       if [[ "$mapped_inline" == -RepoDir=* ]]; then
         ARGS+=("-RepoDir=$(normalize_path "$value")")
+      elif [[ "$mapped_inline" == -HubSettingsManifest=* ]]; then
+        ARGS+=("-HubSettingsManifest=$(normalize_path "$value")")
       else
         ARGS+=("-KenshiPath=$(normalize_path "$value")")
         HAS_KENSHI_PATH=1
@@ -123,7 +127,7 @@ for arg in "$@"; do
   fi
 
   ARGS+=("$arg")
-  if [[ "$arg" == "-RepoDir" || "$arg" == "-KenshiPath" ]]; then
+  if [[ "$arg" == "-RepoDir" || "$arg" == "-KenshiPath" || "$arg" == "-HubSettingsManifest" ]]; then
     EXPECT_PATH=1
   fi
   if [[ "$arg" == "-HubBoolSetting" ]]; then

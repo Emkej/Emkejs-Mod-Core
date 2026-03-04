@@ -103,6 +103,9 @@ Assert-Condition -Condition ($docsText.Contains("Callbacks run on the main threa
 Assert-Condition -Condition ($docsText.Contains("samples/single-tu/mod_hub_consumer_single_tu.cpp")) -Message "docs/mod-hub-sdk.md should reference the packaged single-TU sample asset."
 Assert-Condition -Condition ($docsText.Contains('--hub-bool-setting show_overlay --hub-bool-setting auto_save')) -Message "docs/mod-hub-sdk.md should document shell bool-setting scaffold generation."
 Assert-Condition -Condition ($docsText.Contains('-HubBoolSetting "show_overlay", "auto_save"')) -Message "docs/mod-hub-sdk.md should document PowerShell bool-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('--hub-settings-manifest ./hub-settings.json')) -Message "docs/mod-hub-sdk.md should document shell manifest-based scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('-HubSettingsManifest .\hub-settings.json')) -Message "docs/mod-hub-sdk.md should document PowerShell manifest-based scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('"bool_settings": ["show_overlay", "auto_save"]')) -Message "docs/mod-hub-sdk.md should document the manifest bool_settings format."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase15_scaffold_single_tu_test.ps1")) -Message "docs/mod-hub-sdk.md should reference the phase15 scaffold validation harness."
 Assert-Condition -Condition ($docsText.Contains("./scripts/build-and-package.ps1 -Configuration Debug -SkipSdkPackage -RunReliabilitySmoke [-SmokeKenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should document the Debug reliability smoke build wrapper command."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase16_hub_attach_reliability_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>] [-RepeatCount 2]")) -Message "docs/mod-hub-sdk.md should reference the phase16 reliability smoke harness."
@@ -133,9 +136,11 @@ $requiredQuickstartSymbols = @(
     "-WithHubSingleTuSample",
     "--with-hub-single-tu-sample",
     "--hub-bool-setting show_overlay --hub-bool-setting auto_save",
+    "--hub-settings-manifest ./hub-settings.json",
     "HubNamespaceId",
     "HubModId",
     "HubBoolSetting",
+    "HubSettingsManifest",
     "ModHubConsumerAdapter_OnStartup()",
     "ModHubConsumerAdapter_OnOptionsWindowInit()",
     "ModHubConsumerAdapter_ShouldCreateLocalTab()",

@@ -46,6 +46,22 @@ callback/registration skeletons directly:
 ./scripts/init-mod-template.ps1 -WithHub -HubBoolSetting "show_overlay", "auto_save"
 ```
 
+If you already have several toggles, put them in `hub-settings.json`:
+
+```json
+{
+  "bool_settings": ["show_overlay", "auto_save"]
+}
+```
+
+```bash
+./scripts/init-mod-template.sh --with-hub --hub-settings-manifest ./hub-settings.json
+```
+
+```powershell
+./scripts/init-mod-template.ps1 -WithHub -HubSettingsManifest .\hub-settings.json
+```
+
 Generated bool setters include a TODO placeholder for the common
 "persist-and-rollback-on-failure" path.
 

@@ -94,7 +94,16 @@ try {
     if (($null -ne $bash) -and (-not $IsWindows)) {
         $shellInitScript = Join-Path $RepoRoot "scripts/init-mod-template.sh"
         $shellRepo = Join-Path $runRoot "shell-consumer"
+        $shellManifestPath = Join-Path $runRoot "hub-settings.json"
         New-Item -ItemType Directory -Path $shellRepo -Force | Out-Null
+        Set-Content -Path $shellManifestPath -Value @'
+{
+  "bool_settings": [
+    "show_overlay",
+    "auto_save"
+  ]
+}
+'@
 
         & $bash.Source $shellInitScript `
             "--repo-dir" $shellRepo `
@@ -103,8 +112,7 @@ try {
             "--mod-file-name" "Phase15ShellConsumer.mod" `
             "--kenshi-path" "." `
             "--with-hub" `
-            "--hub-bool-setting" "show_overlay" `
-            "--hub-bool-setting" "auto_save" | Out-Null
+            "--hub-settings-manifest" $shellManifestPath | Out-Null
 
         Assert-Condition -Condition ($LASTEXITCODE -eq 0) -Message "Shell wrapper failed to generate Hub scaffold."
 

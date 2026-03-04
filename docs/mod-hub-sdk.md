@@ -178,6 +178,22 @@ Optional bool-setting skeleton generation:
 ./scripts/init-mod-template.ps1 -WithHub -HubBoolSetting "show_overlay", "auto_save"
 ```
 
+For larger lists, use a small manifest instead of repeating flags:
+
+```json
+{
+  "bool_settings": ["show_overlay", "auto_save"]
+}
+```
+
+```bash
+./scripts/init-mod-template.sh --with-hub --hub-settings-manifest ./hub-settings.json
+```
+
+```powershell
+./scripts/init-mod-template.ps1 -WithHub -HubSettingsManifest .\hub-settings.json
+```
+
 This replaces the default single bool example with generated bool state fields,
 get/set callbacks, setting definitions, and row entries. Generated setters also
 include a small persistence/rollback TODO scaffold so the repetitive save-fail

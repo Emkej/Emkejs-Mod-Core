@@ -63,6 +63,7 @@ After deploy, expected files:
 - Optional overrides:
   - `-HubNamespaceId`, `-HubNamespaceDisplayName`, `-HubModId`, `-HubModDisplayName`
   - `-HubBoolSetting "show_overlay","auto_save"` to generate bool-setting callback/registration skeletons
+  - `-HubSettingsManifest .\hub-settings.json` to load bool-setting names from a small JSON manifest
 - Output files:
   - `src/mod_hub_consumer_adapter.h`
   - `src/mod_hub_consumer_adapter.cpp`
