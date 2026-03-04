@@ -51,10 +51,36 @@ public static class HubPhase5NumericHarness
     public delegate int UiSetPendingIntFromTextRaw(IntPtr nsId, IntPtr modId, IntPtr settingId, IntPtr text);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int UiNormalizePendingIntTextRaw(IntPtr nsId, IntPtr modId, IntPtr settingId);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int UiGetPendingIntStateRaw(
+        IntPtr nsId,
+        IntPtr modId,
+        IntPtr settingId,
+        out int outValue,
+        out int outParseError,
+        IntPtr textBuffer,
+        uint textBufferSize);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int UiAdjustPendingFloatStepRaw(IntPtr nsId, IntPtr modId, IntPtr settingId, int stepDelta);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int UiSetPendingFloatFromTextRaw(IntPtr nsId, IntPtr modId, IntPtr settingId, IntPtr text);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int UiNormalizePendingFloatTextRaw(IntPtr nsId, IntPtr modId, IntPtr settingId);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int UiGetPendingFloatStateRaw(
+        IntPtr nsId,
+        IntPtr modId,
+        IntPtr settingId,
+        out float outValue,
+        out int outParseError,
+        IntPtr textBuffer,
+        uint textBufferSize);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void CommitGetSummaryRaw(out uint attempted, out uint succeeded, out uint failed, out uint skipped, out int skipReason);
@@ -180,6 +206,11 @@ public static class HubPhase5NumericHarness
         return Marshal.ReadIntPtr(apiPtr, offset);
     }
 
+    private static string ReadAnsiBuffer(IntPtr buffer)
+    {
+        return Marshal.PtrToStringAnsi(buffer) ?? string.Empty;
+    }
+
     private static int IntGet(IntPtr userData, IntPtr outValue)
     {
         IntGetCount += 1;
@@ -267,8 +298,12 @@ public static class HubPhase5NumericHarness
             IntPtr closeOptionsProc = GetProcAddress(module, "EMC_ModHub_Test_Menu_CloseOptionsWindow");
             IntPtr adjustIntProc = GetProcAddress(module, "EMC_ModHub_Test_UI_AdjustPendingIntStep");
             IntPtr setIntTextProc = GetProcAddress(module, "EMC_ModHub_Test_UI_SetPendingIntFromText");
+            IntPtr normalizeIntTextProc = GetProcAddress(module, "EMC_ModHub_Test_UI_NormalizePendingIntText");
+            IntPtr getIntStateProc = GetProcAddress(module, "EMC_ModHub_Test_UI_GetPendingIntState");
             IntPtr adjustFloatProc = GetProcAddress(module, "EMC_ModHub_Test_UI_AdjustPendingFloatStep");
             IntPtr setFloatTextProc = GetProcAddress(module, "EMC_ModHub_Test_UI_SetPendingFloatFromText");
+            IntPtr normalizeFloatTextProc = GetProcAddress(module, "EMC_ModHub_Test_UI_NormalizePendingFloatText");
+            IntPtr getFloatStateProc = GetProcAddress(module, "EMC_ModHub_Test_UI_GetPendingFloatState");
             IntPtr getSummaryProc = GetProcAddress(module, "EMC_ModHub_Test_Commit_GetLastSummary");
 
             Assert(setLockedProc != IntPtr.Zero, "Missing EMC_ModHub_Test_SetRegistrationLocked export");
@@ -279,8 +314,12 @@ public static class HubPhase5NumericHarness
             Assert(closeOptionsProc != IntPtr.Zero, "Missing EMC_ModHub_Test_Menu_CloseOptionsWindow export");
             Assert(adjustIntProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_AdjustPendingIntStep export");
             Assert(setIntTextProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_SetPendingIntFromText export");
+            Assert(normalizeIntTextProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_NormalizePendingIntText export");
+            Assert(getIntStateProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_GetPendingIntState export");
             Assert(adjustFloatProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_AdjustPendingFloatStep export");
             Assert(setFloatTextProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_SetPendingFloatFromText export");
+            Assert(normalizeFloatTextProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_NormalizePendingFloatText export");
+            Assert(getFloatStateProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_GetPendingFloatState export");
             Assert(getSummaryProc != IntPtr.Zero, "Missing EMC_ModHub_Test_Commit_GetLastSummary export");
 
             setRegistrationLocked = (TestSetRegistrationLockedRaw)Marshal.GetDelegateForFunctionPointer(
@@ -296,10 +335,18 @@ public static class HubPhase5NumericHarness
                 adjustIntProc, typeof(UiAdjustPendingIntStepRaw));
             UiSetPendingIntFromTextRaw setIntFromText = (UiSetPendingIntFromTextRaw)Marshal.GetDelegateForFunctionPointer(
                 setIntTextProc, typeof(UiSetPendingIntFromTextRaw));
+            UiNormalizePendingIntTextRaw normalizeIntText = (UiNormalizePendingIntTextRaw)Marshal.GetDelegateForFunctionPointer(
+                normalizeIntTextProc, typeof(UiNormalizePendingIntTextRaw));
+            UiGetPendingIntStateRaw getIntState = (UiGetPendingIntStateRaw)Marshal.GetDelegateForFunctionPointer(
+                getIntStateProc, typeof(UiGetPendingIntStateRaw));
             UiAdjustPendingFloatStepRaw adjustFloatStep = (UiAdjustPendingFloatStepRaw)Marshal.GetDelegateForFunctionPointer(
                 adjustFloatProc, typeof(UiAdjustPendingFloatStepRaw));
             UiSetPendingFloatFromTextRaw setFloatFromText = (UiSetPendingFloatFromTextRaw)Marshal.GetDelegateForFunctionPointer(
                 setFloatTextProc, typeof(UiSetPendingFloatFromTextRaw));
+            UiNormalizePendingFloatTextRaw normalizeFloatText = (UiNormalizePendingFloatTextRaw)Marshal.GetDelegateForFunctionPointer(
+                normalizeFloatTextProc, typeof(UiNormalizePendingFloatTextRaw));
+            UiGetPendingFloatStateRaw getFloatState = (UiGetPendingFloatStateRaw)Marshal.GetDelegateForFunctionPointer(
+                getFloatStateProc, typeof(UiGetPendingFloatStateRaw));
             CommitGetSummaryRaw getSummary = (CommitGetSummaryRaw)Marshal.GetDelegateForFunctionPointer(
                 getSummaryProc, typeof(CommitGetSummaryRaw));
 
@@ -419,6 +466,63 @@ public static class HubPhase5NumericHarness
             Assert(attempted == 0u && succeeded == 0u && failed == 0u && skipped == 0u, "Expected empty summary when nothing is dirty");
             Assert(skipReason == HUB_COMMIT_SKIP_REASON_NONE, "Expected skip reason NONE when nothing is dirty");
 
+            IntPtr intTextBuffer = Marshal.AllocHGlobal(64);
+            IntPtr floatTextBuffer = Marshal.AllocHGlobal(64);
+            allocations.Add(intTextBuffer);
+            allocations.Add(floatTextBuffer);
+
+            int pendingIntValue;
+            int intParseError;
+            float pendingFloatValue;
+            int floatParseError;
+
+            IntPtr intUnnormalizedText = AllocAnsi(allocations, "3");
+            IntPtr floatUnnormalizedText = AllocAnsi(allocations, "0.31");
+            r = setIntFromText(nsId, modId, intSettingId, intUnnormalizedText);
+            ExpectResult(r, EMC_OK, "set_pending_int_from_text unnormalized text failed");
+            r = setFloatFromText(nsId, modId, floatSettingId, floatUnnormalizedText);
+            ExpectResult(r, EMC_OK, "set_pending_float_from_text unnormalized text failed");
+
+            r = getIntState(nsId, modId, intSettingId, out pendingIntValue, out intParseError, intTextBuffer, 64u);
+            ExpectResult(r, EMC_OK, "get_pending_int_state after text edit failed");
+            Assert(pendingIntValue == 2, "Int pending value should snap immediately after text edit");
+            Assert(intParseError == 0, "Int parse error should remain clear for valid text edit");
+            Assert(ReadAnsiBuffer(intTextBuffer) == "3", "Int pending text should remain user-entered until explicit normalization");
+
+            r = getFloatState(nsId, modId, floatSettingId, out pendingFloatValue, out floatParseError, floatTextBuffer, 64u);
+            ExpectResult(r, EMC_OK, "get_pending_float_state after text edit failed");
+            Assert(NearlyEqual(pendingFloatValue, 0.2f, 1e-4f), "Float pending value should snap immediately after text edit");
+            Assert(floatParseError == 0, "Float parse error should remain clear for valid text edit");
+            Assert(ReadAnsiBuffer(floatTextBuffer) == "0.31", "Float pending text should remain user-entered until explicit normalization");
+
+            r = normalizeIntText(nsId, modId, intSettingId);
+            ExpectResult(r, EMC_OK, "normalize_pending_int_text failed");
+            r = normalizeFloatText(nsId, modId, floatSettingId);
+            ExpectResult(r, EMC_OK, "normalize_pending_float_text failed");
+
+            r = getIntState(nsId, modId, intSettingId, out pendingIntValue, out intParseError, intTextBuffer, 64u);
+            ExpectResult(r, EMC_OK, "get_pending_int_state after normalization failed");
+            Assert(pendingIntValue == 2, "Int pending value should remain snapped after normalization");
+            Assert(intParseError == 0, "Int normalize should clear parse error state");
+            Assert(ReadAnsiBuffer(intTextBuffer) == "2", "Int normalization should canonicalize the pending text");
+
+            r = getFloatState(nsId, modId, floatSettingId, out pendingFloatValue, out floatParseError, floatTextBuffer, 64u);
+            ExpectResult(r, EMC_OK, "get_pending_float_state after normalization failed");
+            Assert(NearlyEqual(pendingFloatValue, 0.2f, 1e-4f), "Float pending value should remain snapped after normalization");
+            Assert(floatParseError == 0, "Float normalize should clear parse error state");
+            Assert(ReadAnsiBuffer(floatTextBuffer) == "0.200", "Float normalization should canonicalize the pending text");
+
+            saveOptions();
+            ReadSummary(getSummary, out attempted, out succeeded, out failed, out skipped, out skipReason);
+            Assert(attempted == 2u && succeeded == 2u && failed == 0u && skipped == 0u, "Normalized text save should commit both numeric settings");
+            Assert(CurrentIntValue == 2, "Normalized int text save should commit the snapped int value");
+            Assert(NearlyEqual(CurrentFloatValue, 0.2f, 1e-4f), "Normalized float text save should commit the snapped float value");
+            Assert(IntSetCount == 1 && FloatSetCount == 1, "Normalized text save should call both numeric set callbacks exactly once");
+
+            IntSetCount = 0;
+            FloatSetCount = 0;
+            CommitSetOrder.Clear();
+
             r = adjustIntStep(nsId, modId, intSettingId, 5);
             ExpectResult(r, EMC_OK, "adjust_pending_int_step clamp-high failed");
             r = adjustFloatStep(nsId, modId, floatSettingId, 10);
@@ -454,10 +558,35 @@ public static class HubPhase5NumericHarness
             r = setFloatFromText(nsId, modId, floatSettingId, floatInvalidText);
             ExpectResult(r, EMC_OK, "set_pending_float_from_text invalid parse should not hard-fail");
 
+            r = getIntState(nsId, modId, intSettingId, out pendingIntValue, out intParseError, intTextBuffer, 64u);
+            ExpectResult(r, EMC_OK, "get_pending_int_state after invalid parse failed");
+            Assert(intParseError == 1, "Invalid int text should set parse-error state");
+            Assert(ReadAnsiBuffer(intTextBuffer) == "abc", "Invalid int text should remain visible before normalization");
+
+            r = getFloatState(nsId, modId, floatSettingId, out pendingFloatValue, out floatParseError, floatTextBuffer, 64u);
+            ExpectResult(r, EMC_OK, "get_pending_float_state after invalid parse failed");
+            Assert(floatParseError == 1, "Invalid float text should set parse-error state");
+            Assert(ReadAnsiBuffer(floatTextBuffer) == "abc", "Invalid float text should remain visible before normalization");
+
             saveOptions();
             ReadSummary(getSummary, out attempted, out succeeded, out failed, out skipped, out skipReason);
             Assert(attempted == 0u && succeeded == 0u && failed == 0u && skipped == 0u, "Invalid numeric text rows should be skipped during commit");
             Assert(IntSetCount == 2 && FloatSetCount == 2, "Invalid parse save should not call numeric set callbacks");
+
+            r = normalizeIntText(nsId, modId, intSettingId);
+            ExpectResult(r, EMC_OK, "normalize_pending_int_text after invalid parse failed");
+            r = normalizeFloatText(nsId, modId, floatSettingId);
+            ExpectResult(r, EMC_OK, "normalize_pending_float_text after invalid parse failed");
+
+            r = getIntState(nsId, modId, intSettingId, out pendingIntValue, out intParseError, intTextBuffer, 64u);
+            ExpectResult(r, EMC_OK, "get_pending_int_state after invalid normalization failed");
+            Assert(intParseError == 0, "Int normalize should clear invalid parse state");
+            Assert(ReadAnsiBuffer(intTextBuffer) == "-6", "Int normalize should restore the canonical snapped value after invalid text");
+
+            r = getFloatState(nsId, modId, floatSettingId, out pendingFloatValue, out floatParseError, floatTextBuffer, 64u);
+            ExpectResult(r, EMC_OK, "get_pending_float_state after invalid normalization failed");
+            Assert(floatParseError == 0, "Float normalize should clear invalid parse state");
+            Assert(ReadAnsiBuffer(floatTextBuffer) == "-0.200", "Float normalize should restore the canonical snapped value after invalid text");
 
             IntPtr intPositiveTieText = AllocAnsi(allocations, "8");
             IntPtr floatPositiveTieText = AllocAnsi(allocations, "0.4");

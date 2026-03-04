@@ -64,6 +64,61 @@ bool IsEnvTruthy(const char* value)
         || std::strcmp(value, "ON") == 0;
 }
 
+void CopyStringToBuffer(const char* value, char* out_buffer, uint32_t out_buffer_size)
+{
+    if (out_buffer == 0 || out_buffer_size == 0u)
+    {
+        return;
+    }
+
+    const char* safe_value = value != 0 ? value : "";
+    const size_t max_chars = static_cast<size_t>(out_buffer_size - 1u);
+    const size_t value_length = std::strlen(safe_value);
+    const size_t copy_length = value_length < max_chars ? value_length : max_chars;
+    if (copy_length > 0u)
+    {
+        std::memcpy(out_buffer, safe_value, copy_length);
+    }
+    out_buffer[copy_length] = '\0';
+}
+
+bool TryGetRowViewById(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    HubUiRowView* out_view)
+{
+    if (namespace_id == 0 || mod_id == 0 || setting_id == 0 || out_view == 0)
+    {
+        return false;
+    }
+
+    const uint32_t row_count = HubUi_GetRowCount();
+    for (uint32_t index = 0u; index < row_count; ++index)
+    {
+        HubUiRowView row_view = {};
+        if (!HubUi_GetRowViewByIndex(index, &row_view))
+        {
+            continue;
+        }
+
+        if (row_view.namespace_id == 0 || row_view.mod_id == 0 || row_view.setting_id == 0)
+        {
+            continue;
+        }
+
+        if (std::strcmp(row_view.namespace_id, namespace_id) == 0
+            && std::strcmp(row_view.mod_id, mod_id) == 0
+            && std::strcmp(row_view.setting_id, setting_id) == 0)
+        {
+            *out_view = row_view;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool IsRegistryAttachEnabled()
 {
 #if defined(EMC_ENABLE_TEST_EXPORTS)
@@ -1203,6 +1258,41 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetPendingIntFr
     return HubUi_SetPendingIntFromText(namespace_id, mod_id, setting_id, text);
 }
 
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_NormalizePendingIntText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id)
+{
+    return HubUi_NormalizePendingIntText(namespace_id, mod_id, setting_id);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetPendingIntState(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t* out_value,
+    int32_t* out_parse_error,
+    char* out_text,
+    uint32_t out_text_size)
+{
+    if (out_value == 0 || out_parse_error == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    HubUiRowView row_view = {};
+    if (!TryGetRowViewById(namespace_id, mod_id, setting_id, &row_view)
+        || row_view.kind != HUB_UI_ROW_KIND_INT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    *out_value = row_view.pending_int_value;
+    *out_parse_error = row_view.int_text_parse_error ? 1 : 0;
+    CopyStringToBuffer(row_view.pending_int_text, out_text, out_text_size);
+    return EMC_OK;
+}
+
 extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_AdjustPendingFloatStep(
     const char* namespace_id,
     const char* mod_id,
@@ -1219,6 +1309,41 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetPendingFloat
     const char* text)
 {
     return HubUi_SetPendingFloatFromText(namespace_id, mod_id, setting_id, text);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_NormalizePendingFloatText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id)
+{
+    return HubUi_NormalizePendingFloatText(namespace_id, mod_id, setting_id);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetPendingFloatState(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    float* out_value,
+    int32_t* out_parse_error,
+    char* out_text,
+    uint32_t out_text_size)
+{
+    if (out_value == 0 || out_parse_error == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    HubUiRowView row_view = {};
+    if (!TryGetRowViewById(namespace_id, mod_id, setting_id, &row_view)
+        || row_view.kind != HUB_UI_ROW_KIND_FLOAT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    *out_value = row_view.pending_float_value;
+    *out_parse_error = row_view.float_text_parse_error ? 1 : 0;
+    CopyStringToBuffer(row_view.pending_float_text, out_text, out_text_size);
+    return EMC_OK;
 }
 
 extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_BeginKeybindCapture(
