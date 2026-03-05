@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#if defined(EMC_ENABLE_TEST_EXPORTS)
+
 void ModHubDummyConsumer_Reset();
 void ModHubDummyConsumer_SetMode(int32_t mode);
 int32_t ModHubDummyConsumer_OnStartup();
@@ -17,5 +19,7 @@ int32_t ModHubDummyConsumer_GetRegisterFloatCalls();
 int32_t ModHubDummyConsumer_GetRegisterActionCalls();
 int32_t ModHubDummyConsumer_GetOrderChecksPassed();
 int32_t ModHubDummyConsumer_GetDescriptorChecksPassed();
+
+#endif
 
 #endif

@@ -377,7 +377,7 @@ void LogGetApiAliasDeprecatedOnce(const char* alias_name)
         return;
     }
 
-    ErrorLog("event=hub_get_api_alias_deprecated alias=EMC_ModHub_GetApi_v1_compat canonical=EMC_ModHub_GetApi removal_target=v1.2.0");
+    DebugLog("event=hub_get_api_alias_deprecated alias=EMC_ModHub_GetApi_v1_compat canonical=EMC_ModHub_GetApi removal_target=v1.2.0");
 }
 
 void LogRegistrationRejected(const char* api_name, const char* reason, EMC_Result result, const char* message)

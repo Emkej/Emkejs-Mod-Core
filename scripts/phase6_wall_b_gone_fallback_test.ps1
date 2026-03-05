@@ -32,8 +32,7 @@ foreach ($candidateRepoPath in $candidateRepoPaths) {
 if (-not $consumerScript) {
     $searched = $candidateRepoPaths -join "; "
     Write-Host "SKIPPED: phase6 moved to Wall-B-Gone repo but script not found. Searched: $searched"
-    Write-Host "PASS"
-    exit 0
+    exit 2
 }
 
 if (-not $WallDllPath) {
@@ -45,8 +44,12 @@ if (-not $WallDllPath) {
 
 if (-not $WallDllPath -or -not (Test-Path -LiteralPath $WallDllPath)) {
     Write-Host "SKIPPED: Wall-B-Gone.dll not found. Provide -WallDllPath to run consumer-owned phase6 harness."
-    Write-Host "PASS"
-    exit 0
+    exit 2
 }
 
 & $consumerScript -DllPath $WallDllPath -CoreDllPath $DllPath -KenshiPath $KenshiPath
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+exit 0

@@ -1,5 +1,7 @@
 #include "mod_hub_dummy_consumer.h"
 
+#if defined(EMC_ENABLE_TEST_EXPORTS)
+
 #include "emc/mod_hub_api.h"
 #include "emc/mod_hub_client.h"
 
@@ -628,3 +630,5 @@ int32_t ModHubDummyConsumer_GetDescriptorChecksPassed()
     EnsureInitialized();
     return g_state.descriptor_checks_passed;
 }
+
+#endif
