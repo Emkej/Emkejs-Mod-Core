@@ -13,6 +13,7 @@
 #include <mygui/MyGUI_EditBox.h>
 #include <mygui/MyGUI_Gui.h>
 #include <mygui/MyGUI_InputManager.h>
+#include <mygui/MyGUI_ScrollBar.h>
 #include <mygui/MyGUI_TabControl.h>
 #include <mygui/MyGUI_TabItem.h>
 #include <mygui/MyGUI_TextBox.h>
@@ -103,8 +104,20 @@ MyGUI::Widget* g_active_hub_panel_widget = 0;
 std::string g_selected_namespace_id;
 std::vector<MyGUI::Widget*> g_dynamic_widgets;
 bool g_logged_missing_edit_box_skin = false;
+bool g_logged_missing_scrollbar_skin = false;
 bool g_restore_search_focus_after_rebuild = false;
 std::string g_restore_search_focus_namespace_id;
+int g_hub_scroll_offset = 0;
+int g_hub_scroll_max_offset = 0;
+int g_hub_scroll_page_step = 160;
+bool g_ignore_scrollbar_position_event = false;
+
+const int kHubScrollLineStep = 24;
+const int kHubScrollControlWidth = 44;
+const int kHubScrollGutterWidth = 56;
+
+void OnHubMouseWheel(MyGUI::Widget* sender, int rel);
+void OnHubScrollBarPositionChanged(MyGUI::ScrollBar* sender, size_t position);
 
 struct RenderModGroup
 {
@@ -197,6 +210,7 @@ TWidget* CreateTrackedWidget(MyGUI::Widget* parent, const char* skin, const MyGU
     TWidget* widget = parent->createWidget<TWidget>(skin, coord, MyGUI::Align::Default);
     if (widget != 0)
     {
+        widget->eventMouseWheel += MyGUI::newDelegate(&OnHubMouseWheel);
         g_dynamic_widgets.push_back(widget);
     }
     return widget;
@@ -225,6 +239,7 @@ MyGUI::EditBox* CreateTrackedSearchBox(MyGUI::Widget* parent, const MyGUI::IntCo
             if (widget != 0)
             {
                 widget->setTextColour(MyGUI::Colour(0.85f, 0.85f, 0.85f, 1.0f));
+                widget->eventMouseWheel += MyGUI::newDelegate(&OnHubMouseWheel);
                 g_dynamic_widgets.push_back(widget);
                 return widget;
             }
@@ -238,6 +253,46 @@ MyGUI::EditBox* CreateTrackedSearchBox(MyGUI::Widget* parent, const MyGUI::IntCo
     {
         ErrorLog("Emkejs-Mod-Core: failed to create EditBox for Mod Hub (no compatible skin found)");
         g_logged_missing_edit_box_skin = true;
+    }
+
+    return 0;
+}
+
+MyGUI::ScrollBar* CreateTrackedScrollBar(MyGUI::Widget* parent, const MyGUI::IntCoord& coord)
+{
+    if (parent == 0)
+    {
+        return 0;
+    }
+
+    const char* skins[] = {
+        "VScroll",
+        "VScrollBar",
+        "ScrollBarV",
+        "ScrollBar"
+    };
+
+    for (size_t index = 0; index < sizeof(skins) / sizeof(skins[0]); ++index)
+    {
+        try
+        {
+            MyGUI::ScrollBar* widget = parent->createWidget<MyGUI::ScrollBar>(skins[index], coord, MyGUI::Align::Default);
+            if (widget != 0)
+            {
+                widget->setVerticalAlignment(true);
+                g_dynamic_widgets.push_back(widget);
+                return widget;
+            }
+        }
+        catch (...)
+        {
+        }
+    }
+
+    if (!g_logged_missing_scrollbar_skin)
+    {
+        ErrorLog("Emkejs-Mod-Core: failed to create ScrollBar for Mod Hub (no compatible skin found)");
+        g_logged_missing_scrollbar_skin = true;
     }
 
     return 0;
@@ -512,6 +567,7 @@ void EnsureSelectedNamespace(const std::vector<RenderNamespaceGroup>& namespaces
 }
 
 void RebuildHubPanelWidgets();
+void SetHubScrollOffset(int offset);
 
 void OnHubSearchTextChanged(MyGUI::EditBox* sender)
 {
@@ -537,6 +593,7 @@ void OnHubSearchTextChanged(MyGUI::EditBox* sender)
 
     if (HubUi_SetNamespaceSearchQuery(namespace_id.c_str(), query.c_str()) == EMC_OK)
     {
+        g_hub_scroll_offset = 0;
         g_restore_search_focus_after_rebuild = true;
         g_restore_search_focus_namespace_id = namespace_id;
         RebuildHubPanelWidgets();
@@ -695,6 +752,44 @@ void OnHubFloatEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
     NormalizeHubFloatEditText(sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0);
 }
 
+void OnHubMouseWheel(MyGUI::Widget*, int rel)
+{
+    if (!g_hub_enabled || !HubUi_IsOptionsWindowOpen() || g_hub_scroll_max_offset <= 0 || rel == 0)
+    {
+        return;
+    }
+
+    const int previous_offset = g_hub_scroll_offset;
+    if (rel > 0)
+    {
+        SetHubScrollOffset(g_hub_scroll_offset - kHubScrollLineStep);
+    }
+    else
+    {
+        SetHubScrollOffset(g_hub_scroll_offset + kHubScrollLineStep);
+    }
+
+    if (g_hub_scroll_offset != previous_offset)
+    {
+        RebuildHubPanelWidgets();
+    }
+}
+
+void OnHubScrollBarPositionChanged(MyGUI::ScrollBar*, size_t position)
+{
+    if (g_ignore_scrollbar_position_event)
+    {
+        return;
+    }
+
+    const int previous_offset = g_hub_scroll_offset;
+    SetHubScrollOffset(static_cast<int>(position));
+    if (g_hub_scroll_offset != previous_offset)
+    {
+        RebuildHubPanelWidgets();
+    }
+}
+
 void OnHubButtonClicked(MyGUI::Widget* sender)
 {
     if (sender == 0)
@@ -707,9 +802,38 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     const std::string mod_id = sender->getUserString("emc_mod");
     const std::string setting_id = sender->getUserString("emc_setting");
 
+    if (action == "scroll_line_up")
+    {
+        SetHubScrollOffset(g_hub_scroll_offset - kHubScrollLineStep);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "scroll_line_down")
+    {
+        SetHubScrollOffset(g_hub_scroll_offset + kHubScrollLineStep);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "scroll_page_up")
+    {
+        SetHubScrollOffset(g_hub_scroll_offset - g_hub_scroll_page_step);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "scroll_page_down")
+    {
+        SetHubScrollOffset(g_hub_scroll_offset + g_hub_scroll_page_step);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
     if (action == "namespace_select")
     {
         g_selected_namespace_id = namespace_id;
+        g_hub_scroll_offset = 0;
         RebuildHubPanelWidgets();
         return;
     }
@@ -1152,6 +1276,101 @@ void BuildFilteredModsForNamespace(const RenderNamespaceGroup& namespace_group, 
     }
 }
 
+int ClampInt(int value, int min_value, int max_value)
+{
+    if (value < min_value)
+    {
+        return min_value;
+    }
+    if (value > max_value)
+    {
+        return max_value;
+    }
+    return value;
+}
+
+int MeasureRowBlockHeight(const HubUiRowView& row)
+{
+    int height = 34;
+    if (row.kind == HUB_UI_ROW_KIND_INT || row.kind == HUB_UI_ROW_KIND_FLOAT)
+    {
+        height += 20;
+    }
+
+    if (row.inline_error != 0 && row.inline_error[0] != '\0' && std::strcmp(row.inline_error, "none") != 0)
+    {
+        height += 20;
+    }
+
+    return height;
+}
+
+int MeasureFilteredModsContentHeight(const std::vector<RenderModGroup>& filtered_mods)
+{
+    int total_height = 0;
+    for (size_t mod_index = 0; mod_index < filtered_mods.size(); ++mod_index)
+    {
+        const RenderModGroup& mod_group = filtered_mods[mod_index];
+        total_height += 38;
+        if (mod_group.collapsed)
+        {
+            continue;
+        }
+
+        for (size_t row_index = 0; row_index < mod_group.rows.size(); ++row_index)
+        {
+            total_height += MeasureRowBlockHeight(mod_group.rows[row_index]);
+        }
+
+        total_height += 8;
+    }
+
+    return total_height;
+}
+
+void ConfigureHubScrollRange(int content_height, int viewport_height)
+{
+    if (viewport_height <= 0)
+    {
+        g_hub_scroll_max_offset = 0;
+        g_hub_scroll_offset = 0;
+        g_hub_scroll_page_step = 160;
+        return;
+    }
+
+    const int overflow = content_height - viewport_height;
+    g_hub_scroll_max_offset = overflow > 0 ? overflow : 0;
+    g_hub_scroll_offset = ClampInt(g_hub_scroll_offset, 0, g_hub_scroll_max_offset);
+
+    int page_step = viewport_height - 32;
+    if (page_step < 120)
+    {
+        page_step = 120;
+    }
+    g_hub_scroll_page_step = page_step;
+}
+
+void SetHubScrollOffset(int offset)
+{
+    g_hub_scroll_offset = ClampInt(offset, 0, g_hub_scroll_max_offset);
+}
+
+bool IsBlockFullyVisible(int block_y, int block_height, int viewport_top, int viewport_bottom)
+{
+    if (block_height <= 0)
+    {
+        return false;
+    }
+
+    if (block_y < viewport_top)
+    {
+        return false;
+    }
+
+    const int block_bottom = block_y + block_height;
+    return block_bottom <= viewport_bottom;
+}
+
 void RebuildHubPanelWidgets()
 {
     if (g_active_hub_panel_widget == 0)
@@ -1166,10 +1385,13 @@ void RebuildHubPanelWidgets()
     EnsureSelectedNamespace(namespaces);
 
     const int panel_width = g_active_hub_panel_widget->getWidth();
+    const int panel_height = g_active_hub_panel_widget->getHeight();
     int y = 12;
 
     if (namespaces.empty())
     {
+        g_hub_scroll_offset = 0;
+        g_hub_scroll_max_offset = 0;
         MyGUI::TextBox* empty_text = CreateTrackedWidget<MyGUI::TextBox>(
             g_active_hub_panel_widget,
             kTextSkin,
@@ -1263,16 +1485,23 @@ void RebuildHubPanelWidgets()
         }
     }
 
-    y += 50;
+    const int content_top = y + 50;
+    int content_bottom = panel_height - 12;
+    if (content_bottom <= content_top)
+    {
+        content_bottom = content_top + 1;
+    }
+    const int viewport_height = content_bottom - content_top;
 
     std::vector<RenderModGroup> filtered_mods;
     BuildFilteredModsForNamespace(*selected_namespace, &filtered_mods);
     if (filtered_mods.empty())
     {
+        ConfigureHubScrollRange(0, viewport_height);
         MyGUI::TextBox* no_matches_text = CreateTrackedWidget<MyGUI::TextBox>(
             g_active_hub_panel_widget,
             kTextSkin,
-            MyGUI::IntCoord(24, y, panel_width - 48, 28));
+            MyGUI::IntCoord(24, content_top, panel_width - 48, 28));
         if (no_matches_text != 0)
         {
             no_matches_text->setCaption(kNoMatchesText);
@@ -1280,23 +1509,142 @@ void RebuildHubPanelWidgets()
         return;
     }
 
+    const int content_total_height = MeasureFilteredModsContentHeight(filtered_mods);
+    ConfigureHubScrollRange(content_total_height, viewport_height);
+
+    const bool show_scroll_controls = g_hub_scroll_max_offset > 0;
+    int content_panel_width = panel_width;
+    if (show_scroll_controls)
+    {
+        content_panel_width -= kHubScrollGutterWidth;
+    }
+    if (content_panel_width < 280)
+    {
+        content_panel_width = panel_width;
+    }
+
+    if (show_scroll_controls)
+    {
+        const int control_x = content_panel_width + ((panel_width - content_panel_width - kHubScrollControlWidth) / 2);
+        const int button_height = 28;
+        const int button_gap = 4;
+        const int top_line_y = content_top;
+        const int bottom_line_y = content_bottom - button_height;
+
+        MyGUI::Button* line_up_button = CreateTrackedWidget<MyGUI::Button>(
+            g_active_hub_panel_widget,
+            kValueButtonSkin,
+            MyGUI::IntCoord(control_x, top_line_y, kHubScrollControlWidth, button_height));
+        if (line_up_button != 0)
+        {
+            line_up_button->setCaption("^");
+            line_up_button->setEnabled(g_hub_scroll_offset > 0);
+            line_up_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(line_up_button, "scroll_line_up", "", "", "");
+        }
+
+        MyGUI::Button* line_down_button = CreateTrackedWidget<MyGUI::Button>(
+            g_active_hub_panel_widget,
+            kValueButtonSkin,
+            MyGUI::IntCoord(control_x, bottom_line_y, kHubScrollControlWidth, button_height));
+        if (line_down_button != 0)
+        {
+            line_down_button->setCaption("v");
+            line_down_button->setEnabled(g_hub_scroll_offset < g_hub_scroll_max_offset);
+            line_down_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(line_down_button, "scroll_line_down", "", "", "");
+        }
+
+        const int scroll_bar_y = top_line_y + button_height + button_gap;
+        int scroll_bar_height = bottom_line_y - button_gap - scroll_bar_y;
+        if (scroll_bar_height < 40)
+        {
+            scroll_bar_height = 0;
+        }
+
+        bool has_scrollbar = false;
+        if (scroll_bar_height > 0)
+        {
+            MyGUI::ScrollBar* scroll_bar = CreateTrackedScrollBar(
+                g_active_hub_panel_widget,
+                MyGUI::IntCoord(control_x, scroll_bar_y, kHubScrollControlWidth, scroll_bar_height));
+            if (scroll_bar != 0)
+            {
+                const size_t range = static_cast<size_t>(g_hub_scroll_max_offset + 1);
+                const size_t line_step = static_cast<size_t>(kHubScrollLineStep);
+                size_t page_step = static_cast<size_t>(g_hub_scroll_page_step);
+                if (page_step == 0u)
+                {
+                    page_step = line_step;
+                }
+
+                g_ignore_scrollbar_position_event = true;
+                scroll_bar->setScrollRange(range);
+                scroll_bar->setScrollPage(line_step);
+                scroll_bar->setScrollViewPage(page_step);
+                scroll_bar->setScrollWheelPage(line_step);
+                scroll_bar->setScrollPosition(static_cast<size_t>(g_hub_scroll_offset));
+                g_ignore_scrollbar_position_event = false;
+
+                scroll_bar->eventScrollChangePosition += MyGUI::newDelegate(&OnHubScrollBarPositionChanged);
+                has_scrollbar = true;
+            }
+        }
+
+        if (!has_scrollbar)
+        {
+            const int top_page_y = content_top + 34;
+            const int bottom_page_y = content_bottom - 62;
+
+            MyGUI::Button* page_up_button = CreateTrackedWidget<MyGUI::Button>(
+                g_active_hub_panel_widget,
+                kValueButtonSkin,
+                MyGUI::IntCoord(control_x, top_page_y, kHubScrollControlWidth, button_height));
+            if (page_up_button != 0)
+            {
+                page_up_button->setCaption("Pg^");
+                page_up_button->setEnabled(g_hub_scroll_offset > 0);
+                page_up_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(page_up_button, "scroll_page_up", "", "", "");
+            }
+
+            MyGUI::Button* page_down_button = CreateTrackedWidget<MyGUI::Button>(
+                g_active_hub_panel_widget,
+                kValueButtonSkin,
+                MyGUI::IntCoord(control_x, bottom_page_y, kHubScrollControlWidth, button_height));
+            if (page_down_button != 0)
+            {
+                page_down_button->setCaption("Pgv");
+                page_down_button->setEnabled(g_hub_scroll_offset < g_hub_scroll_max_offset);
+                page_down_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(page_down_button, "scroll_page_down", "", "", "");
+            }
+        }
+    }
+
+    int logical_y = 0;
     for (size_t mod_index = 0; mod_index < filtered_mods.size(); ++mod_index)
     {
         const RenderModGroup& mod_group = filtered_mods[mod_index];
+        const int header_height = 32;
+        const int header_y = content_top + logical_y - g_hub_scroll_offset;
 
-        MyGUI::Button* mod_header = CreateTrackedWidget<MyGUI::Button>(
-            g_active_hub_panel_widget,
-            kHeaderButtonSkin,
-            MyGUI::IntCoord(20, y, panel_width - 40, 32));
-        if (mod_header != 0)
+        if (IsBlockFullyVisible(header_y, header_height, content_top, content_bottom))
         {
-            const std::string prefix = mod_group.collapsed ? "[+] " : "[-] ";
-            mod_header->setCaption(prefix + mod_group.mod_display_name);
-            mod_header->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
-            AttachHubAction(mod_header, "mod_toggle", selected_namespace->namespace_id, mod_group.mod_id, "");
+            MyGUI::Button* mod_header = CreateTrackedWidget<MyGUI::Button>(
+                g_active_hub_panel_widget,
+                kHeaderButtonSkin,
+                MyGUI::IntCoord(20, header_y, content_panel_width - 40, header_height));
+            if (mod_header != 0)
+            {
+                const std::string prefix = mod_group.collapsed ? "[+] " : "[-] ";
+                mod_header->setCaption(prefix + mod_group.mod_display_name);
+                mod_header->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(mod_header, "mod_toggle", selected_namespace->namespace_id, mod_group.mod_id, "");
+            }
         }
 
-        y += 38;
+        logical_y += 38;
 
         if (mod_group.collapsed)
         {
@@ -1305,12 +1653,18 @@ void RebuildHubPanelWidgets()
 
         for (size_t row_index = 0; row_index < mod_group.rows.size(); ++row_index)
         {
-            int next_y = y;
-            CreateRowWidgets(g_active_hub_panel_widget, panel_width, y, mod_group.rows[row_index], &next_y);
-            y = next_y;
+            const HubUiRowView& row = mod_group.rows[row_index];
+            const int row_height = MeasureRowBlockHeight(row);
+            const int row_y = content_top + logical_y - g_hub_scroll_offset;
+            if (IsBlockFullyVisible(row_y, row_height, content_top, content_bottom))
+            {
+                int next_y = row_y;
+                CreateRowWidgets(g_active_hub_panel_widget, content_panel_width, row_y, row, &next_y);
+            }
+            logical_y += row_height;
         }
 
-        y += 8;
+        logical_y += 8;
     }
 }
 
@@ -1318,6 +1672,9 @@ void ClearActiveUiState()
 {
     DestroyDynamicWidgets();
     g_selected_namespace_id.clear();
+    g_hub_scroll_offset = 0;
+    g_hub_scroll_max_offset = 0;
+    g_hub_scroll_page_step = 160;
     g_active_hub_panel_widget = 0;
     g_active_hub_panel = 0;
     g_active_options_window = 0;
@@ -1360,6 +1717,7 @@ bool EnsureHubPanel(OptionsWindow* self)
         ErrorLog("Emkejs-Mod-Core: Mod Hub panel widget is null");
         return false;
     }
+    g_active_hub_panel_widget->eventMouseWheel += MyGUI::newDelegate(&OnHubMouseWheel);
 
     hub_tab->setVisible(false);
     self->optionsTab->setItemData(hub_tab, hub_panel);
@@ -1406,6 +1764,37 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
         HubUi_ApplyCapturedKeycodeToActiveRow(static_cast<int32_t>(key_code));
         RebuildHubPanelWidgets();
         return;
+    }
+
+    if (g_hub_enabled && HubUi_IsOptionsWindowOpen() && g_active_hub_panel_widget != 0)
+    {
+        if (key_code == OIS::KC_PGUP)
+        {
+            SetHubScrollOffset(g_hub_scroll_offset - g_hub_scroll_page_step);
+            RebuildHubPanelWidgets();
+            return;
+        }
+
+        if (key_code == OIS::KC_PGDOWN)
+        {
+            SetHubScrollOffset(g_hub_scroll_offset + g_hub_scroll_page_step);
+            RebuildHubPanelWidgets();
+            return;
+        }
+
+        if (key_code == OIS::KC_UP)
+        {
+            SetHubScrollOffset(g_hub_scroll_offset - kHubScrollLineStep);
+            RebuildHubPanelWidgets();
+            return;
+        }
+
+        if (key_code == OIS::KC_DOWN)
+        {
+            SetHubScrollOffset(g_hub_scroll_offset + kHubScrollLineStep);
+            RebuildHubPanelWidgets();
+            return;
+        }
     }
 
     if (InputHandler_keyDownEvent_orig != 0)
