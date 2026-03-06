@@ -211,7 +211,21 @@ void EmitSdkStampWarning(
     uint32_t runtime_struct_api_size)
 {
     char message[320];
-    const int written = std::snprintf(
+    message[0] = '\0';
+
+#if defined(_MSC_VER) && _MSC_VER < 1900
+    _snprintf_s(
+        message,
+        sizeof(message),
+        _TRUNCATE,
+        "Emkejs-Mod-Core: Mod Hub SDK stamp drift detected (expected version=%u min_api_size=%u, runtime version=%u out_api_size=%u api_struct_size=%u).",
+        (unsigned int)expected_api_version,
+        (unsigned int)expected_min_api_size,
+        (unsigned int)runtime_api_version,
+        (unsigned int)runtime_api_size,
+        (unsigned int)runtime_struct_api_size);
+#else
+    std::snprintf(
         message,
         sizeof(message),
         "Emkejs-Mod-Core: Mod Hub SDK stamp drift detected (expected version=%u min_api_size=%u, runtime version=%u out_api_size=%u api_struct_size=%u).",
@@ -220,8 +234,9 @@ void EmitSdkStampWarning(
         (unsigned int)runtime_api_version,
         (unsigned int)runtime_api_size,
         (unsigned int)runtime_struct_api_size);
+#endif
 
-    if (written <= 0)
+    if (message[0] == '\0')
     {
         return;
     }
