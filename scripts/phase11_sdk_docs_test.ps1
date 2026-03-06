@@ -116,6 +116,9 @@ Assert-Condition -Condition ($docsText.Contains("./scripts/phase18_dummy_consume
 Assert-Condition -Condition ($docsText.Contains("registration count and one bool/int commit path")) -Message "docs/mod-hub-sdk.md should describe phase18 smoke coverage."
 Assert-Condition -Condition ($docsText.Contains("docs/addresses/kenshi_1_0_65_x64.md")) -Message "docs/mod-hub-sdk.md should reference the Phase 17 address SSOT table."
 Assert-Condition -Condition ($docsText.Contains("Existing scaffold output remains valid.")) -Message "docs/mod-hub-sdk.md should include scaffold migration notes."
+Assert-Condition -Condition ($docsText.Contains("./scripts/sync-mod-hub-sdk.ps1")) -Message "docs/mod-hub-sdk.md should document the SDK sync command."
+Assert-Condition -Condition ($docsText.Contains("./scripts/sync-mod-hub-sdk.sh")) -Message "docs/mod-hub-sdk.md should document the shell SDK sync wrapper."
+Assert-Condition -Condition ($docsText.Contains("does not edit changelog")) -Message "docs/mod-hub-sdk.md should clarify changelog edits are manual for sync."
 
 $requiredLogEvents = @(
     "event=hub_commit_failure",
@@ -149,7 +152,10 @@ $requiredQuickstartSymbols = @(
     "ModHubConsumerAdapter_OnOptionsWindowInit()",
     "ModHubConsumerAdapter_ShouldCreateLocalTab()",
     "no per-mod options-init RVA hook is required",
-    "samples/mod_hub_consumer_single_tu.cpp"
+    "samples/mod_hub_consumer_single_tu.cpp",
+    "./scripts/sync-mod-hub-sdk.ps1",
+    "./scripts/sync-mod-hub-sdk.sh",
+    "pull + validate only"
 )
 
 foreach ($symbol in $requiredQuickstartSymbols) {

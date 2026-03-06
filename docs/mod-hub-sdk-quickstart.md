@@ -63,7 +63,7 @@ If you already have several toggles, put them in `hub-settings.json`:
 ```
 
 Generated bool setters include a TODO placeholder for the common
-"persist-and-rollback-on-failure" path.
+"persist-and-rollback-on-failure" path via `emc/mod_hub_consumer_helpers.h`.
 
 ## 2) Set your namespace and mod IDs
 
@@ -108,6 +108,7 @@ Supported row kinds:
 - `MOD_HUB_CLIENT_SETTING_KIND_ACTION`
 
 Use your existing get/set callbacks in row definitions; the helper performs deterministic registration and commit ordering.
+Generated callback wrappers delegate to the shared consumer helper header to reduce repetitive state/update boilerplate.
 
 ## 4) Wire lifecycle calls
 
@@ -137,5 +138,17 @@ Wall-B-Gone fallback matrix ownership note:
 - `Emkejs-Mod-Core/scripts/phase6_wall_b_gone_fallback_test.ps1` is a delegating wrapper for convenience; it runs the consumer harness when the Wall-B-Gone repo/script and `Wall-B-Gone.dll` are available.
 
 If those phase scripts are not part of your mod repo, validate by building your plugin and confirming options UI behavior in game (hub path when attached, local fallback when hub is unavailable).
+
+SDK sync workflow (no changelog mutation):
+
+```powershell
+./scripts/sync-mod-hub-sdk.ps1
+```
+
+```bash
+./scripts/sync-mod-hub-sdk.sh
+```
+
+This command is intentionally scoped to pull + validate only. Changelog/release-note edits are manual.
 
 For full API reference and complete sample code, see [docs/mod-hub-sdk.md](mod-hub-sdk.md).

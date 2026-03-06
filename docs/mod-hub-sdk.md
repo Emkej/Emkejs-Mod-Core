@@ -10,6 +10,7 @@ Canonical SDK surfaces:
 
 - C ABI header: `include/emc/mod_hub_api.h`
 - C++ helper API: `include/emc/mod_hub_client.h`
+- Consumer callback helpers: `include/emc/mod_hub_consumer_helpers.h`
 - Helper implementation: `src/mod_hub_client.cpp`
 
 Do not include or copy internal hub implementation files (`src/hub_*`) in consumer mods.
@@ -120,6 +121,14 @@ config.table_registration = ModHubConsumerAdapter_GetTableRegistration();
 client.SetConfig(config);
 ```
 
+`ModHubClient::Config` defaults the expected SDK stamp to `EMC_HUB_API_VERSION_1` +
+`EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE`; override only when you intentionally target a different contract.
+
+SDK stamp warning behavior:
+
+- At startup attach, `ModHubClient` compares the expected stamp (`expected_sdk_api_version`, `expected_sdk_min_api_size`) against runtime `api_version` / `out_api_size`.
+- Drift emits a warning and continues using fallback-compatible behavior where possible.
+
 ## Runtime Log Semantics (Hub Events)
 
 Consumers should expect these event formats in RE_Kenshi logs:
@@ -197,7 +206,7 @@ For larger lists, use a small manifest instead of repeating flags:
 This replaces the default single bool example with generated bool state fields,
 get/set callbacks, setting definitions, and row entries. Generated setters also
 include a small persistence/rollback TODO scaffold so the repetitive save-fail
-pattern is harder to miss.
+pattern is harder to miss, now centralized in `emc/mod_hub_consumer_helpers.h`.
 
 Migration note:
 
@@ -207,6 +216,35 @@ Migration note:
 - Do not add per-mod options-init hook RVAs to new scaffold output; current hubs already retry through the observer path from `OnStartup()`.
 - Do not add any new consumer-local Kenshi hook RVAs; the remaining core literals are tracked in `docs/addresses/*.md` (including `docs/addresses/kenshi_1_0_65_x64.md`) and guarded by `./scripts/phase17_address_ssot_guard_test.ps1`.
 - Wall-B-Gone Phase 6 fallback matrix harness is consumer-owned in `../Wall-B-Gone/scripts/phase6_wall_b_gone_fallback_test.ps1`; the Mod-Core `scripts/phase6_wall_b_gone_fallback_test.ps1` entrypoint delegates to that harness when present.
+
+## SDK Sync Command
+
+Per-consumer sync command (pull + validate only):
+
+```powershell
+./scripts/sync-mod-hub-sdk.ps1
+```
+
+```bash
+./scripts/sync-mod-hub-sdk.sh
+```
+
+Optional validation-only mode:
+
+```powershell
+./scripts/sync-mod-hub-sdk.ps1 -SkipPull
+```
+
+```bash
+./scripts/sync-mod-hub-sdk.sh --skip-pull
+```
+
+Behavior constraints:
+
+- Pulls the SDK submodule when `-SkipPull` is not used.
+- Validates required SDK contract assets and key ABI symbols.
+- Does not edit changelog or release-note files; changelog updates remain manual.
+- Sync command does not edit changelog entries automatically.
 
 ## Minimal Consumer Sample (Phase 11)
 
