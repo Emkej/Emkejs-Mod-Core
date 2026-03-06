@@ -1,6 +1,5 @@
 #include "emc/mod_hub_client.h"
-
-#include <cstring>
+#include "emc/mod_hub_consumer_helpers.h"
 
 namespace
 {
@@ -21,111 +20,41 @@ __BOOL_STATE_INITIALIZERS__
 emc::ModHubClient g_client;
 bool g_client_configured = false;
 
-void WriteErrorMessage(char* err_buf, uint32_t err_buf_size, const char* message)
-{
-    if (err_buf == 0 || err_buf_size == 0u)
-    {
-        return;
-    }
-
-    if (message == 0)
-    {
-        err_buf[0] = '\0';
-        return;
-    }
-
-    size_t index = 0u;
-    while (index + 1u < err_buf_size && message[index] != '\0')
-    {
-        err_buf[index] = message[index];
-        ++index;
-    }
-
-    err_buf[index] = '\0';
-}
-
 __BOOL_ACCESSORS__
 
 EMC_Result __cdecl GetHotkey(void* user_data, EMC_KeybindValueV1* out_value)
 {
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    *out_value = state->hotkey;
-    return EMC_OK;
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::hotkey);
 }
 
 EMC_Result __cdecl SetHotkey(void* user_data, EMC_KeybindValueV1 value, char* err_buf, uint32_t err_buf_size)
 {
-    if (user_data == 0)
-    {
-        WriteErrorMessage(err_buf, err_buf_size, "invalid_state");
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    state->hotkey = value;
-    return EMC_OK;
+    return emc::consumer::SetFieldValueWithRollback(user_data, value, err_buf, err_buf_size, &ExampleModState::hotkey);
 }
 
 EMC_Result __cdecl GetCount(void* user_data, int32_t* out_value)
 {
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    *out_value = state->count;
-    return EMC_OK;
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::count);
 }
 
 EMC_Result __cdecl SetCount(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
 {
-    if (user_data == 0)
-    {
-        WriteErrorMessage(err_buf, err_buf_size, "invalid_state");
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    state->count = value;
-    return EMC_OK;
+    return emc::consumer::SetFieldValueWithRollback(user_data, value, err_buf, err_buf_size, &ExampleModState::count);
 }
 
 EMC_Result __cdecl GetRadius(void* user_data, float* out_value)
 {
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    *out_value = state->radius;
-    return EMC_OK;
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::radius);
 }
 
 EMC_Result __cdecl SetRadius(void* user_data, float value, char* err_buf, uint32_t err_buf_size)
 {
-    if (user_data == 0)
-    {
-        WriteErrorMessage(err_buf, err_buf_size, "invalid_state");
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    state->radius = value;
-    return EMC_OK;
+    return emc::consumer::SetFieldValueWithRollback(user_data, value, err_buf, err_buf_size, &ExampleModState::radius);
 }
 
 EMC_Result __cdecl RefreshNow(void* user_data, char* err_buf, uint32_t err_buf_size)
 {
-    (void)user_data;
-    WriteErrorMessage(err_buf, err_buf_size, 0);
-    return EMC_OK;
+    return emc::consumer::ActionNoopSuccess(user_data, err_buf, err_buf_size);
 }
 
 const EMC_ModDescriptorV1 kModDescriptor = {

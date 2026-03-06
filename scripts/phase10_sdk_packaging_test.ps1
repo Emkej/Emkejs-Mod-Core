@@ -57,6 +57,7 @@ try {
     $requiredRelPaths = @(
         "include\emc\mod_hub_api.h",
         "include\emc\mod_hub_client.h",
+        "include\emc\mod_hub_consumer_helpers.h",
         "src\mod_hub_client.cpp",
         "samples\minimal\mod_hub_consumer_adapter.h",
         "samples\minimal\mod_hub_consumer_adapter.cpp",

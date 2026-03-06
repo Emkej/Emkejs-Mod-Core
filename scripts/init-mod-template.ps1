@@ -206,63 +206,17 @@ function New-HubBoolScaffoldSections {
 @"
 EMC_Result __cdecl Get$($_.FunctionSuffix)(void* user_data, int32_t* out_value)
 {
-    return GetBoolSettingValue(user_data, out_value, &ExampleModState::$($_.FieldName));
+    return emc::consumer::GetBoolFieldValue(user_data, out_value, &ExampleModState::$($_.FieldName));
 }
 
 EMC_Result __cdecl Set$($_.FunctionSuffix)(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
 {
-    return SetBoolSettingValue(user_data, value, err_buf, err_buf_size, &ExampleModState::$($_.FieldName));
+    return emc::consumer::SetBoolFieldValueWithRollback(user_data, value, err_buf, err_buf_size, &ExampleModState::$($_.FieldName));
 }
 "@
     }) -join ([Environment]::NewLine + [Environment]::NewLine)
 
-    $boolAccessors = @"
-typedef int32_t ExampleModState::*BoolField;
-
-EMC_Result GetBoolSettingValue(void* user_data, int32_t* out_value, BoolField field)
-{
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    *out_value = (state->*field) != 0 ? 1 : 0;
-    return EMC_OK;
-}
-
-EMC_Result SetBoolSettingValue(
-    void* user_data,
-    int32_t value,
-    char* err_buf,
-    uint32_t err_buf_size,
-    BoolField field)
-{
-    if (user_data == 0)
-    {
-        WriteErrorMessage(err_buf, err_buf_size, "invalid_state");
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    if (value != 0 && value != 1)
-    {
-        WriteErrorMessage(err_buf, err_buf_size, "invalid_bool");
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    int32_t& target = state->*field;
-    const int32_t previous_value = target;
-    target = value;
-
-    // TODO: Persist the updated value. If persistence fails, restore previous_value and return an error.
-    (void)previous_value;
-    WriteErrorMessage(err_buf, err_buf_size, 0);
-    return EMC_OK;
-}
-
-$boolAccessorWrappers
-"@
+    $boolAccessors = $boolAccessorWrappers
 
     $boolSettingDefs = ($settings | ForEach-Object {
 @"

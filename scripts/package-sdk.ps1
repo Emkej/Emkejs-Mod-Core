@@ -47,58 +47,14 @@ function Get-DefaultBoolScaffoldReplacements {
     $stateFields = "    int32_t enabled;"
     $stateInitializers = "    1,"
     $accessors = @"
-typedef int32_t ExampleModState::*BoolField;
-
-EMC_Result GetBoolSettingValue(void* user_data, int32_t* out_value, BoolField field)
-{
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    *out_value = (state->*field) != 0 ? 1 : 0;
-    return EMC_OK;
-}
-
-EMC_Result SetBoolSettingValue(
-    void* user_data,
-    int32_t value,
-    char* err_buf,
-    uint32_t err_buf_size,
-    BoolField field)
-{
-    if (user_data == 0)
-    {
-        WriteErrorMessage(err_buf, err_buf_size, "invalid_state");
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    if (value != 0 && value != 1)
-    {
-        WriteErrorMessage(err_buf, err_buf_size, "invalid_bool");
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleModState* state = static_cast<ExampleModState*>(user_data);
-    int32_t& target = state->*field;
-    const int32_t previous_value = target;
-    target = value;
-
-    // TODO: Persist the updated value. If persistence fails, restore previous_value and return an error.
-    (void)previous_value;
-    WriteErrorMessage(err_buf, err_buf_size, 0);
-    return EMC_OK;
-}
-
 EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
 {
-    return GetBoolSettingValue(user_data, out_value, &ExampleModState::enabled);
+    return emc::consumer::GetBoolFieldValue(user_data, out_value, &ExampleModState::enabled);
 }
 
 EMC_Result __cdecl SetEnabled(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
 {
-    return SetBoolSettingValue(user_data, value, err_buf, err_buf_size, &ExampleModState::enabled);
+    return emc::consumer::SetBoolFieldValueWithRollback(user_data, value, err_buf, err_buf_size, &ExampleModState::enabled);
 }
 "@
 
@@ -147,6 +103,7 @@ $ctx = [pscustomobject]@{
 
 $apiHeaderPath = Join-Path $ctx.RepoDir "include\emc\mod_hub_api.h"
 $clientHeaderPath = Join-Path $ctx.RepoDir "include\emc\mod_hub_client.h"
+$consumerHelpersHeaderPath = Join-Path $ctx.RepoDir "include\emc\mod_hub_consumer_helpers.h"
 $clientSourcePath = Join-Path $ctx.RepoDir "src\mod_hub_client.cpp"
 $sdkDocPath = Join-Path $ctx.RepoDir "docs\mod-hub-sdk.md"
 $sdkQuickstartDocPath = Join-Path $ctx.RepoDir "docs\mod-hub-sdk-quickstart.md"
@@ -157,6 +114,7 @@ $singleTuSampleTemplatePath = Join-Path $ctx.RepoDir "scripts\templates\mod_hub_
 foreach ($requiredPath in @(
         $apiHeaderPath,
         $clientHeaderPath,
+        $consumerHelpersHeaderPath,
         $clientSourcePath,
         $sdkDocPath,
         $sdkQuickstartDocPath,
@@ -208,6 +166,7 @@ foreach ($dir in @($bundleIncludeDir, $bundleSrcDir, $bundleDocsDir, $bundleSamp
 
 Copy-Item -Path $apiHeaderPath -Destination (Join-Path $bundleIncludeDir "mod_hub_api.h") -Force
 Copy-Item -Path $clientHeaderPath -Destination (Join-Path $bundleIncludeDir "mod_hub_client.h") -Force
+Copy-Item -Path $consumerHelpersHeaderPath -Destination (Join-Path $bundleIncludeDir "mod_hub_consumer_helpers.h") -Force
 Copy-Item -Path $clientSourcePath -Destination (Join-Path $bundleSrcDir "mod_hub_client.cpp") -Force
 Copy-Item -Path $sdkDocPath -Destination (Join-Path $bundleDocsDir "mod-hub-sdk.md") -Force
 Copy-Item -Path $sdkQuickstartDocPath -Destination (Join-Path $bundleDocsDir "mod-hub-sdk-quickstart.md") -Force

@@ -73,14 +73,20 @@ try {
     Assert-Condition -Condition ($header.Contains("ModHubConsumerAdapter_OnStartup")) -Message "Header missing startup wiring declaration."
     Assert-Condition -Condition ($source.Contains("config.table_registration = &kRegistration;")) -Message "Source missing table-registration helper wiring."
     Assert-Condition -Condition ($singleTu.Contains("ModHubSingleTuSample_OnStartup")) -Message "Single-TU sample missing startup wiring."
-    Assert-Condition -Condition ($singleTu.Contains("WriteErrorMessage")) -Message "Single-TU sample missing error-buffer helper utility."
+    Assert-Condition -Condition ($source.Contains('#include "emc/mod_hub_consumer_helpers.h"')) -Message "Scaffold adapter should include shared consumer helper header."
+    Assert-Condition -Condition ($singleTu.Contains('#include "emc/mod_hub_consumer_helpers.h"')) -Message "Single-TU sample should include shared consumer helper header."
     Assert-Condition -Condition ($source.Contains("GetShowOverlay")) -Message "Scaffold adapter missing generated show_overlay getter."
     Assert-Condition -Condition ($source.Contains("SetAutoSave")) -Message "Scaffold adapter missing generated auto_save setter."
     Assert-Condition -Condition ($source.Contains('const EMC_BoolSettingDefV1 kBoolSettingShowOverlay')) -Message "Scaffold adapter missing generated bool setting definition."
     Assert-Condition -Condition (-not $source.Contains('const EMC_BoolSettingDefV1 kBoolSetting =')) -Message "Scaffold adapter should replace the legacy single bool definition when custom bool settings are requested."
     Assert-Condition -Condition ($singleTu.Contains("GetShowOverlay")) -Message "Single-TU sample missing generated show_overlay getter."
     Assert-Condition -Condition ($singleTu.Contains("SetAutoSave")) -Message "Single-TU sample missing generated auto_save setter."
-    Assert-Condition -Condition ($singleTu.Contains("previous_value")) -Message "Generated bool setter should include persistence rollback placeholder state."
+    Assert-Condition -Condition ($singleTu.Contains("SetBoolFieldValueWithRollback")) -Message "Generated bool setter should delegate to shared rollback helper."
+
+    $consumerHelpersPath = Join-Path $RepoRoot "include\emc\mod_hub_consumer_helpers.h"
+    Assert-Condition -Condition (Test-Path $consumerHelpersPath) -Message "Missing shared consumer helper header: $consumerHelpersPath"
+    $consumerHelpers = Get-Content -Path $consumerHelpersPath -Raw
+    Assert-Condition -Condition ($consumerHelpers.Contains("previous_value")) -Message "Shared consumer helper should retain persistence rollback placeholder state."
 
     foreach ($text in @($source, $singleTu)) {
         Assert-Condition -Condition (-not $text.Contains("src/hub_")) -Message "Scaffold output should not reference hub internals (src/hub_*)."
