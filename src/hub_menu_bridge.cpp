@@ -22,6 +22,7 @@
 
 #include <Windows.h>
 
+#include <cctype>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -108,10 +109,14 @@ bool g_logged_missing_edit_box_skin = false;
 bool g_logged_missing_scrollbar_skin = false;
 bool g_restore_search_focus_after_rebuild = false;
 std::string g_restore_search_focus_namespace_id;
+bool g_restore_search_cursor_after_rebuild = false;
+std::string g_restore_search_cursor_namespace_id;
+size_t g_restore_search_cursor_position = 0;
 int g_hub_scroll_offset = 0;
 int g_hub_scroll_max_offset = 0;
 int g_hub_scroll_page_step = 160;
 bool g_ignore_scrollbar_position_event = false;
+MyGUI::EditBox* g_active_hub_search_box = 0;
 
 const int kHubScrollLineStep = 24;
 const int kHubScrollControlWidth = 44;
@@ -182,6 +187,7 @@ bool InitPluginMenuFunctions(unsigned int platform, const std::string& version, 
 void DestroyDynamicWidgets()
 {
     MyGUI::Gui* gui = MyGUI::Gui::getInstancePtr();
+    g_active_hub_search_box = 0;
     if (gui == 0)
     {
         g_dynamic_widgets.clear();
@@ -570,6 +576,200 @@ void EnsureSelectedNamespace(const std::vector<RenderNamespaceGroup>& namespaces
 void RebuildHubPanelWidgets();
 void SetHubScrollOffset(int offset);
 
+bool IsCtrlModifierDown()
+{
+    return (GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0
+        || (GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0;
+}
+
+bool IsSearchTokenSeparator(MyGUI::UString::unicode_char value)
+{
+    if (value < 0x80u)
+    {
+        const unsigned char byte = static_cast<unsigned char>(value);
+        return std::isspace(byte) || !std::isalnum(byte);
+    }
+
+    return false;
+}
+
+size_t FindPreviousSearchTokenBoundary(const MyGUI::UString& text, size_t cursor)
+{
+    size_t position = cursor;
+    while (position > 0 && IsSearchTokenSeparator(text[position - 1]))
+    {
+        --position;
+    }
+
+    while (position > 0 && !IsSearchTokenSeparator(text[position - 1]))
+    {
+        --position;
+    }
+
+    return position;
+}
+
+size_t FindNextSearchTokenBoundary(const MyGUI::UString& text, size_t cursor)
+{
+    size_t position = cursor;
+    const size_t length = text.size();
+    while (position < length && !IsSearchTokenSeparator(text[position]))
+    {
+        ++position;
+    }
+
+    while (position < length && IsSearchTokenSeparator(text[position]))
+    {
+        ++position;
+    }
+
+    return position;
+}
+
+void RequestSearchRestoreAfterRebuild(const std::string& namespace_id, size_t cursor_position)
+{
+    g_restore_search_focus_after_rebuild = true;
+    g_restore_search_focus_namespace_id = namespace_id;
+    g_restore_search_cursor_after_rebuild = true;
+    g_restore_search_cursor_namespace_id = namespace_id;
+    g_restore_search_cursor_position = cursor_position;
+}
+
+bool ApplyHubSearchQueryAndRebuild(const std::string& namespace_id, const std::string& query, size_t cursor_position)
+{
+    const char* existing_query = "";
+    if (HubUi_GetNamespaceSearchQuery(namespace_id.c_str(), &existing_query)
+        && existing_query != 0
+        && query == existing_query)
+    {
+        return false;
+    }
+
+    if (HubUi_SetNamespaceSearchQuery(namespace_id.c_str(), query.c_str()) != EMC_OK)
+    {
+        return false;
+    }
+
+    g_hub_scroll_offset = 0;
+    RequestSearchRestoreAfterRebuild(namespace_id, cursor_position);
+    RebuildHubPanelWidgets();
+    return true;
+}
+
+MyGUI::EditBox* FindFocusedHubSearchBox(std::string* out_namespace_id)
+{
+    MyGUI::InputManager* input = MyGUI::InputManager::getInstancePtr();
+    if (input == 0)
+    {
+        return 0;
+    }
+
+    MyGUI::Widget* focused_widget = input->getKeyFocusWidget();
+    if (focused_widget == 0)
+    {
+        return 0;
+    }
+
+    MyGUI::EditBox* search_box = 0;
+    for (MyGUI::Widget* widget = focused_widget; widget != 0; widget = widget->getParent())
+    {
+        if (widget != g_active_hub_search_box
+            && widget->getUserString("emc_search_box") != "1")
+        {
+            continue;
+        }
+
+        search_box = widget->castType<MyGUI::EditBox>(false);
+        if (search_box != 0)
+        {
+            break;
+        }
+    }
+
+    if (search_box == 0)
+    {
+        return 0;
+    }
+
+    if (out_namespace_id != 0)
+    {
+        *out_namespace_id = search_box->getUserString("emc_ns");
+    }
+
+    return search_box;
+}
+
+bool HandleHubSearchCtrlShortcut(OIS::KeyCode key_code)
+{
+    if (!IsCtrlModifierDown())
+    {
+        return false;
+    }
+
+    std::string namespace_id;
+    MyGUI::EditBox* search_box = FindFocusedHubSearchBox(&namespace_id);
+    if (search_box == 0 || namespace_id.empty())
+    {
+        return false;
+    }
+
+    const MyGUI::UString text = search_box->getOnlyText();
+    const size_t cursor = search_box->getTextCursor();
+
+    if (key_code == OIS::KC_LEFT)
+    {
+        const size_t next_cursor = FindPreviousSearchTokenBoundary(text, cursor);
+        if (next_cursor != cursor)
+        {
+            search_box->setTextCursor(next_cursor);
+        }
+        return true;
+    }
+
+    if (key_code == OIS::KC_RIGHT)
+    {
+        const size_t next_cursor = FindNextSearchTokenBoundary(text, cursor);
+        if (next_cursor != cursor)
+        {
+            search_box->setTextCursor(next_cursor);
+        }
+        return true;
+    }
+
+    if (key_code != OIS::KC_BACK)
+    {
+        return false;
+    }
+
+    if (search_box->isTextSelection())
+    {
+        const size_t selection_start = search_box->getTextSelectionStart();
+        const size_t selection_length = search_box->getTextSelectionLength();
+        if (selection_start == MyGUI::ITEM_NONE || selection_length == 0)
+        {
+            return true;
+        }
+
+        MyGUI::UString updated = text;
+        updated.erase(selection_start, selection_length);
+        const std::string updated_query = updated.asUTF8();
+        ApplyHubSearchQueryAndRebuild(namespace_id, updated_query, selection_start);
+        return true;
+    }
+
+    const size_t delete_start = FindPreviousSearchTokenBoundary(text, cursor);
+    if (delete_start == cursor)
+    {
+        return true;
+    }
+
+    MyGUI::UString updated = text;
+    updated.erase(delete_start, cursor - delete_start);
+    const std::string updated_query = updated.asUTF8();
+    ApplyHubSearchQueryAndRebuild(namespace_id, updated_query, delete_start);
+    return true;
+}
+
 void OnHubSearchTextChanged(MyGUI::EditBox* sender)
 {
     if (sender == 0)
@@ -584,21 +784,7 @@ void OnHubSearchTextChanged(MyGUI::EditBox* sender)
     }
 
     const std::string query = sender->getOnlyText().asUTF8();
-    const char* existing_query = "";
-    if (HubUi_GetNamespaceSearchQuery(namespace_id.c_str(), &existing_query)
-        && existing_query != 0
-        && query == existing_query)
-    {
-        return;
-    }
-
-    if (HubUi_SetNamespaceSearchQuery(namespace_id.c_str(), query.c_str()) == EMC_OK)
-    {
-        g_hub_scroll_offset = 0;
-        g_restore_search_focus_after_rebuild = true;
-        g_restore_search_focus_namespace_id = namespace_id;
-        RebuildHubPanelWidgets();
-    }
+    ApplyHubSearchQueryAndRebuild(namespace_id, query, sender->getTextCursor());
 }
 
 void NormalizeHubIntEditText(MyGUI::EditBox* sender)
@@ -841,13 +1027,7 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
 
     if (action == "search_clear")
     {
-        if (HubUi_SetNamespaceSearchQuery(namespace_id.c_str(), "") == EMC_OK)
-        {
-            g_hub_scroll_offset = 0;
-            g_restore_search_focus_after_rebuild = true;
-            g_restore_search_focus_namespace_id = namespace_id;
-            RebuildHubPanelWidgets();
-        }
+        ApplyHubSearchQueryAndRebuild(namespace_id, "", 0);
         return;
     }
 
@@ -1461,8 +1641,15 @@ void RebuildHubPanelWidgets()
     const bool should_restore_search_focus =
         g_restore_search_focus_after_rebuild
         && selected_namespace->namespace_id == g_restore_search_focus_namespace_id;
+    const bool should_restore_search_cursor =
+        g_restore_search_cursor_after_rebuild
+        && selected_namespace->namespace_id == g_restore_search_cursor_namespace_id;
+    const size_t restore_search_cursor_position = g_restore_search_cursor_position;
     g_restore_search_focus_after_rebuild = false;
     g_restore_search_focus_namespace_id.clear();
+    g_restore_search_cursor_after_rebuild = false;
+    g_restore_search_cursor_namespace_id.clear();
+    g_restore_search_cursor_position = 0;
 
     MyGUI::TextBox* search_label = CreateTrackedWidget<MyGUI::TextBox>(
         g_active_hub_panel_widget,
@@ -1490,9 +1677,11 @@ void RebuildHubPanelWidgets()
         MyGUI::IntCoord(96, y, search_box_width, 40));
     if (search_box != 0)
     {
+        g_active_hub_search_box = search_box;
         search_box->setEditMultiLine(false);
         search_box->setOnlyText(search_query_text);
         search_box->setUserString("emc_ns", selected_namespace->namespace_id);
+        search_box->setUserString("emc_search_box", "1");
         search_box->eventEditTextChange += MyGUI::newDelegate(&OnHubSearchTextChanged);
         if (should_restore_search_focus)
         {
@@ -1501,6 +1690,17 @@ void RebuildHubPanelWidgets()
             {
                 input->setKeyFocusWidget(search_box);
             }
+        }
+
+        if (should_restore_search_cursor)
+        {
+            size_t cursor_position = restore_search_cursor_position;
+            const size_t text_length = search_box->getTextLength();
+            if (cursor_position > text_length)
+            {
+                cursor_position = text_length;
+            }
+            search_box->setTextCursor(cursor_position);
         }
     }
 
@@ -1811,6 +2011,11 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
 
     if (g_hub_enabled && HubUi_IsOptionsWindowOpen() && g_active_hub_panel_widget != 0)
     {
+        if (HandleHubSearchCtrlShortcut(key_code))
+        {
+            return;
+        }
+
         if (key_code == OIS::KC_PGUP)
         {
             SetHubScrollOffset(g_hub_scroll_offset - g_hub_scroll_page_step);
