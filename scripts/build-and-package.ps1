@@ -1,4 +1,4 @@
-# Local wrapper: delegates to shared scripts submodule.
+# Local wrapper: delegates to shared build scripts.
 param(
     [string]$ModName = "",
     [string]$ProjectFileName = "",
@@ -29,7 +29,7 @@ $SharedScript = Join-Path $SharedRoot "build-and-package.ps1"
 
 if (-not (Test-Path $SharedScript)) {
     Write-Host "ERROR: Shared script not found: $SharedScript" -ForegroundColor Red
-    Write-Host "Run: git submodule update --init --recursive" -ForegroundColor Yellow
+    Write-Host "Sync tools\\build-scripts from the shared repo and retry." -ForegroundColor Yellow
     exit 1
 }
 
@@ -62,7 +62,7 @@ if ($RunReliabilitySmoke) {
 
     if ($BuildContext.Configuration -ne "Debug") {
         Write-Host "ERROR: -RunReliabilitySmoke requires -Configuration Debug." -ForegroundColor Red
-        exit 1
+        return (Exit-KenshiScriptWithTimestamp -ExitCode 1)
     }
 }
 
@@ -71,20 +71,21 @@ foreach ($k in @('ModName','ProjectFileName','OutputSubdir','Configuration','Pla
     if ($PSBoundParameters.ContainsKey($k)) { $Forward[$k] = (Get-Variable -Name $k -ValueOnly) }
 }
 
-& $SharedScript @Forward
+Invoke-KenshiScriptWithSuppressedTimestamp { & $SharedScript @Forward }
 if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+    return (Exit-KenshiScriptWithTimestamp -ExitCode $LASTEXITCODE)
 }
 
 if ($RunReliabilitySmoke) {
     if ($null -eq $BuildContext) {
-        throw "Build context was not resolved for reliability smoke."
+        Write-Host "ERROR: Build context was not resolved for reliability smoke." -ForegroundColor Red
+        return (Exit-KenshiScriptWithTimestamp -ExitCode 1)
     }
 
     $SmokeScript = Join-Path $ScriptDir "phase16_hub_attach_reliability_smoke_test.ps1"
     if (-not (Test-Path $SmokeScript)) {
         Write-Host "ERROR: Reliability smoke script not found: $SmokeScript" -ForegroundColor Red
-        exit 1
+        return (Exit-KenshiScriptWithTimestamp -ExitCode 1)
     }
 
     $ResolvedSmokeKenshiPath = Resolve-KenshiValue -CurrentValue $SmokeKenshiPath -EnvVar "KENSHI_PATH"
@@ -102,18 +103,18 @@ if ($RunReliabilitySmoke) {
 
     & $SmokeScript @SmokeParams
     if ($LASTEXITCODE -ne 0) {
-        exit $LASTEXITCODE
+        return (Exit-KenshiScriptWithTimestamp -ExitCode $LASTEXITCODE)
     }
 }
 
 if ($SkipSdkPackage) {
-    exit 0
+    return (Exit-KenshiScriptWithTimestamp -ExitCode 0)
 }
 
 $SdkScript = Join-Path $ScriptDir "package-sdk.ps1"
 if (-not (Test-Path $SdkScript)) {
     Write-Host "ERROR: SDK package script not found: $SdkScript" -ForegroundColor Red
-    exit 1
+    return (Exit-KenshiScriptWithTimestamp -ExitCode 1)
 }
 
 $SdkParams = @{
@@ -130,4 +131,8 @@ if ($PSBoundParameters.ContainsKey("SdkVersion")) { $SdkParams.Version = $SdkVer
 elseif ($PSBoundParameters.ContainsKey("Version")) { $SdkParams.Version = $Version }
 
 & $SdkScript @SdkParams
-exit $LASTEXITCODE
+if ($LASTEXITCODE -ne 0) {
+    return (Exit-KenshiScriptWithTimestamp -ExitCode $LASTEXITCODE)
+}
+
+return (Exit-KenshiScriptWithTimestamp -ExitCode 0)
