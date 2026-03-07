@@ -84,6 +84,7 @@ const char* kValueButtonSkin = "Kenshi_Button1";
 const char* kTextSkin = "Kenshi_TextboxStandardText";
 const char* kEditBoxSkin = "Kenshi_EditBox";
 const char* kNoMatchesText = "No matches in this tab. Try checking other tabs?";
+const char* kSearchHintText = "Search settings, or use mod:term (example: loot:enable)";
 
 bool g_hub_enabled = true;
 bool g_hooks_installed = false;
@@ -838,6 +839,18 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
         return;
     }
 
+    if (action == "search_clear")
+    {
+        if (HubUi_SetNamespaceSearchQuery(namespace_id.c_str(), "") == EMC_OK)
+        {
+            g_hub_scroll_offset = 0;
+            g_restore_search_focus_after_rebuild = true;
+            g_restore_search_focus_namespace_id = namespace_id;
+            RebuildHubPanelWidgets();
+        }
+        return;
+    }
+
     if (action == "mod_toggle")
     {
         bool collapsed = false;
@@ -1466,13 +1479,19 @@ void RebuildHubPanelWidgets()
         search_width = 220;
     }
 
+    const std::string search_query_text = search_query != 0 ? search_query : "";
+    const bool show_search_clear_button = !search_query_text.empty();
+    const int clear_button_gap = 6;
+    const int clear_button_width = 32;
+    const int search_box_width = search_width - clear_button_width - clear_button_gap;
+
     MyGUI::EditBox* search_box = CreateTrackedSearchBox(
         g_active_hub_panel_widget,
-        MyGUI::IntCoord(96, y, search_width, 40));
+        MyGUI::IntCoord(96, y, search_box_width, 40));
     if (search_box != 0)
     {
         search_box->setEditMultiLine(false);
-        search_box->setOnlyText(search_query != 0 ? search_query : "");
+        search_box->setOnlyText(search_query_text);
         search_box->setUserString("emc_ns", selected_namespace->namespace_id);
         search_box->eventEditTextChange += MyGUI::newDelegate(&OnHubSearchTextChanged);
         if (should_restore_search_focus)
@@ -1485,7 +1504,31 @@ void RebuildHubPanelWidgets()
         }
     }
 
-    const int content_top = y + 50;
+    if (show_search_clear_button)
+    {
+        MyGUI::Button* clear_search_button = CreateTrackedWidget<MyGUI::Button>(
+            g_active_hub_panel_widget,
+            kValueButtonSkin,
+            MyGUI::IntCoord(96 + search_box_width + clear_button_gap, y + 4, clear_button_width, 32));
+        if (clear_search_button != 0)
+        {
+            clear_search_button->setCaption("x");
+            clear_search_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(clear_search_button, "search_clear", selected_namespace->namespace_id, "", "");
+        }
+    }
+
+    MyGUI::TextBox* search_hint = CreateTrackedWidget<MyGUI::TextBox>(
+        g_active_hub_panel_widget,
+        kTextSkin,
+        MyGUI::IntCoord(96, y + 42, panel_width - 120, 22));
+    if (search_hint != 0)
+    {
+        search_hint->setCaption(kSearchHintText);
+        search_hint->setTextColour(MyGUI::Colour(0.65f, 0.65f, 0.65f, 1.0f));
+    }
+
+    const int content_top = y + 68;
     int content_bottom = panel_height - 12;
     if (content_bottom <= content_top)
     {

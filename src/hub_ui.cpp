@@ -441,6 +441,63 @@ bool ContainsSearchMatch(const char* haystack, const std::string& needle)
     return false;
 }
 
+std::string TrimSearchText(const std::string& value)
+{
+    size_t start = 0;
+    while (start < value.size()
+        && std::isspace(static_cast<unsigned char>(value[start])))
+    {
+        ++start;
+    }
+
+    size_t end = value.size();
+    while (end > start
+        && std::isspace(static_cast<unsigned char>(value[end - 1])))
+    {
+        --end;
+    }
+
+    return value.substr(start, end - start);
+}
+
+bool TryParseScopedSearchQuery(
+    const std::string& raw_query,
+    std::string* out_mod_query,
+    std::string* out_setting_query)
+{
+    if (out_mod_query == nullptr || out_setting_query == nullptr)
+    {
+        return false;
+    }
+
+    out_mod_query->clear();
+    out_setting_query->clear();
+
+    const std::string trimmed_query = TrimSearchText(raw_query);
+    if (trimmed_query.empty())
+    {
+        return false;
+    }
+
+    const size_t separator = trimmed_query.find(':');
+    if (separator == std::string::npos)
+    {
+        *out_setting_query = trimmed_query;
+        return false;
+    }
+
+    const std::string mod_query = TrimSearchText(trimmed_query.substr(0, separator));
+    if (mod_query.empty())
+    {
+        *out_setting_query = trimmed_query;
+        return false;
+    }
+
+    *out_mod_query = mod_query;
+    *out_setting_query = TrimSearchText(trimmed_query.substr(separator + 1));
+    return true;
+}
+
 void LogUiGetFailure(const HubUiSettingRow* row, EMC_Result result, const char* message)
 {
     std::ostringstream line;
@@ -1201,14 +1258,35 @@ bool HubUi_DoesRowMatchNamespaceSearch(const HubUiRowView* row)
         return false;
     }
 
-    if (tab->search_query.empty())
+    const std::string trimmed_query = TrimSearchText(tab->search_query);
+    if (trimmed_query.empty())
     {
         return true;
     }
 
-    return ContainsSearchMatch(row->mod_display_name, tab->search_query)
-        || ContainsSearchMatch(row->label, tab->search_query)
-        || ContainsSearchMatch(row->description, tab->search_query);
+    std::string mod_query;
+    std::string setting_query;
+    const bool has_mod_scope = TryParseScopedSearchQuery(trimmed_query, &mod_query, &setting_query);
+    if (has_mod_scope)
+    {
+        const bool mod_matches = ContainsSearchMatch(row->mod_display_name, mod_query)
+            || ContainsSearchMatch(row->mod_id, mod_query);
+        if (!mod_matches)
+        {
+            return false;
+        }
+
+        if (setting_query.empty())
+        {
+            return true;
+        }
+
+        return ContainsSearchMatch(row->label, setting_query)
+            || ContainsSearchMatch(row->description, setting_query);
+    }
+
+    return ContainsSearchMatch(row->label, trimmed_query)
+        || ContainsSearchMatch(row->description, trimmed_query);
 }
 
 bool HubUi_DoesSettingMatchNamespaceSearch(
@@ -1231,7 +1309,9 @@ bool HubUi_DoesSettingMatchNamespaceSearch(
     }
 
     HubUiRowView view;
+    std::memset(&view, 0, sizeof(view));
     view.namespace_id = row->namespace_id.c_str();
+    view.mod_id = row->mod_id.c_str();
     view.mod_display_name = row->mod_display_name.c_str();
     view.label = row->label.c_str();
     view.description = row->description.c_str();

@@ -412,8 +412,20 @@ public static class HubPhase4SearchCollapseHarness
             AssertSearchMatch(doesMatch, nsCombatId, modGammaId, settingGammaId, true, "default empty query / gamma");
 
             SetSearch(setSearch, nsQolId, "alpha");
-            AssertSearchMatch(doesMatch, nsQolId, modAlphaId, settingAlphaId, true, "mod name search");
-            AssertSearchMatch(doesMatch, nsQolId, modBetaId, settingBetaId, false, "mod name search miss");
+            AssertSearchMatch(doesMatch, nsQolId, modAlphaId, settingAlphaId, false, "plain search ignores mod name");
+            AssertSearchMatch(doesMatch, nsQolId, modBetaId, settingBetaId, false, "plain search mod name miss");
+            AssertSearchMatch(doesMatch, nsCombatId, modGammaId, settingGammaId, true, "per-tab isolation with empty other tab query");
+
+            SetSearch(setSearch, nsQolId, "alpha:enable");
+            AssertSearchMatch(doesMatch, nsQolId, modAlphaId, settingAlphaId, true, "scoped mod:term search");
+            AssertSearchMatch(doesMatch, nsQolId, modBetaId, settingBetaId, false, "scoped mod:term search miss");
+
+            SetSearch(setSearch, nsQolId, "alpha:");
+            AssertSearchMatch(doesMatch, nsQolId, modAlphaId, settingAlphaId, true, "scoped mod-only search");
+            AssertSearchMatch(doesMatch, nsQolId, modBetaId, settingBetaId, false, "scoped mod-only search miss");
+
+            SetSearch(setSearch, nsQolId, " phase4_alpha : enable ");
+            AssertSearchMatch(doesMatch, nsQolId, modAlphaId, settingAlphaId, true, "scoped search trims whitespace and matches mod id");
             AssertSearchMatch(doesMatch, nsCombatId, modGammaId, settingGammaId, true, "per-tab isolation with empty other tab query");
 
             SetSearch(setSearch, nsQolId, "ENABLE");
@@ -435,7 +447,7 @@ public static class HubPhase4SearchCollapseHarness
             ExpectResult(r, EMC_OK, "set_mod_collapsed(true) failed");
             AssertCollapsed(getCollapsed, nsQolId, modAlphaId, true, "before filtering");
 
-            SetSearch(setSearch, nsQolId, "alpha");
+            SetSearch(setSearch, nsQolId, "alpha:");
             AssertCollapsed(getCollapsed, nsQolId, modAlphaId, true, "while filtered");
 
             SetSearch(setSearch, nsQolId, "");
@@ -443,12 +455,12 @@ public static class HubPhase4SearchCollapseHarness
 
             r = setCollapsed(nsQolId, modAlphaId, 0);
             ExpectResult(r, EMC_OK, "set_mod_collapsed(false) failed");
-            SetSearch(setSearch, nsQolId, "alpha");
+            SetSearch(setSearch, nsQolId, "alpha:");
             AssertCollapsed(getCollapsed, nsQolId, modAlphaId, false, "expanded while filtered");
             SetSearch(setSearch, nsQolId, "");
             AssertCollapsed(getCollapsed, nsQolId, modAlphaId, false, "expanded after clearing filter");
 
-            SetSearch(setSearch, nsQolId, "alpha");
+            SetSearch(setSearch, nsQolId, "alpha:");
             SetSearch(setSearch, nsCombatId, "guard");
             AssertSearchMatch(doesMatch, nsQolId, modAlphaId, settingAlphaId, true, "ns1 filter retained");
             AssertSearchMatch(doesMatch, nsQolId, modBetaId, settingBetaId, false, "ns1 filter retained miss");
