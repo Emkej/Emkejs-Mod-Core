@@ -99,6 +99,7 @@ FnOptionsSave g_fnOptionsSaveOrig = 0;
 ForgottenGUI* g_ptrKenshiGUI = 0;
 
 void (*InputHandler_keyDownEvent_orig)(InputHandler*, OIS::KeyCode) = 0;
+void (*InputHandler_keyUpEvent_orig)(InputHandler*, OIS::KeyCode) = 0;
 
 OptionsWindow* g_active_options_window = 0;
 DatapanelGUI* g_active_hub_panel = 0;
@@ -117,6 +118,34 @@ int g_hub_scroll_max_offset = 0;
 int g_hub_scroll_page_step = 160;
 bool g_ignore_scrollbar_position_event = false;
 MyGUI::EditBox* g_active_hub_search_box = 0;
+bool g_left_ctrl_down = false;
+bool g_right_ctrl_down = false;
+
+struct PendingHubSearchShortcut
+{
+    bool active;
+    bool rebuild_query;
+    int key_value;
+    std::string namespace_id;
+    std::string query;
+    size_t cursor_position;
+
+    PendingHubSearchShortcut()
+        : active(false)
+        , rebuild_query(false)
+        , key_value(0)
+        , namespace_id()
+        , query()
+        , cursor_position(0)
+    {
+    }
+};
+
+PendingHubSearchShortcut g_pending_hub_search_shortcut;
+bool g_have_hub_search_snapshot = false;
+std::string g_hub_search_snapshot_namespace_id;
+std::string g_hub_search_snapshot_query;
+size_t g_hub_search_snapshot_cursor_position = 0;
 
 const int kHubScrollLineStep = 24;
 const int kHubScrollControlWidth = 44;
@@ -124,6 +153,8 @@ const int kHubScrollGutterWidth = 56;
 
 void OnHubMouseWheel(MyGUI::Widget* sender, int rel);
 void OnHubScrollBarPositionChanged(MyGUI::ScrollBar* sender, size_t position);
+void OnHubSearchKeyPressed(MyGUI::Widget* sender, MyGUI::KeyCode key_code, MyGUI::Char character);
+void OnHubSearchKeyReleased(MyGUI::Widget* sender, MyGUI::KeyCode key_code);
 
 struct RenderModGroup
 {
@@ -247,6 +278,8 @@ MyGUI::EditBox* CreateTrackedSearchBox(MyGUI::Widget* parent, const MyGUI::IntCo
             {
                 widget->setTextColour(MyGUI::Colour(0.85f, 0.85f, 0.85f, 1.0f));
                 widget->eventMouseWheel += MyGUI::newDelegate(&OnHubMouseWheel);
+                widget->eventKeyButtonPressed += MyGUI::newDelegate(&OnHubSearchKeyPressed);
+                widget->eventKeyButtonReleased += MyGUI::newDelegate(&OnHubSearchKeyReleased);
                 g_dynamic_widgets.push_back(widget);
                 return widget;
             }
@@ -526,6 +559,16 @@ std::string FormatKeybindButtonCaption(const HubUiRowView& row)
     return caption.str();
 }
 
+bool IsInterestingHubSearchMyGuiKey(MyGUI::KeyCode key_code)
+{
+    const int value = key_code.getValue();
+    return value == MyGUI::KeyCode::LeftControl
+        || value == MyGUI::KeyCode::RightControl
+        || value == MyGUI::KeyCode::ArrowLeft
+        || value == MyGUI::KeyCode::ArrowRight
+        || value == MyGUI::KeyCode::Backspace;
+}
+
 bool TryFindRowViewById(const std::string& namespace_id, const std::string& mod_id, const std::string& setting_id, HubUiRowView* out_row)
 {
     if (out_row == 0)
@@ -576,10 +619,33 @@ void EnsureSelectedNamespace(const std::vector<RenderNamespaceGroup>& namespaces
 void RebuildHubPanelWidgets();
 void SetHubScrollOffset(int offset);
 
-bool IsCtrlModifierDown()
+void ResetTrackedModifierState()
 {
-    return (GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0
-        || (GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0;
+    g_left_ctrl_down = false;
+    g_right_ctrl_down = false;
+}
+
+void ResetPendingHubSearchShortcut()
+{
+    g_pending_hub_search_shortcut = PendingHubSearchShortcut();
+}
+
+void ResetHubSearchSnapshot()
+{
+    g_have_hub_search_snapshot = false;
+    g_hub_search_snapshot_namespace_id.clear();
+    g_hub_search_snapshot_query.clear();
+    g_hub_search_snapshot_cursor_position = 0;
+}
+
+bool IsCtrlModifierDown(const InputHandler* input_handler)
+{
+    if (input_handler != 0 && input_handler->ctrl)
+    {
+        return true;
+    }
+
+    return g_left_ctrl_down || g_right_ctrl_down;
 }
 
 bool IsSearchTokenSeparator(MyGUI::UString::unicode_char value)
@@ -587,7 +653,7 @@ bool IsSearchTokenSeparator(MyGUI::UString::unicode_char value)
     if (value < 0x80u)
     {
         const unsigned char byte = static_cast<unsigned char>(value);
-        return std::isspace(byte) || !std::isalnum(byte);
+        return byte == ':' || std::isspace(byte) || !std::isalnum(byte);
     }
 
     return false;
@@ -595,6 +661,12 @@ bool IsSearchTokenSeparator(MyGUI::UString::unicode_char value)
 
 size_t FindPreviousSearchTokenBoundary(const MyGUI::UString& text, size_t cursor)
 {
+    const size_t length = text.size();
+    if (cursor > length)
+    {
+        cursor = length;
+    }
+
     size_t position = cursor;
     while (position > 0 && IsSearchTokenSeparator(text[position - 1]))
     {
@@ -611,8 +683,13 @@ size_t FindPreviousSearchTokenBoundary(const MyGUI::UString& text, size_t cursor
 
 size_t FindNextSearchTokenBoundary(const MyGUI::UString& text, size_t cursor)
 {
-    size_t position = cursor;
     const size_t length = text.size();
+    if (cursor > length)
+    {
+        cursor = length;
+    }
+
+    size_t position = cursor;
     while (position < length && !IsSearchTokenSeparator(text[position]))
     {
         ++position;
@@ -699,9 +776,196 @@ MyGUI::EditBox* FindFocusedHubSearchBox(std::string* out_namespace_id)
     return search_box;
 }
 
-bool HandleHubSearchCtrlShortcut(OIS::KeyCode key_code)
+void RememberHubSearchSnapshot(MyGUI::EditBox* search_box)
 {
-    if (!IsCtrlModifierDown())
+    if (search_box == 0)
+    {
+        ResetHubSearchSnapshot();
+        return;
+    }
+
+    size_t cursor_position = search_box->getTextCursor();
+    const size_t text_length = search_box->getTextLength();
+    if (cursor_position > text_length)
+    {
+        cursor_position = text_length;
+    }
+
+    g_have_hub_search_snapshot = true;
+    g_hub_search_snapshot_namespace_id = search_box->getUserString("emc_ns");
+    g_hub_search_snapshot_query = search_box->getOnlyText().asUTF8();
+    g_hub_search_snapshot_cursor_position = cursor_position;
+}
+
+void RememberHubSearchSnapshotValue(const std::string& namespace_id, const std::string& query, size_t cursor_position)
+{
+    g_have_hub_search_snapshot = true;
+    g_hub_search_snapshot_namespace_id = namespace_id;
+    g_hub_search_snapshot_query = query;
+
+    if (cursor_position > query.size())
+    {
+        cursor_position = query.size();
+    }
+
+    g_have_hub_search_snapshot = true;
+    g_hub_search_snapshot_cursor_position = cursor_position;
+}
+
+bool ScheduleHubSearchMyGuiShortcut(MyGUI::EditBox* search_box, MyGUI::KeyCode key_code)
+{
+    if (search_box == 0)
+    {
+        return false;
+    }
+
+    MyGUI::InputManager* input = MyGUI::InputManager::getInstancePtr();
+    if (input == 0 || !input->isControlPressed())
+    {
+        return false;
+    }
+
+    const std::string namespace_id = search_box->getUserString("emc_ns");
+    if (namespace_id.empty() || search_box->getUserString("emc_search_box") != "1")
+    {
+        return false;
+    }
+
+    MyGUI::UString text = search_box->getOnlyText();
+    size_t text_length = text.size();
+    size_t cursor = search_box->getTextCursor();
+    if (cursor > text_length)
+    {
+        cursor = text_length;
+    }
+
+    ResetPendingHubSearchShortcut();
+    g_pending_hub_search_shortcut.active = true;
+    g_pending_hub_search_shortcut.key_value = key_code.getValue();
+    g_pending_hub_search_shortcut.namespace_id = namespace_id;
+
+    if (key_code.getValue() == MyGUI::KeyCode::ArrowLeft)
+    {
+        g_pending_hub_search_shortcut.rebuild_query = false;
+        g_pending_hub_search_shortcut.cursor_position = FindPreviousSearchTokenBoundary(text, cursor);
+        return true;
+    }
+
+    if (key_code.getValue() == MyGUI::KeyCode::ArrowRight)
+    {
+        g_pending_hub_search_shortcut.rebuild_query = false;
+        g_pending_hub_search_shortcut.cursor_position = FindNextSearchTokenBoundary(text, cursor);
+        return true;
+    }
+
+    if (key_code.getValue() != MyGUI::KeyCode::Backspace)
+    {
+        ResetPendingHubSearchShortcut();
+        return false;
+    }
+
+    if (g_have_hub_search_snapshot && g_hub_search_snapshot_namespace_id == namespace_id)
+    {
+        text = MyGUI::UString(g_hub_search_snapshot_query);
+        text_length = text.size();
+        cursor = g_hub_search_snapshot_cursor_position;
+        if (cursor > text_length)
+        {
+            cursor = text_length;
+        }
+    }
+
+    g_pending_hub_search_shortcut.rebuild_query = true;
+    MyGUI::UString updated = text;
+
+    if (search_box->isTextSelection())
+    {
+        size_t selection_start = search_box->getTextSelectionStart();
+        size_t selection_length = search_box->getTextSelectionLength();
+        if (selection_start != MyGUI::ITEM_NONE)
+        {
+            if (selection_start > text_length)
+            {
+                selection_start = text_length;
+            }
+            if (selection_start + selection_length > text_length)
+            {
+                selection_length = text_length - selection_start;
+            }
+        }
+
+        if (selection_start != MyGUI::ITEM_NONE && selection_length != 0)
+        {
+            updated.erase(selection_start, selection_length);
+            g_pending_hub_search_shortcut.cursor_position = selection_start;
+        }
+        else
+        {
+            g_pending_hub_search_shortcut.cursor_position = cursor;
+        }
+    }
+    else
+    {
+        const size_t delete_start = FindPreviousSearchTokenBoundary(text, cursor);
+        if (delete_start != cursor)
+        {
+            updated.erase(delete_start, cursor - delete_start);
+        }
+        g_pending_hub_search_shortcut.cursor_position = delete_start;
+    }
+
+    g_pending_hub_search_shortcut.query = updated.asUTF8();
+    return true;
+}
+
+void ApplyPendingHubSearchShortcut(MyGUI::EditBox* search_box, MyGUI::KeyCode key_code)
+{
+    if (!g_pending_hub_search_shortcut.active || g_pending_hub_search_shortcut.key_value != key_code.getValue())
+    {
+        return;
+    }
+
+    const PendingHubSearchShortcut pending = g_pending_hub_search_shortcut;
+    ResetPendingHubSearchShortcut();
+
+    if (search_box == 0)
+    {
+        return;
+    }
+
+    if (pending.rebuild_query)
+    {
+        RememberHubSearchSnapshotValue(pending.namespace_id, pending.query, pending.cursor_position);
+        const bool applied = ApplyHubSearchQueryAndRebuild(pending.namespace_id, pending.query, pending.cursor_position);
+        if (!applied)
+        {
+            search_box->setOnlyText(pending.query);
+            size_t cursor_position = pending.cursor_position;
+            const size_t text_length = search_box->getTextLength();
+            if (cursor_position > text_length)
+            {
+                cursor_position = text_length;
+            }
+            search_box->setTextCursor(cursor_position);
+            search_box->setTextSelection(cursor_position, cursor_position);
+        }
+
+        return;
+    }
+
+    size_t cursor_position = pending.cursor_position;
+    const size_t text_length = search_box->getTextLength();
+    if (cursor_position > text_length)
+    {
+        cursor_position = text_length;
+    }
+    search_box->setTextCursor(cursor_position);
+    search_box->setTextSelection(cursor_position, cursor_position);
+}
+
+bool HandleHubSearchCtrlShortcut(InputHandler* input_handler, OIS::KeyCode key_code)
+{
+    if (!IsCtrlModifierDown(input_handler))
     {
         return false;
     }
@@ -784,7 +1048,46 @@ void OnHubSearchTextChanged(MyGUI::EditBox* sender)
     }
 
     const std::string query = sender->getOnlyText().asUTF8();
-    ApplyHubSearchQueryAndRebuild(namespace_id, query, sender->getTextCursor());
+    size_t cursor_position = sender->getTextCursor();
+    const size_t text_length = sender->getTextLength();
+    if (cursor_position > text_length)
+    {
+        cursor_position = text_length;
+    }
+
+    RememberHubSearchSnapshotValue(namespace_id, query, cursor_position);
+    ApplyHubSearchQueryAndRebuild(namespace_id, query, cursor_position);
+}
+
+void OnHubSearchKeyPressed(MyGUI::Widget* sender, MyGUI::KeyCode key_code, MyGUI::Char character)
+{
+    (void)character;
+
+    if (sender == 0 || !IsInterestingHubSearchMyGuiKey(key_code))
+    {
+        return;
+    }
+
+    ScheduleHubSearchMyGuiShortcut(sender->castType<MyGUI::EditBox>(false), key_code);
+}
+
+void OnHubSearchKeyReleased(MyGUI::Widget* sender, MyGUI::KeyCode key_code)
+{
+    if (sender == 0 || !IsInterestingHubSearchMyGuiKey(key_code))
+    {
+        return;
+    }
+
+    MyGUI::EditBox* search_box = sender->castType<MyGUI::EditBox>(false);
+    const bool pending_rebuild_query =
+        g_pending_hub_search_shortcut.active
+        && g_pending_hub_search_shortcut.key_value == key_code.getValue()
+        && g_pending_hub_search_shortcut.rebuild_query;
+    ApplyPendingHubSearchShortcut(search_box, key_code);
+    if (!pending_rebuild_query)
+    {
+        RememberHubSearchSnapshot(search_box);
+    }
 }
 
 void NormalizeHubIntEditText(MyGUI::EditBox* sender)
@@ -1702,6 +2005,8 @@ void RebuildHubPanelWidgets()
             }
             search_box->setTextCursor(cursor_position);
         }
+
+        RememberHubSearchSnapshot(search_box);
     }
 
     if (show_search_clear_button)
@@ -1914,6 +2219,9 @@ void RebuildHubPanelWidgets()
 void ClearActiveUiState()
 {
     DestroyDynamicWidgets();
+    ResetTrackedModifierState();
+    ResetPendingHubSearchShortcut();
+    ResetHubSearchSnapshot();
     g_selected_namespace_id.clear();
     g_hub_scroll_offset = 0;
     g_hub_scroll_max_offset = 0;
@@ -2002,6 +2310,15 @@ void OptionsWindowSaveHook(OptionsWindow* self)
 
 void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code)
 {
+    if (key_code == OIS::KC_LCONTROL)
+    {
+        g_left_ctrl_down = true;
+    }
+    else if (key_code == OIS::KC_RCONTROL)
+    {
+        g_right_ctrl_down = true;
+    }
+
     if (g_hub_enabled && HubUi_IsOptionsWindowOpen() && HubUi_IsAnyKeybindCaptureActive())
     {
         HubUi_ApplyCapturedKeycodeToActiveRow(static_cast<int32_t>(key_code));
@@ -2011,7 +2328,7 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
 
     if (g_hub_enabled && HubUi_IsOptionsWindowOpen() && g_active_hub_panel_widget != 0)
     {
-        if (HandleHubSearchCtrlShortcut(key_code))
+        if (HandleHubSearchCtrlShortcut(thisptr, key_code))
         {
             return;
         }
@@ -2048,6 +2365,23 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
     if (InputHandler_keyDownEvent_orig != 0)
     {
         InputHandler_keyDownEvent_orig(thisptr, key_code);
+    }
+}
+
+void InputHandler_keyUpEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code)
+{
+    if (key_code == OIS::KC_LCONTROL)
+    {
+        g_left_ctrl_down = false;
+    }
+    else if (key_code == OIS::KC_RCONTROL)
+    {
+        g_right_ctrl_down = false;
+    }
+
+    if (InputHandler_keyUpEvent_orig != 0)
+    {
+        InputHandler_keyUpEvent_orig(thisptr, key_code);
     }
 }
 }
@@ -2106,6 +2440,15 @@ bool HubMenuBridge_InstallHooks(unsigned int platform, const std::string& versio
         &InputHandler_keyDownEvent_orig))
     {
         ErrorLog("Emkejs-Mod-Core: Could not hook InputHandler::keyDownEvent");
+        return false;
+    }
+
+    if (KenshiLib::SUCCESS != KenshiLib::AddHook(
+        KenshiLib::GetRealAddress(&InputHandler::keyUpEvent),
+        InputHandler_keyUpEvent_hook,
+        &InputHandler_keyUpEvent_orig))
+    {
+        ErrorLog("Emkejs-Mod-Core: Could not hook InputHandler::keyUpEvent");
         return false;
     }
 
