@@ -14,6 +14,7 @@
 #include <mygui/MyGUI_Gui.h>
 #include <mygui/MyGUI_InputManager.h>
 #include <mygui/MyGUI_ScrollBar.h>
+#include <mygui/MyGUI_ScrollView.h>
 #include <mygui/MyGUI_TabControl.h>
 #include <mygui/MyGUI_TabItem.h>
 #include <mygui/MyGUI_TextBox.h>
@@ -108,6 +109,7 @@ std::string g_selected_namespace_id;
 std::vector<MyGUI::Widget*> g_dynamic_widgets;
 bool g_logged_missing_edit_box_skin = false;
 bool g_logged_missing_scrollbar_skin = false;
+bool g_logged_missing_scroll_view_skin = false;
 bool g_restore_search_focus_after_rebuild = false;
 std::string g_restore_search_focus_namespace_id;
 bool g_restore_search_cursor_after_rebuild = false;
@@ -118,6 +120,7 @@ int g_hub_scroll_max_offset = 0;
 int g_hub_scroll_page_step = 160;
 bool g_ignore_scrollbar_position_event = false;
 MyGUI::EditBox* g_active_hub_search_box = 0;
+MyGUI::ScrollView* g_active_hub_scroll_view = 0;
 bool g_left_ctrl_down = false;
 bool g_right_ctrl_down = false;
 
@@ -151,8 +154,10 @@ const int kHubScrollLineStep = 24;
 const int kHubScrollControlWidth = 44;
 const int kHubScrollGutterWidth = 56;
 
+bool ApplyHubScrollOffsetWithoutRebuild(int offset);
 void OnHubMouseWheel(MyGUI::Widget* sender, int rel);
 void OnHubScrollBarPositionChanged(MyGUI::ScrollBar* sender, size_t position);
+void OnHubNativeScrollBarPositionChanged(MyGUI::ScrollBar* sender, size_t position);
 void OnHubSearchKeyPressed(MyGUI::Widget* sender, MyGUI::KeyCode key_code, MyGUI::Char character);
 void OnHubSearchKeyReleased(MyGUI::Widget* sender, MyGUI::KeyCode key_code);
 
@@ -219,6 +224,7 @@ void DestroyDynamicWidgets()
 {
     MyGUI::Gui* gui = MyGUI::Gui::getInstancePtr();
     g_active_hub_search_box = 0;
+    g_active_hub_scroll_view = 0;
     if (gui == 0)
     {
         g_dynamic_widgets.clear();
@@ -306,6 +312,9 @@ MyGUI::ScrollBar* CreateTrackedScrollBar(MyGUI::Widget* parent, const MyGUI::Int
     }
 
     const char* skins[] = {
+        "Kenshi_ScrollBarV",
+        "Kenshi_ScrollBar",
+        "Kenshi_ScrollBarVBig",
         "VScroll",
         "VScrollBar",
         "ScrollBarV",
@@ -333,6 +342,46 @@ MyGUI::ScrollBar* CreateTrackedScrollBar(MyGUI::Widget* parent, const MyGUI::Int
     {
         ErrorLog("Emkejs-Mod-Core: failed to create ScrollBar for Mod Hub (no compatible skin found)");
         g_logged_missing_scrollbar_skin = true;
+    }
+
+    return 0;
+}
+
+MyGUI::ScrollView* CreateTrackedScrollView(MyGUI::Widget* parent, const MyGUI::IntCoord& coord)
+{
+    if (parent == 0)
+    {
+        return 0;
+    }
+
+    const char* skins[] = {
+        "Kenshi_ScrollViewEmpty",
+        "Kenshi_ScrollView",
+        "Kenshi_ScrollViewEmptyLight",
+        "ScrollView"
+    };
+
+    for (size_t index = 0; index < sizeof(skins) / sizeof(skins[0]); ++index)
+    {
+        try
+        {
+            MyGUI::ScrollView* widget = parent->createWidget<MyGUI::ScrollView>(skins[index], coord, MyGUI::Align::Default);
+            if (widget != 0)
+            {
+                widget->eventMouseWheel += MyGUI::newDelegate(&OnHubMouseWheel);
+                g_dynamic_widgets.push_back(widget);
+                return widget;
+            }
+        }
+        catch (...)
+        {
+        }
+    }
+
+    if (!g_logged_missing_scroll_view_skin)
+    {
+        ErrorLog("Emkejs-Mod-Core: failed to create native ScrollView for Mod Hub (no compatible skin found)");
+        g_logged_missing_scroll_view_skin = true;
     }
 
     return 0;
@@ -1248,19 +1297,41 @@ void OnHubMouseWheel(MyGUI::Widget*, int rel)
         return;
     }
 
-    const int previous_offset = g_hub_scroll_offset;
+    int delta = kHubScrollLineStep;
+    const int magnitude = rel > 0 ? rel : -rel;
+    if (magnitude > 120)
+    {
+        const int steps = (magnitude + 119) / 120;
+        delta *= steps;
+    }
+
     if (rel > 0)
     {
-        SetHubScrollOffset(g_hub_scroll_offset - kHubScrollLineStep);
+        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - delta))
+        {
+            return;
+        }
+
+        const int previous_offset = g_hub_scroll_offset;
+        SetHubScrollOffset(g_hub_scroll_offset - delta);
+        if (g_hub_scroll_offset != previous_offset)
+        {
+            RebuildHubPanelWidgets();
+        }
     }
     else
     {
-        SetHubScrollOffset(g_hub_scroll_offset + kHubScrollLineStep);
-    }
+        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + delta))
+        {
+            return;
+        }
 
-    if (g_hub_scroll_offset != previous_offset)
-    {
-        RebuildHubPanelWidgets();
+        const int previous_offset = g_hub_scroll_offset;
+        SetHubScrollOffset(g_hub_scroll_offset + delta);
+        if (g_hub_scroll_offset != previous_offset)
+        {
+            RebuildHubPanelWidgets();
+        }
     }
 }
 
@@ -1279,6 +1350,16 @@ void OnHubScrollBarPositionChanged(MyGUI::ScrollBar*, size_t position)
     }
 }
 
+void OnHubNativeScrollBarPositionChanged(MyGUI::ScrollBar*, size_t position)
+{
+    if (g_ignore_scrollbar_position_event)
+    {
+        return;
+    }
+
+    SetHubScrollOffset(static_cast<int>(position));
+}
+
 void OnHubButtonClicked(MyGUI::Widget* sender)
 {
     if (sender == 0)
@@ -1293,6 +1374,10 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
 
     if (action == "scroll_line_up")
     {
+        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - kHubScrollLineStep))
+        {
+            return;
+        }
         SetHubScrollOffset(g_hub_scroll_offset - kHubScrollLineStep);
         RebuildHubPanelWidgets();
         return;
@@ -1300,6 +1385,10 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
 
     if (action == "scroll_line_down")
     {
+        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + kHubScrollLineStep))
+        {
+            return;
+        }
         SetHubScrollOffset(g_hub_scroll_offset + kHubScrollLineStep);
         RebuildHubPanelWidgets();
         return;
@@ -1307,6 +1396,10 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
 
     if (action == "scroll_page_up")
     {
+        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - g_hub_scroll_page_step))
+        {
+            return;
+        }
         SetHubScrollOffset(g_hub_scroll_offset - g_hub_scroll_page_step);
         RebuildHubPanelWidgets();
         return;
@@ -1314,6 +1407,10 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
 
     if (action == "scroll_page_down")
     {
+        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + g_hub_scroll_page_step))
+        {
+            return;
+        }
         SetHubScrollOffset(g_hub_scroll_offset + g_hub_scroll_page_step);
         RebuildHubPanelWidgets();
         return;
@@ -1850,6 +1947,24 @@ void SetHubScrollOffset(int offset)
     g_hub_scroll_offset = ClampInt(offset, 0, g_hub_scroll_max_offset);
 }
 
+bool ApplyHubScrollOffsetWithoutRebuild(int offset)
+{
+    if (g_active_hub_scroll_view == 0)
+    {
+        return false;
+    }
+
+    const int previous_offset = g_hub_scroll_offset;
+    SetHubScrollOffset(offset);
+    if (g_hub_scroll_offset == previous_offset)
+    {
+        return false;
+    }
+
+    g_active_hub_scroll_view->setViewOffset(MyGUI::IntPoint(0, g_hub_scroll_offset));
+    return true;
+}
+
 bool IsBlockFullyVisible(int block_y, int block_height, int viewport_top, int viewport_bottom)
 {
     if (block_height <= 0)
@@ -2059,15 +2174,68 @@ void RebuildHubPanelWidgets()
     const int content_total_height = MeasureFilteredModsContentHeight(filtered_mods);
     ConfigureHubScrollRange(content_total_height, viewport_height);
 
-    const bool show_scroll_controls = g_hub_scroll_max_offset > 0;
+    MyGUI::Widget* content_parent = g_active_hub_panel_widget;
     int content_panel_width = panel_width;
-    if (show_scroll_controls)
+    bool use_native_scroll_view = false;
+
+    MyGUI::ScrollView* scroll_view = CreateTrackedScrollView(
+        g_active_hub_panel_widget,
+        MyGUI::IntCoord(20, content_top, panel_width - 40, viewport_height));
+    if (scroll_view != 0)
     {
-        content_panel_width -= kHubScrollGutterWidth;
+        scroll_view->setVisibleHScroll(false);
+        scroll_view->setVisibleVScroll(true);
+        g_active_hub_scroll_view = scroll_view;
+
+        MyGUI::Widget* native_vscroll_widget = scroll_view->findWidget("VScroll");
+        MyGUI::ScrollBar* native_vscroll = native_vscroll_widget != 0
+            ? native_vscroll_widget->castType<MyGUI::ScrollBar>(false)
+            : 0;
+        if (native_vscroll != 0)
+        {
+            native_vscroll->eventScrollChangePosition += MyGUI::newDelegate(&OnHubNativeScrollBarPositionChanged);
+        }
+
+        MyGUI::Widget* client_widget = scroll_view->getClientWidget();
+        if (client_widget != 0)
+        {
+            content_parent = client_widget;
+        }
+        else
+        {
+            content_parent = scroll_view;
+        }
+
+        content_panel_width = scroll_view->getClientCoord().width;
+        if (content_panel_width < 280)
+        {
+            content_panel_width = panel_width - 40;
+        }
+
+        int canvas_height = content_total_height;
+        if (canvas_height < viewport_height)
+        {
+            canvas_height = viewport_height;
+        }
+
+        scroll_view->setCanvasSize(content_panel_width, canvas_height);
+        g_ignore_scrollbar_position_event = true;
+        scroll_view->setViewOffset(MyGUI::IntPoint(0, g_hub_scroll_offset));
+        g_ignore_scrollbar_position_event = false;
+        use_native_scroll_view = true;
     }
-    if (content_panel_width < 280)
+
+    const bool show_scroll_controls = !use_native_scroll_view && g_hub_scroll_max_offset > 0;
+    if (!use_native_scroll_view)
     {
-        content_panel_width = panel_width;
+        if (show_scroll_controls)
+        {
+            content_panel_width -= kHubScrollGutterWidth;
+        }
+        if (content_panel_width < 280)
+        {
+            content_panel_width = panel_width;
+        }
     }
 
     if (show_scroll_controls)
@@ -2174,12 +2342,14 @@ void RebuildHubPanelWidgets()
     {
         const RenderModGroup& mod_group = filtered_mods[mod_index];
         const int header_height = 32;
-        const int header_y = content_top + logical_y - g_hub_scroll_offset;
+        const int header_y = use_native_scroll_view
+            ? logical_y
+            : content_top + logical_y - g_hub_scroll_offset;
 
-        if (IsBlockFullyVisible(header_y, header_height, content_top, content_bottom))
+        if (use_native_scroll_view || IsBlockFullyVisible(header_y, header_height, content_top, content_bottom))
         {
             MyGUI::Button* mod_header = CreateTrackedWidget<MyGUI::Button>(
-                g_active_hub_panel_widget,
+                content_parent,
                 kHeaderButtonSkin,
                 MyGUI::IntCoord(20, header_y, content_panel_width - 40, header_height));
             if (mod_header != 0)
@@ -2202,11 +2372,13 @@ void RebuildHubPanelWidgets()
         {
             const HubUiRowView& row = mod_group.rows[row_index];
             const int row_height = MeasureRowBlockHeight(row);
-            const int row_y = content_top + logical_y - g_hub_scroll_offset;
-            if (IsBlockFullyVisible(row_y, row_height, content_top, content_bottom))
+            const int row_y = use_native_scroll_view
+                ? logical_y
+                : content_top + logical_y - g_hub_scroll_offset;
+            if (use_native_scroll_view || IsBlockFullyVisible(row_y, row_height, content_top, content_bottom))
             {
                 int next_y = row_y;
-                CreateRowWidgets(g_active_hub_panel_widget, content_panel_width, row_y, row, &next_y);
+                CreateRowWidgets(content_parent, content_panel_width, row_y, row, &next_y);
             }
             logical_y += row_height;
         }
@@ -2334,6 +2506,10 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
 
         if (key_code == OIS::KC_PGUP)
         {
+            if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - g_hub_scroll_page_step))
+            {
+                return;
+            }
             SetHubScrollOffset(g_hub_scroll_offset - g_hub_scroll_page_step);
             RebuildHubPanelWidgets();
             return;
@@ -2341,6 +2517,10 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
 
         if (key_code == OIS::KC_PGDOWN)
         {
+            if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + g_hub_scroll_page_step))
+            {
+                return;
+            }
             SetHubScrollOffset(g_hub_scroll_offset + g_hub_scroll_page_step);
             RebuildHubPanelWidgets();
             return;
@@ -2348,6 +2528,10 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
 
         if (key_code == OIS::KC_UP)
         {
+            if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - kHubScrollLineStep))
+            {
+                return;
+            }
             SetHubScrollOffset(g_hub_scroll_offset - kHubScrollLineStep);
             RebuildHubPanelWidgets();
             return;
@@ -2355,6 +2539,10 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
 
         if (key_code == OIS::KC_DOWN)
         {
+            if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + kHubScrollLineStep))
+            {
+                return;
+            }
             SetHubScrollOffset(g_hub_scroll_offset + kHubScrollLineStep);
             RebuildHubPanelWidgets();
             return;
