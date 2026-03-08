@@ -121,6 +121,12 @@ int g_hub_scroll_page_step = 160;
 bool g_ignore_scrollbar_position_event = false;
 MyGUI::EditBox* g_active_hub_search_box = 0;
 MyGUI::ScrollView* g_active_hub_scroll_view = 0;
+MyGUI::Widget* g_active_hub_scroll_client = 0;
+MyGUI::ScrollBar* g_active_hub_scroll_bar = 0;
+MyGUI::Button* g_active_hub_scroll_line_up_button = 0;
+MyGUI::Button* g_active_hub_scroll_line_down_button = 0;
+MyGUI::Button* g_active_hub_scroll_page_up_button = 0;
+MyGUI::Button* g_active_hub_scroll_page_down_button = 0;
 bool g_left_ctrl_down = false;
 bool g_right_ctrl_down = false;
 
@@ -154,12 +160,50 @@ const int kHubScrollLineStep = 24;
 const int kHubScrollControlWidth = 44;
 const int kHubScrollGutterWidth = 56;
 
+struct HubScrollableWidgetState
+{
+    MyGUI::Widget* widget;
+    int left;
+    int top;
+    int width;
+    int height;
+};
+
+std::vector<HubScrollableWidgetState> g_hub_scrollable_widgets;
+
 bool ApplyHubScrollOffsetWithoutRebuild(int offset);
+bool IsWidgetWithinHubPanel(MyGUI::Widget* widget);
+void ApplyHubScrollVisualState();
+void TrackHubScrollableWidget(MyGUI::Widget* parent, MyGUI::Widget* widget, const MyGUI::IntCoord& coord);
 void OnHubMouseWheel(MyGUI::Widget* sender, int rel);
+void OnHubWidgetMouseWheelDebug(MyGUI::Widget* sender, int rel);
 void OnHubScrollBarPositionChanged(MyGUI::ScrollBar* sender, size_t position);
-void OnHubNativeScrollBarPositionChanged(MyGUI::ScrollBar* sender, size_t position);
 void OnHubSearchKeyPressed(MyGUI::Widget* sender, MyGUI::KeyCode key_code, MyGUI::Char character);
 void OnHubSearchKeyReleased(MyGUI::Widget* sender, MyGUI::KeyCode key_code);
+
+void OnHubWidgetMouseWheelDebug(MyGUI::Widget* sender, int rel)
+{
+    if (IsWidgetWithinHubPanel(sender))
+    {
+        OnHubMouseWheel(sender, rel);
+    }
+}
+
+void TrackHubScrollableWidget(MyGUI::Widget* parent, MyGUI::Widget* widget, const MyGUI::IntCoord& coord)
+{
+    if (parent != g_active_hub_scroll_client || widget == 0)
+    {
+        return;
+    }
+
+    HubScrollableWidgetState state;
+    state.widget = widget;
+    state.left = coord.left;
+    state.top = coord.top;
+    state.width = coord.width;
+    state.height = coord.height;
+    g_hub_scrollable_widgets.push_back(state);
+}
 
 struct RenderModGroup
 {
@@ -225,6 +269,13 @@ void DestroyDynamicWidgets()
     MyGUI::Gui* gui = MyGUI::Gui::getInstancePtr();
     g_active_hub_search_box = 0;
     g_active_hub_scroll_view = 0;
+    g_active_hub_scroll_client = 0;
+    g_active_hub_scroll_bar = 0;
+    g_active_hub_scroll_line_up_button = 0;
+    g_active_hub_scroll_line_down_button = 0;
+    g_active_hub_scroll_page_up_button = 0;
+    g_active_hub_scroll_page_down_button = 0;
+    g_hub_scrollable_widgets.clear();
     if (gui == 0)
     {
         g_dynamic_widgets.clear();
@@ -254,8 +305,9 @@ TWidget* CreateTrackedWidget(MyGUI::Widget* parent, const char* skin, const MyGU
     TWidget* widget = parent->createWidget<TWidget>(skin, coord, MyGUI::Align::Default);
     if (widget != 0)
     {
-        widget->eventMouseWheel += MyGUI::newDelegate(&OnHubMouseWheel);
+        widget->eventMouseWheel += MyGUI::newDelegate(&OnHubWidgetMouseWheelDebug);
         g_dynamic_widgets.push_back(widget);
+        TrackHubScrollableWidget(parent, widget, coord);
     }
     return widget;
 }
@@ -283,10 +335,11 @@ MyGUI::EditBox* CreateTrackedSearchBox(MyGUI::Widget* parent, const MyGUI::IntCo
             if (widget != 0)
             {
                 widget->setTextColour(MyGUI::Colour(0.85f, 0.85f, 0.85f, 1.0f));
-                widget->eventMouseWheel += MyGUI::newDelegate(&OnHubMouseWheel);
+                widget->eventMouseWheel += MyGUI::newDelegate(&OnHubWidgetMouseWheelDebug);
                 widget->eventKeyButtonPressed += MyGUI::newDelegate(&OnHubSearchKeyPressed);
                 widget->eventKeyButtonReleased += MyGUI::newDelegate(&OnHubSearchKeyReleased);
                 g_dynamic_widgets.push_back(widget);
+                TrackHubScrollableWidget(parent, widget, coord);
                 return widget;
             }
         }
@@ -329,7 +382,9 @@ MyGUI::ScrollBar* CreateTrackedScrollBar(MyGUI::Widget* parent, const MyGUI::Int
             if (widget != 0)
             {
                 widget->setVerticalAlignment(true);
+                widget->eventMouseWheel += MyGUI::newDelegate(&OnHubWidgetMouseWheelDebug);
                 g_dynamic_widgets.push_back(widget);
+                TrackHubScrollableWidget(parent, widget, coord);
                 return widget;
             }
         }
@@ -355,8 +410,8 @@ MyGUI::ScrollView* CreateTrackedScrollView(MyGUI::Widget* parent, const MyGUI::I
     }
 
     const char* skins[] = {
-        "Kenshi_ScrollViewEmpty",
         "Kenshi_ScrollView",
+        "Kenshi_ScrollViewEmpty",
         "Kenshi_ScrollViewEmptyLight",
         "ScrollView"
     };
@@ -368,7 +423,7 @@ MyGUI::ScrollView* CreateTrackedScrollView(MyGUI::Widget* parent, const MyGUI::I
             MyGUI::ScrollView* widget = parent->createWidget<MyGUI::ScrollView>(skins[index], coord, MyGUI::Align::Default);
             if (widget != 0)
             {
-                widget->eventMouseWheel += MyGUI::newDelegate(&OnHubMouseWheel);
+                widget->eventMouseWheel += MyGUI::newDelegate(&OnHubWidgetMouseWheelDebug);
                 g_dynamic_widgets.push_back(widget);
                 return widget;
             }
@@ -1307,50 +1362,15 @@ void OnHubMouseWheel(MyGUI::Widget*, int rel)
 
     if (rel > 0)
     {
-        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - delta))
-        {
-            return;
-        }
-
-        const int previous_offset = g_hub_scroll_offset;
-        SetHubScrollOffset(g_hub_scroll_offset - delta);
-        if (g_hub_scroll_offset != previous_offset)
-        {
-            RebuildHubPanelWidgets();
-        }
+        ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - delta);
     }
     else
     {
-        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + delta))
-        {
-            return;
-        }
-
-        const int previous_offset = g_hub_scroll_offset;
-        SetHubScrollOffset(g_hub_scroll_offset + delta);
-        if (g_hub_scroll_offset != previous_offset)
-        {
-            RebuildHubPanelWidgets();
-        }
+        ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + delta);
     }
 }
 
 void OnHubScrollBarPositionChanged(MyGUI::ScrollBar*, size_t position)
-{
-    if (g_ignore_scrollbar_position_event)
-    {
-        return;
-    }
-
-    const int previous_offset = g_hub_scroll_offset;
-    SetHubScrollOffset(static_cast<int>(position));
-    if (g_hub_scroll_offset != previous_offset)
-    {
-        RebuildHubPanelWidgets();
-    }
-}
-
-void OnHubNativeScrollBarPositionChanged(MyGUI::ScrollBar*, size_t position)
 {
     if (g_ignore_scrollbar_position_event)
     {
@@ -1374,45 +1394,25 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
 
     if (action == "scroll_line_up")
     {
-        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - kHubScrollLineStep))
-        {
-            return;
-        }
-        SetHubScrollOffset(g_hub_scroll_offset - kHubScrollLineStep);
-        RebuildHubPanelWidgets();
+        ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - kHubScrollLineStep);
         return;
     }
 
     if (action == "scroll_line_down")
     {
-        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + kHubScrollLineStep))
-        {
-            return;
-        }
-        SetHubScrollOffset(g_hub_scroll_offset + kHubScrollLineStep);
-        RebuildHubPanelWidgets();
+        ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + kHubScrollLineStep);
         return;
     }
 
     if (action == "scroll_page_up")
     {
-        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - g_hub_scroll_page_step))
-        {
-            return;
-        }
-        SetHubScrollOffset(g_hub_scroll_offset - g_hub_scroll_page_step);
-        RebuildHubPanelWidgets();
+        ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - g_hub_scroll_page_step);
         return;
     }
 
     if (action == "scroll_page_down")
     {
-        if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + g_hub_scroll_page_step))
-        {
-            return;
-        }
-        SetHubScrollOffset(g_hub_scroll_offset + g_hub_scroll_page_step);
-        RebuildHubPanelWidgets();
+        ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + g_hub_scroll_page_step);
         return;
     }
 
@@ -1945,15 +1945,11 @@ void ConfigureHubScrollRange(int content_height, int viewport_height)
 void SetHubScrollOffset(int offset)
 {
     g_hub_scroll_offset = ClampInt(offset, 0, g_hub_scroll_max_offset);
+    ApplyHubScrollVisualState();
 }
 
 bool ApplyHubScrollOffsetWithoutRebuild(int offset)
 {
-    if (g_active_hub_scroll_view == 0)
-    {
-        return false;
-    }
-
     const int previous_offset = g_hub_scroll_offset;
     SetHubScrollOffset(offset);
     if (g_hub_scroll_offset == previous_offset)
@@ -1961,8 +1957,70 @@ bool ApplyHubScrollOffsetWithoutRebuild(int offset)
         return false;
     }
 
-    g_active_hub_scroll_view->setViewOffset(MyGUI::IntPoint(0, g_hub_scroll_offset));
+    if (g_active_hub_scroll_client == 0)
+    {
+        RebuildHubPanelWidgets();
+    }
+
     return true;
+}
+
+bool IsWidgetWithinHubPanel(MyGUI::Widget* widget)
+{
+    while (widget != 0)
+    {
+        if (widget == g_active_hub_panel_widget)
+        {
+            return true;
+        }
+        widget = widget->getParent();
+    }
+
+    return false;
+}
+
+void ApplyHubScrollVisualState()
+{
+    if (g_active_hub_scroll_client != 0 && g_active_hub_scroll_view != 0)
+    {
+        const int viewport_height = g_active_hub_scroll_view->getClientCoord().height;
+        for (size_t index = 0; index < g_hub_scrollable_widgets.size(); ++index)
+        {
+            HubScrollableWidgetState& state = g_hub_scrollable_widgets[index];
+            if (state.widget == 0)
+            {
+                continue;
+            }
+
+            const int top = state.top - g_hub_scroll_offset;
+            state.widget->setCoord(state.left, top, state.width, state.height);
+            state.widget->setVisible((top + state.height) > 0 && top < viewport_height);
+        }
+    }
+
+    if (g_active_hub_scroll_bar != 0)
+    {
+        g_ignore_scrollbar_position_event = true;
+        g_active_hub_scroll_bar->setScrollPosition(static_cast<size_t>(g_hub_scroll_offset));
+        g_ignore_scrollbar_position_event = false;
+    }
+
+    if (g_active_hub_scroll_line_up_button != 0)
+    {
+        g_active_hub_scroll_line_up_button->setEnabled(g_hub_scroll_offset > 0);
+    }
+    if (g_active_hub_scroll_line_down_button != 0)
+    {
+        g_active_hub_scroll_line_down_button->setEnabled(g_hub_scroll_offset < g_hub_scroll_max_offset);
+    }
+    if (g_active_hub_scroll_page_up_button != 0)
+    {
+        g_active_hub_scroll_page_up_button->setEnabled(g_hub_scroll_offset > 0);
+    }
+    if (g_active_hub_scroll_page_down_button != 0)
+    {
+        g_active_hub_scroll_page_down_button->setEnabled(g_hub_scroll_offset < g_hub_scroll_max_offset);
+    }
 }
 
 bool IsBlockFullyVisible(int block_y, int block_height, int viewport_top, int viewport_bottom)
@@ -2173,43 +2231,49 @@ void RebuildHubPanelWidgets()
 
     const int content_total_height = MeasureFilteredModsContentHeight(filtered_mods);
     ConfigureHubScrollRange(content_total_height, viewport_height);
+    const int preserved_scroll_offset = g_hub_scroll_offset;
+    const bool show_scroll_controls = g_hub_scroll_max_offset > 0;
+    int content_panel_width = panel_width - 40;
+    if (show_scroll_controls)
+    {
+        content_panel_width -= kHubScrollGutterWidth;
+    }
+    if (content_panel_width < 280)
+    {
+        content_panel_width = panel_width - 40;
+    }
 
     MyGUI::Widget* content_parent = g_active_hub_panel_widget;
-    int content_panel_width = panel_width;
-    bool use_native_scroll_view = false;
-
     MyGUI::ScrollView* scroll_view = CreateTrackedScrollView(
         g_active_hub_panel_widget,
-        MyGUI::IntCoord(20, content_top, panel_width - 40, viewport_height));
+        MyGUI::IntCoord(20, content_top, content_panel_width, viewport_height));
     if (scroll_view != 0)
     {
         scroll_view->setVisibleHScroll(false);
-        scroll_view->setVisibleVScroll(true);
+        scroll_view->setVisibleVScroll(false);
         g_active_hub_scroll_view = scroll_view;
-
-        MyGUI::Widget* native_vscroll_widget = scroll_view->findWidget("VScroll");
-        MyGUI::ScrollBar* native_vscroll = native_vscroll_widget != 0
-            ? native_vscroll_widget->castType<MyGUI::ScrollBar>(false)
-            : 0;
-        if (native_vscroll != 0)
-        {
-            native_vscroll->eventScrollChangePosition += MyGUI::newDelegate(&OnHubNativeScrollBarPositionChanged);
-        }
 
         MyGUI::Widget* client_widget = scroll_view->getClientWidget();
         if (client_widget != 0)
         {
+            client_widget->eventMouseWheel += MyGUI::newDelegate(&OnHubWidgetMouseWheelDebug);
+            g_active_hub_scroll_client = client_widget;
             content_parent = client_widget;
+            content_panel_width = scroll_view->getClientCoord().width;
         }
         else
         {
+            g_active_hub_scroll_client = scroll_view;
             content_parent = scroll_view;
         }
 
-        content_panel_width = scroll_view->getClientCoord().width;
         if (content_panel_width < 280)
         {
             content_panel_width = panel_width - 40;
+            if (show_scroll_controls)
+            {
+                content_panel_width -= kHubScrollGutterWidth;
+            }
         }
 
         int canvas_height = content_total_height;
@@ -2217,25 +2281,7 @@ void RebuildHubPanelWidgets()
         {
             canvas_height = viewport_height;
         }
-
         scroll_view->setCanvasSize(content_panel_width, canvas_height);
-        g_ignore_scrollbar_position_event = true;
-        scroll_view->setViewOffset(MyGUI::IntPoint(0, g_hub_scroll_offset));
-        g_ignore_scrollbar_position_event = false;
-        use_native_scroll_view = true;
-    }
-
-    const bool show_scroll_controls = !use_native_scroll_view && g_hub_scroll_max_offset > 0;
-    if (!use_native_scroll_view)
-    {
-        if (show_scroll_controls)
-        {
-            content_panel_width -= kHubScrollGutterWidth;
-        }
-        if (content_panel_width < 280)
-        {
-            content_panel_width = panel_width;
-        }
     }
 
     if (show_scroll_controls)
@@ -2252,6 +2298,7 @@ void RebuildHubPanelWidgets()
             MyGUI::IntCoord(control_x, top_line_y, kHubScrollControlWidth, button_height));
         if (line_up_button != 0)
         {
+            g_active_hub_scroll_line_up_button = line_up_button;
             line_up_button->setCaption("^");
             line_up_button->setEnabled(g_hub_scroll_offset > 0);
             line_up_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
@@ -2264,6 +2311,7 @@ void RebuildHubPanelWidgets()
             MyGUI::IntCoord(control_x, bottom_line_y, kHubScrollControlWidth, button_height));
         if (line_down_button != 0)
         {
+            g_active_hub_scroll_line_down_button = line_down_button;
             line_down_button->setCaption("v");
             line_down_button->setEnabled(g_hub_scroll_offset < g_hub_scroll_max_offset);
             line_down_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
@@ -2285,6 +2333,7 @@ void RebuildHubPanelWidgets()
                 MyGUI::IntCoord(control_x, scroll_bar_y, kHubScrollControlWidth, scroll_bar_height));
             if (scroll_bar != 0)
             {
+                g_active_hub_scroll_bar = scroll_bar;
                 const size_t range = static_cast<size_t>(g_hub_scroll_max_offset + 1);
                 const size_t line_step = static_cast<size_t>(kHubScrollLineStep);
                 size_t page_step = static_cast<size_t>(g_hub_scroll_page_step);
@@ -2317,6 +2366,7 @@ void RebuildHubPanelWidgets()
                 MyGUI::IntCoord(control_x, top_page_y, kHubScrollControlWidth, button_height));
             if (page_up_button != 0)
             {
+                g_active_hub_scroll_page_up_button = page_up_button;
                 page_up_button->setCaption("Pg^");
                 page_up_button->setEnabled(g_hub_scroll_offset > 0);
                 page_up_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
@@ -2329,6 +2379,7 @@ void RebuildHubPanelWidgets()
                 MyGUI::IntCoord(control_x, bottom_page_y, kHubScrollControlWidth, button_height));
             if (page_down_button != 0)
             {
+                g_active_hub_scroll_page_down_button = page_down_button;
                 page_down_button->setCaption("Pgv");
                 page_down_button->setEnabled(g_hub_scroll_offset < g_hub_scroll_max_offset);
                 page_down_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
@@ -2338,15 +2389,16 @@ void RebuildHubPanelWidgets()
     }
 
     int logical_y = 0;
+    const bool has_persistent_scroll = g_active_hub_scroll_client != 0;
     for (size_t mod_index = 0; mod_index < filtered_mods.size(); ++mod_index)
     {
         const RenderModGroup& mod_group = filtered_mods[mod_index];
         const int header_height = 32;
-        const int header_y = use_native_scroll_view
+        const int header_y = has_persistent_scroll
             ? logical_y
             : content_top + logical_y - g_hub_scroll_offset;
 
-        if (use_native_scroll_view || IsBlockFullyVisible(header_y, header_height, content_top, content_bottom))
+        if (has_persistent_scroll || IsBlockFullyVisible(header_y, header_height, content_top, content_bottom))
         {
             MyGUI::Button* mod_header = CreateTrackedWidget<MyGUI::Button>(
                 content_parent,
@@ -2372,10 +2424,10 @@ void RebuildHubPanelWidgets()
         {
             const HubUiRowView& row = mod_group.rows[row_index];
             const int row_height = MeasureRowBlockHeight(row);
-            const int row_y = use_native_scroll_view
+            const int row_y = has_persistent_scroll
                 ? logical_y
                 : content_top + logical_y - g_hub_scroll_offset;
-            if (use_native_scroll_view || IsBlockFullyVisible(row_y, row_height, content_top, content_bottom))
+            if (has_persistent_scroll || IsBlockFullyVisible(row_y, row_height, content_top, content_bottom))
             {
                 int next_y = row_y;
                 CreateRowWidgets(content_parent, content_panel_width, row_y, row, &next_y);
@@ -2385,6 +2437,8 @@ void RebuildHubPanelWidgets()
 
         logical_y += 8;
     }
+
+    SetHubScrollOffset(preserved_scroll_offset);
 }
 
 void ClearActiveUiState()
@@ -2439,7 +2493,7 @@ bool EnsureHubPanel(OptionsWindow* self)
         ErrorLog("Emkejs-Mod-Core: Mod Hub panel widget is null");
         return false;
     }
-    g_active_hub_panel_widget->eventMouseWheel += MyGUI::newDelegate(&OnHubMouseWheel);
+    g_active_hub_panel_widget->eventMouseWheel += MyGUI::newDelegate(&OnHubWidgetMouseWheelDebug);
 
     hub_tab->setVisible(false);
     self->optionsTab->setItemData(hub_tab, hub_panel);
@@ -2506,45 +2560,25 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
 
         if (key_code == OIS::KC_PGUP)
         {
-            if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - g_hub_scroll_page_step))
-            {
-                return;
-            }
-            SetHubScrollOffset(g_hub_scroll_offset - g_hub_scroll_page_step);
-            RebuildHubPanelWidgets();
+            ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - g_hub_scroll_page_step);
             return;
         }
 
         if (key_code == OIS::KC_PGDOWN)
         {
-            if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + g_hub_scroll_page_step))
-            {
-                return;
-            }
-            SetHubScrollOffset(g_hub_scroll_offset + g_hub_scroll_page_step);
-            RebuildHubPanelWidgets();
+            ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + g_hub_scroll_page_step);
             return;
         }
 
         if (key_code == OIS::KC_UP)
         {
-            if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - kHubScrollLineStep))
-            {
-                return;
-            }
-            SetHubScrollOffset(g_hub_scroll_offset - kHubScrollLineStep);
-            RebuildHubPanelWidgets();
+            ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - kHubScrollLineStep);
             return;
         }
 
         if (key_code == OIS::KC_DOWN)
         {
-            if (ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + kHubScrollLineStep))
-            {
-                return;
-            }
-            SetHubScrollOffset(g_hub_scroll_offset + kHubScrollLineStep);
-            RebuildHubPanelWidgets();
+            ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + kHubScrollLineStep);
             return;
         }
     }
@@ -2571,6 +2605,7 @@ void InputHandler_keyUpEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code)
         InputHandler_keyUpEvent_orig(thisptr, key_code);
     }
 }
+
 }
 
 void HubMenuBridge_SetHubEnabled(bool is_enabled)
