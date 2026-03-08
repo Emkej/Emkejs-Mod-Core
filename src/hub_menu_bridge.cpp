@@ -808,7 +808,6 @@ void RememberHubSearchSnapshotValue(const std::string& namespace_id, const std::
         cursor_position = query.size();
     }
 
-    g_have_hub_search_snapshot = true;
     g_hub_search_snapshot_cursor_position = cursor_position;
 }
 
