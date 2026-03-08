@@ -2292,34 +2292,8 @@ void RebuildHubPanelWidgets()
         const int top_line_y = content_top;
         const int bottom_line_y = content_bottom - button_height;
 
-        MyGUI::Button* line_up_button = CreateTrackedWidget<MyGUI::Button>(
-            g_active_hub_panel_widget,
-            kValueButtonSkin,
-            MyGUI::IntCoord(control_x, top_line_y, kHubScrollControlWidth, button_height));
-        if (line_up_button != 0)
-        {
-            g_active_hub_scroll_line_up_button = line_up_button;
-            line_up_button->setCaption("^");
-            line_up_button->setEnabled(g_hub_scroll_offset > 0);
-            line_up_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
-            AttachHubAction(line_up_button, "scroll_line_up", "", "", "");
-        }
-
-        MyGUI::Button* line_down_button = CreateTrackedWidget<MyGUI::Button>(
-            g_active_hub_panel_widget,
-            kValueButtonSkin,
-            MyGUI::IntCoord(control_x, bottom_line_y, kHubScrollControlWidth, button_height));
-        if (line_down_button != 0)
-        {
-            g_active_hub_scroll_line_down_button = line_down_button;
-            line_down_button->setCaption("v");
-            line_down_button->setEnabled(g_hub_scroll_offset < g_hub_scroll_max_offset);
-            line_down_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
-            AttachHubAction(line_down_button, "scroll_line_down", "", "", "");
-        }
-
-        const int scroll_bar_y = top_line_y + button_height + button_gap;
-        int scroll_bar_height = bottom_line_y - button_gap - scroll_bar_y;
+        const int scroll_bar_y = content_top;
+        int scroll_bar_height = content_bottom - content_top;
         if (scroll_bar_height < 40)
         {
             scroll_bar_height = 0;
@@ -2348,6 +2322,20 @@ void RebuildHubPanelWidgets()
                 scroll_bar->setScrollViewPage(page_step);
                 scroll_bar->setScrollWheelPage(line_step);
                 scroll_bar->setScrollPosition(static_cast<size_t>(g_hub_scroll_offset));
+                int thumb_height = 0;
+                if (content_total_height > 0)
+                {
+                    thumb_height = (scroll_bar_height * viewport_height) / content_total_height;
+                }
+                if (thumb_height < 28)
+                {
+                    thumb_height = 28;
+                }
+                if (thumb_height > scroll_bar_height)
+                {
+                    thumb_height = scroll_bar_height;
+                }
+                scroll_bar->setTrackSize(thumb_height);
                 g_ignore_scrollbar_position_event = false;
 
                 scroll_bar->eventScrollChangePosition += MyGUI::newDelegate(&OnHubScrollBarPositionChanged);
@@ -2357,6 +2345,32 @@ void RebuildHubPanelWidgets()
 
         if (!has_scrollbar)
         {
+            MyGUI::Button* line_up_button = CreateTrackedWidget<MyGUI::Button>(
+                g_active_hub_panel_widget,
+                kValueButtonSkin,
+                MyGUI::IntCoord(control_x, top_line_y, kHubScrollControlWidth, button_height));
+            if (line_up_button != 0)
+            {
+                g_active_hub_scroll_line_up_button = line_up_button;
+                line_up_button->setCaption("^");
+                line_up_button->setEnabled(g_hub_scroll_offset > 0);
+                line_up_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(line_up_button, "scroll_line_up", "", "", "");
+            }
+
+            MyGUI::Button* line_down_button = CreateTrackedWidget<MyGUI::Button>(
+                g_active_hub_panel_widget,
+                kValueButtonSkin,
+                MyGUI::IntCoord(control_x, bottom_line_y, kHubScrollControlWidth, button_height));
+            if (line_down_button != 0)
+            {
+                g_active_hub_scroll_line_down_button = line_down_button;
+                line_down_button->setCaption("v");
+                line_down_button->setEnabled(g_hub_scroll_offset < g_hub_scroll_max_offset);
+                line_down_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(line_down_button, "scroll_line_down", "", "", "");
+            }
+
             const int top_page_y = content_top + 34;
             const int bottom_page_y = content_bottom - 62;
 
