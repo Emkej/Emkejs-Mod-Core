@@ -99,9 +99,6 @@ FnOptionsInit g_fnOptionsInitOrig = 0;
 FnOptionsSave g_fnOptionsSaveOrig = 0;
 ForgottenGUI* g_ptrKenshiGUI = 0;
 
-void (*InputHandler_keyDownEvent_orig)(InputHandler*, OIS::KeyCode) = 0;
-void (*InputHandler_keyUpEvent_orig)(InputHandler*, OIS::KeyCode) = 0;
-
 OptionsWindow* g_active_options_window = 0;
 DatapanelGUI* g_active_hub_panel = 0;
 MyGUI::Widget* g_active_hub_panel_widget = 0;
@@ -118,6 +115,8 @@ size_t g_restore_search_cursor_position = 0;
 int g_hub_scroll_offset = 0;
 int g_hub_scroll_max_offset = 0;
 int g_hub_scroll_page_step = 160;
+int g_hub_final_content_height = 0;
+int g_hub_final_viewport_height = 0;
 bool g_ignore_scrollbar_position_event = false;
 MyGUI::EditBox* g_active_hub_search_box = 0;
 MyGUI::ScrollView* g_active_hub_scroll_view = 0;
@@ -127,9 +126,6 @@ MyGUI::Button* g_active_hub_scroll_line_up_button = 0;
 MyGUI::Button* g_active_hub_scroll_line_down_button = 0;
 MyGUI::Button* g_active_hub_scroll_page_up_button = 0;
 MyGUI::Button* g_active_hub_scroll_page_down_button = 0;
-bool g_left_ctrl_down = false;
-bool g_right_ctrl_down = false;
-
 struct PendingHubSearchShortcut
 {
     bool active;
@@ -171,6 +167,20 @@ struct HubScrollableWidgetState
 
 std::vector<HubScrollableWidgetState> g_hub_scrollable_widgets;
 
+struct HubPanelCreationResult
+{
+    MyGUI::TabItem* hub_tab;
+    DatapanelGUI* hub_panel;
+    MyGUI::Widget* hub_panel_widget;
+
+    HubPanelCreationResult()
+        : hub_tab(0)
+        , hub_panel(0)
+        , hub_panel_widget(0)
+    {
+    }
+};
+
 bool ApplyHubScrollOffsetWithoutRebuild(int offset);
 bool IsWidgetWithinHubPanel(MyGUI::Widget* widget);
 void ApplyHubScrollVisualState();
@@ -181,9 +191,113 @@ void OnHubScrollBarPositionChanged(MyGUI::ScrollBar* sender, size_t position);
 void OnHubSearchKeyPressed(MyGUI::Widget* sender, MyGUI::KeyCode key_code, MyGUI::Char character);
 void OnHubSearchKeyReleased(MyGUI::Widget* sender, MyGUI::KeyCode key_code);
 
+void LogHubScrollDebug(const std::string& message)
+{
+    DebugLog(std::string("Emkejs-Mod-Core DEBUG: hub_scroll ") + message);
+}
+
+std::string DescribeHubWidget(MyGUI::Widget* widget)
+{
+    if (widget == 0)
+    {
+        return "widget=null";
+    }
+
+    std::ostringstream line;
+    line << "widget=" << widget;
+
+    const std::string name = widget->getName();
+    if (!name.empty())
+    {
+        line << " name=" << name;
+    }
+
+    const std::string action = widget->getUserString("emc_action");
+    if (!action.empty())
+    {
+        line << " action=" << action;
+    }
+
+    const MyGUI::IntCoord coord = widget->getCoord();
+    line << " coord=" << coord.left << "," << coord.top << "," << coord.width << "," << coord.height;
+    return line.str();
+}
+
+std::string DescribeHubScrollState()
+{
+    std::ostringstream line;
+    line << "offset=" << g_hub_scroll_offset
+         << " max=" << g_hub_scroll_max_offset
+         << " page=" << g_hub_scroll_page_step
+         << " tracked=" << g_hub_scrollable_widgets.size();
+
+    if (g_active_hub_scroll_view != 0)
+    {
+        const MyGUI::IntCoord client_coord = g_active_hub_scroll_view->getClientCoord();
+        line << " view_client_h=" << client_coord.height
+             << " view_client_w=" << client_coord.width;
+    }
+    else
+    {
+        line << " view_client_h=-1";
+    }
+
+    if (g_active_hub_scroll_client != 0)
+    {
+        const MyGUI::IntCoord client_coord = g_active_hub_scroll_client->getCoord();
+        line << " client_h=" << client_coord.height
+             << " client_w=" << client_coord.width;
+    }
+    else
+    {
+        line << " client_h=-1";
+    }
+
+    if (g_active_hub_scroll_bar != 0)
+    {
+        line << " scrollbar_pos=" << g_active_hub_scroll_bar->getScrollPosition()
+             << " scrollbar_range=" << g_active_hub_scroll_bar->getScrollRange();
+    }
+    else
+    {
+        line << " scrollbar=none";
+    }
+
+    return line.str();
+}
+
+int MeasureTrackedHubScrollContentHeight()
+{
+    int max_bottom = 0;
+    for (size_t index = 0; index < g_hub_scrollable_widgets.size(); ++index)
+    {
+        const HubScrollableWidgetState& state = g_hub_scrollable_widgets[index];
+        if (state.widget == 0)
+        {
+            continue;
+        }
+
+        const int bottom = state.top + state.height;
+        if (bottom > max_bottom)
+        {
+            max_bottom = bottom;
+        }
+    }
+
+    return max_bottom;
+}
+
 void OnHubWidgetMouseWheelDebug(MyGUI::Widget* sender, int rel)
 {
-    if (IsWidgetWithinHubPanel(sender))
+    const bool within_hub = IsWidgetWithinHubPanel(sender);
+    std::ostringstream line;
+    line << "widget_wheel rel=" << rel
+         << " within_hub=" << (within_hub ? 1 : 0)
+         << " " << DescribeHubWidget(sender)
+         << " " << DescribeHubScrollState();
+    LogHubScrollDebug(line.str());
+
+    if (within_hub)
     {
         OnHubMouseWheel(sender, rel);
     }
@@ -724,10 +838,7 @@ void RebuildHubPanelWidgets();
 void SetHubScrollOffset(int offset);
 
 void ResetTrackedModifierState()
-{
-    g_left_ctrl_down = false;
-    g_right_ctrl_down = false;
-}
+{}
 
 void ResetPendingHubSearchShortcut()
 {
@@ -744,12 +855,7 @@ void ResetHubSearchSnapshot()
 
 bool IsCtrlModifierDown(const InputHandler* input_handler)
 {
-    if (input_handler != 0 && input_handler->ctrl)
-    {
-        return true;
-    }
-
-    return g_left_ctrl_down || g_right_ctrl_down;
+    return input_handler != 0 && input_handler->ctrl;
 }
 
 bool IsSearchTokenSeparator(MyGUI::UString::unicode_char value)
@@ -1349,6 +1455,12 @@ void OnHubMouseWheel(MyGUI::Widget*, int rel)
 {
     if (!g_hub_enabled || !HubUi_IsOptionsWindowOpen() || g_hub_scroll_max_offset <= 0 || rel == 0)
     {
+        std::ostringstream line;
+        line << "wheel_ignored rel=" << rel
+             << " enabled=" << (g_hub_enabled ? 1 : 0)
+             << " options_open=" << (HubUi_IsOptionsWindowOpen() ? 1 : 0)
+             << " " << DescribeHubScrollState();
+        LogHubScrollDebug(line.str());
         return;
     }
 
@@ -1360,6 +1472,7 @@ void OnHubMouseWheel(MyGUI::Widget*, int rel)
         delta *= steps;
     }
 
+    const int before_offset = g_hub_scroll_offset;
     if (rel > 0)
     {
         ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - delta);
@@ -1368,15 +1481,31 @@ void OnHubMouseWheel(MyGUI::Widget*, int rel)
     {
         ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + delta);
     }
+
+    std::ostringstream line;
+    line << "wheel_apply rel=" << rel
+         << " delta=" << delta
+         << " before=" << before_offset
+         << " after=" << g_hub_scroll_offset
+         << " " << DescribeHubScrollState();
+    LogHubScrollDebug(line.str());
 }
 
 void OnHubScrollBarPositionChanged(MyGUI::ScrollBar*, size_t position)
 {
     if (g_ignore_scrollbar_position_event)
     {
+        std::ostringstream line;
+        line << "scrollbar_ignored position=" << position
+             << " " << DescribeHubScrollState();
+        LogHubScrollDebug(line.str());
         return;
     }
 
+    std::ostringstream line;
+    line << "scrollbar_change position=" << position
+         << " " << DescribeHubScrollState();
+    LogHubScrollDebug(line.str());
     SetHubScrollOffset(static_cast<int>(position));
 }
 
@@ -1391,6 +1520,17 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     const std::string namespace_id = sender->getUserString("emc_ns");
     const std::string mod_id = sender->getUserString("emc_mod");
     const std::string setting_id = sender->getUserString("emc_setting");
+
+    {
+        std::ostringstream line;
+        line << "button_click action=" << action
+             << " ns=" << namespace_id
+             << " mod=" << mod_id
+             << " setting=" << setting_id
+             << " " << DescribeHubWidget(sender)
+             << " " << DescribeHubScrollState();
+        LogHubScrollDebug(line.str());
+    }
 
     if (action == "scroll_line_up")
     {
@@ -1881,6 +2021,20 @@ int ClampInt(int value, int min_value, int max_value)
     return value;
 }
 
+int GetHubVisibleViewportHeight(int fallback_height)
+{
+    if (g_active_hub_scroll_view != 0)
+    {
+        const int visible_height = g_active_hub_scroll_view->getHeight();
+        if (visible_height > 0)
+        {
+            return visible_height;
+        }
+    }
+
+    return fallback_height;
+}
+
 int MeasureRowBlockHeight(const HubUiRowView& row)
 {
     int height = 34;
@@ -1927,6 +2081,7 @@ void ConfigureHubScrollRange(int content_height, int viewport_height)
         g_hub_scroll_max_offset = 0;
         g_hub_scroll_offset = 0;
         g_hub_scroll_page_step = 160;
+        LogHubScrollDebug("configure_range viewport<=0 content=0 viewport=0 offset=0 max=0 page=160");
         return;
     }
 
@@ -1940,11 +2095,88 @@ void ConfigureHubScrollRange(int content_height, int viewport_height)
         page_step = 120;
     }
     g_hub_scroll_page_step = page_step;
+
+    std::ostringstream line;
+    line << "configure_range content=" << content_height
+         << " viewport=" << viewport_height
+         << " overflow=" << overflow
+         << " offset=" << g_hub_scroll_offset
+         << " max=" << g_hub_scroll_max_offset
+         << " page=" << g_hub_scroll_page_step;
+    LogHubScrollDebug(line.str());
+}
+
+void SetHubFinalScrollMetrics(int content_height, int viewport_height)
+{
+    g_hub_final_content_height = content_height > 0 ? content_height : 0;
+    g_hub_final_viewport_height = viewport_height > 0 ? viewport_height : 0;
+
+    std::ostringstream line;
+    line << "final_scroll_metrics content=" << g_hub_final_content_height
+         << " viewport=" << g_hub_final_viewport_height
+         << " max=" << g_hub_scroll_max_offset
+         << " offset=" << g_hub_scroll_offset;
+    LogHubScrollDebug(line.str());
+}
+
+void SyncHubScrollBarMetrics(int content_height, int viewport_height)
+{
+    if (g_active_hub_scroll_bar == 0)
+    {
+        return;
+    }
+
+    const size_t range = static_cast<size_t>(g_hub_scroll_max_offset + 1);
+    const size_t line_step = static_cast<size_t>(kHubScrollLineStep);
+    size_t page_step = static_cast<size_t>(g_hub_scroll_page_step);
+    if (page_step == 0u)
+    {
+        page_step = line_step;
+    }
+
+    g_ignore_scrollbar_position_event = true;
+    g_active_hub_scroll_bar->setScrollRange(range);
+    g_active_hub_scroll_bar->setScrollPage(line_step);
+    g_active_hub_scroll_bar->setScrollViewPage(page_step);
+    g_active_hub_scroll_bar->setScrollWheelPage(line_step);
+    g_active_hub_scroll_bar->setScrollPosition(static_cast<size_t>(g_hub_scroll_offset));
+
+    int thumb_height = 0;
+    const int scroll_bar_height = g_active_hub_scroll_bar->getHeight();
+    if (content_height > 0)
+    {
+        thumb_height = (scroll_bar_height * viewport_height) / content_height;
+    }
+    if (thumb_height < 28)
+    {
+        thumb_height = 28;
+    }
+    if (thumb_height > scroll_bar_height)
+    {
+        thumb_height = scroll_bar_height;
+    }
+    g_active_hub_scroll_bar->setTrackSize(thumb_height);
+    g_ignore_scrollbar_position_event = false;
+
+    std::ostringstream line;
+    line << "sync_scrollbar content=" << content_height
+         << " viewport=" << viewport_height
+         << " range=" << range
+         << " thumb_h=" << thumb_height
+         << " " << DescribeHubScrollState();
+    LogHubScrollDebug(line.str());
 }
 
 void SetHubScrollOffset(int offset)
 {
+    const int previous_offset = g_hub_scroll_offset;
     g_hub_scroll_offset = ClampInt(offset, 0, g_hub_scroll_max_offset);
+    std::ostringstream line;
+    line << "set_offset requested=" << offset
+         << " previous=" << previous_offset
+         << " clamped=" << g_hub_scroll_offset
+         << " max=" << g_hub_scroll_max_offset;
+    LogHubScrollDebug(line.str());
     ApplyHubScrollVisualState();
 }
 
@@ -1954,12 +2186,31 @@ bool ApplyHubScrollOffsetWithoutRebuild(int offset)
     SetHubScrollOffset(offset);
     if (g_hub_scroll_offset == previous_offset)
     {
+        std::ostringstream line;
+        line << "apply_offset_noop requested=" << offset
+             << " previous=" << previous_offset
+             << " " << DescribeHubScrollState();
+        LogHubScrollDebug(line.str());
         return false;
     }
 
     if (g_active_hub_scroll_client == 0)
     {
+        std::ostringstream line;
+        line << "apply_offset_rebuild_fallback requested=" << offset
+             << " previous=" << previous_offset
+             << " " << DescribeHubScrollState();
+        LogHubScrollDebug(line.str());
         RebuildHubPanelWidgets();
+    }
+    else
+    {
+        std::ostringstream line;
+        line << "apply_offset_visual requested=" << offset
+             << " previous=" << previous_offset
+             << " current=" << g_hub_scroll_offset
+             << " " << DescribeHubScrollState();
+        LogHubScrollDebug(line.str());
     }
 
     return true;
@@ -1981,9 +2232,17 @@ bool IsWidgetWithinHubPanel(MyGUI::Widget* widget)
 
 void ApplyHubScrollVisualState()
 {
+    int visible_widgets = 0;
+    int hidden_widgets = 0;
+    int viewport_height = GetHubVisibleViewportHeight(g_hub_final_viewport_height);
+    int client_visual_offset_y = 0;
     if (g_active_hub_scroll_client != 0 && g_active_hub_scroll_view != 0)
     {
-        const int viewport_height = g_active_hub_scroll_view->getClientCoord().height;
+        if (g_active_hub_scroll_client != g_active_hub_scroll_view)
+        {
+            client_visual_offset_y = g_active_hub_scroll_client->getCoord().top;
+        }
+
         for (size_t index = 0; index < g_hub_scrollable_widgets.size(); ++index)
         {
             HubScrollableWidgetState& state = g_hub_scrollable_widgets[index];
@@ -1992,9 +2251,19 @@ void ApplyHubScrollVisualState()
                 continue;
             }
 
-            const int top = state.top - g_hub_scroll_offset;
+            const int top = state.top - g_hub_scroll_offset - client_visual_offset_y;
             state.widget->setCoord(state.left, top, state.width, state.height);
-            state.widget->setVisible((top + state.height) > 0 && top < viewport_height);
+            const int actual_top = top + client_visual_offset_y;
+            const bool visible = (actual_top + state.height) > 0 && actual_top < viewport_height;
+            state.widget->setVisible(visible);
+            if (visible)
+            {
+                ++visible_widgets;
+            }
+            else
+            {
+                ++hidden_widgets;
+            }
         }
     }
 
@@ -2021,6 +2290,16 @@ void ApplyHubScrollVisualState()
     {
         g_active_hub_scroll_page_down_button->setEnabled(g_hub_scroll_offset < g_hub_scroll_max_offset);
     }
+
+    std::ostringstream line;
+    line << "apply_visual offset=" << g_hub_scroll_offset
+         << " viewport=" << viewport_height
+         << " content=" << g_hub_final_content_height
+         << " max=" << g_hub_scroll_max_offset
+         << " client_y=" << client_visual_offset_y
+         << " visible=" << visible_widgets
+         << " hidden=" << hidden_widgets;
+    LogHubScrollDebug(line.str());
 }
 
 bool IsBlockFullyVisible(int block_y, int block_height, int viewport_top, int viewport_bottom)
@@ -2215,9 +2494,23 @@ void RebuildHubPanelWidgets()
 
     std::vector<RenderModGroup> filtered_mods;
     BuildFilteredModsForNamespace(*selected_namespace, &filtered_mods);
+    {
+        std::ostringstream line;
+        line << "rebuild_begin ns=" << selected_namespace->namespace_id
+             << " mods=" << filtered_mods.size()
+             << " panel_w=" << panel_width
+             << " panel_h=" << panel_height
+             << " content_top=" << content_top
+             << " content_bottom=" << content_bottom
+             << " viewport=" << viewport_height
+             << " search=" << (search_query != 0 ? search_query : "")
+             << " " << DescribeHubScrollState();
+        LogHubScrollDebug(line.str());
+    }
     if (filtered_mods.empty())
     {
         ConfigureHubScrollRange(0, viewport_height);
+        SetHubFinalScrollMetrics(0, viewport_height);
         MyGUI::TextBox* no_matches_text = CreateTrackedWidget<MyGUI::TextBox>(
             g_active_hub_panel_widget,
             kTextSkin,
@@ -2226,6 +2519,7 @@ void RebuildHubPanelWidgets()
         {
             no_matches_text->setCaption(kNoMatchesText);
         }
+        LogHubScrollDebug("rebuild_no_matches");
         return;
     }
 
@@ -2282,6 +2576,18 @@ void RebuildHubPanelWidgets()
             canvas_height = viewport_height;
         }
         scroll_view->setCanvasSize(content_panel_width, canvas_height);
+
+        std::ostringstream line;
+        line << "rebuild_scroll_view created=1 client_exists=" << (g_active_hub_scroll_client != 0 ? 1 : 0)
+             << " content_panel_w=" << content_panel_width
+             << " canvas_h=" << canvas_height
+             << " show_controls=" << (show_scroll_controls ? 1 : 0)
+             << " " << DescribeHubScrollState();
+        LogHubScrollDebug(line.str());
+    }
+    else
+    {
+        LogHubScrollDebug("rebuild_scroll_view created=0");
     }
 
     if (show_scroll_controls)
@@ -2308,37 +2614,14 @@ void RebuildHubPanelWidgets()
             if (scroll_bar != 0)
             {
                 g_active_hub_scroll_bar = scroll_bar;
-                const size_t range = static_cast<size_t>(g_hub_scroll_max_offset + 1);
-                const size_t line_step = static_cast<size_t>(kHubScrollLineStep);
-                size_t page_step = static_cast<size_t>(g_hub_scroll_page_step);
-                if (page_step == 0u)
-                {
-                    page_step = line_step;
-                }
-
-                g_ignore_scrollbar_position_event = true;
-                scroll_bar->setScrollRange(range);
-                scroll_bar->setScrollPage(line_step);
-                scroll_bar->setScrollViewPage(page_step);
-                scroll_bar->setScrollWheelPage(line_step);
-                scroll_bar->setScrollPosition(static_cast<size_t>(g_hub_scroll_offset));
-                int thumb_height = 0;
-                if (content_total_height > 0)
-                {
-                    thumb_height = (scroll_bar_height * viewport_height) / content_total_height;
-                }
-                if (thumb_height < 28)
-                {
-                    thumb_height = 28;
-                }
-                if (thumb_height > scroll_bar_height)
-                {
-                    thumb_height = scroll_bar_height;
-                }
-                scroll_bar->setTrackSize(thumb_height);
-                g_ignore_scrollbar_position_event = false;
-
+                SyncHubScrollBarMetrics(content_total_height, viewport_height);
                 scroll_bar->eventScrollChangePosition += MyGUI::newDelegate(&OnHubScrollBarPositionChanged);
+                std::ostringstream line;
+                line << "rebuild_scrollbar created=1 x=" << control_x
+                     << " y=" << scroll_bar_y
+                     << " h=" << scroll_bar_height
+                     << " " << DescribeHubScrollState();
+                LogHubScrollDebug(line.str());
                 has_scrollbar = true;
             }
         }
@@ -2452,7 +2735,42 @@ void RebuildHubPanelWidgets()
         logical_y += 8;
     }
 
+    {
+        std::ostringstream line;
+        line << "rebuild_rows_complete logical_y=" << logical_y
+             << " preserved=" << preserved_scroll_offset
+             << " content_estimate=" << content_total_height
+             << " persistent=" << (has_persistent_scroll ? 1 : 0)
+             << " " << DescribeHubScrollState();
+        LogHubScrollDebug(line.str());
+    }
+
+    int final_viewport_height = viewport_height;
+    final_viewport_height = GetHubVisibleViewportHeight(final_viewport_height);
+    int final_content_height = logical_y;
+    if (final_content_height < 0)
+    {
+        final_content_height = 0;
+    }
+    ConfigureHubScrollRange(final_content_height, final_viewport_height);
+    SetHubFinalScrollMetrics(final_content_height, final_viewport_height);
+    SyncHubScrollBarMetrics(final_content_height, final_viewport_height);
+    {
+        std::ostringstream line;
+        line << "rebuild_finalize content=" << final_content_height
+             << " logical_y=" << logical_y
+             << " viewport=" << final_viewport_height
+             << " preserved=" << preserved_scroll_offset
+             << " " << DescribeHubScrollState();
+        LogHubScrollDebug(line.str());
+    }
     SetHubScrollOffset(preserved_scroll_offset);
+    {
+        std::ostringstream line;
+        line << "rebuild_end restored=" << preserved_scroll_offset
+             << " " << DescribeHubScrollState();
+        LogHubScrollDebug(line.str());
+    }
 }
 
 void ClearActiveUiState()
@@ -2465,23 +2783,15 @@ void ClearActiveUiState()
     g_hub_scroll_offset = 0;
     g_hub_scroll_max_offset = 0;
     g_hub_scroll_page_step = 160;
+    g_hub_final_content_height = 0;
+    g_hub_final_viewport_height = 0;
     g_active_hub_panel_widget = 0;
     g_active_hub_panel = 0;
     g_active_options_window = 0;
 }
 
-bool EnsureHubPanel(OptionsWindow* self)
+bool BuildHubPanelUnsafe(OptionsWindow* self, HubPanelCreationResult* out_result)
 {
-    if (self == 0 || self->optionsTab == 0 || g_ptrKenshiGUI == 0 || g_fnCreateDatapanel == 0)
-    {
-        return false;
-    }
-
-    if (self->optionsTab->findItemWith(kHubTabName))
-    {
-        return g_active_hub_panel_widget != 0;
-    }
-
     MyGUI::TabItem* hub_tab = self->optionsTab->addItem(kHubTabName);
     if (hub_tab == 0)
     {
@@ -2499,18 +2809,65 @@ bool EnsureHubPanel(OptionsWindow* self)
     hub_panel->vfunc0xc0(kHubPanelLineId);
     hub_panel->vfunc0xe0(25.0f);
 
-    g_active_options_window = self;
-    g_active_hub_panel = hub_panel;
-    g_active_hub_panel_widget = hub_panel->getWidget();
-    if (g_active_hub_panel_widget == 0)
+    MyGUI::Widget* hub_panel_widget = hub_panel->getWidget();
+    if (hub_panel_widget == 0)
     {
         ErrorLog("Emkejs-Mod-Core: Mod Hub panel widget is null");
         return false;
     }
-    g_active_hub_panel_widget->eventMouseWheel += MyGUI::newDelegate(&OnHubWidgetMouseWheelDebug);
+    hub_panel_widget->eventMouseWheel += MyGUI::newDelegate(&OnHubWidgetMouseWheelDebug);
 
     hub_tab->setVisible(false);
     self->optionsTab->setItemData(hub_tab, hub_panel);
+
+    if (out_result != 0)
+    {
+        out_result->hub_tab = hub_tab;
+        out_result->hub_panel = hub_panel;
+        out_result->hub_panel_widget = hub_panel_widget;
+    }
+
+    return true;
+}
+
+bool TryBuildHubPanel(OptionsWindow* self, HubPanelCreationResult* out_result)
+{
+    __try
+    {
+        return BuildHubPanelUnsafe(self, out_result);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        ErrorLog("Emkejs-Mod-Core: EnsureHubPanel UI mutation faulted; skipping Mod Hub attach");
+        if (out_result != 0)
+        {
+            *out_result = HubPanelCreationResult();
+        }
+        return false;
+    }
+}
+
+bool EnsureHubPanel(OptionsWindow* self)
+{
+    if (self == 0 || self->optionsTab == 0 || g_ptrKenshiGUI == 0 || g_fnCreateDatapanel == 0)
+    {
+        return false;
+    }
+
+    if (g_active_options_window == self && g_active_hub_panel_widget != 0)
+    {
+        return true;
+    }
+
+    HubPanelCreationResult result;
+    if (!TryBuildHubPanel(self, &result))
+    {
+        return false;
+    }
+
+    g_active_options_window = self;
+    g_active_hub_panel = result.hub_panel;
+    g_active_hub_panel_widget = result.hub_panel_widget;
     return true;
 }
 
@@ -2545,79 +2902,6 @@ void OptionsWindowSaveHook(OptionsWindow* self)
     HubMenuBridge_OnOptionsWindowSave();
     HubMenuBridge_OnOptionsWindowClose();
     ClearActiveUiState();
-}
-
-void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code)
-{
-    if (key_code == OIS::KC_LCONTROL)
-    {
-        g_left_ctrl_down = true;
-    }
-    else if (key_code == OIS::KC_RCONTROL)
-    {
-        g_right_ctrl_down = true;
-    }
-
-    if (g_hub_enabled && HubUi_IsOptionsWindowOpen() && HubUi_IsAnyKeybindCaptureActive())
-    {
-        HubUi_ApplyCapturedKeycodeToActiveRow(static_cast<int32_t>(key_code));
-        RebuildHubPanelWidgets();
-        return;
-    }
-
-    if (g_hub_enabled && HubUi_IsOptionsWindowOpen() && g_active_hub_panel_widget != 0)
-    {
-        if (HandleHubSearchCtrlShortcut(thisptr, key_code))
-        {
-            return;
-        }
-
-        if (key_code == OIS::KC_PGUP)
-        {
-            ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - g_hub_scroll_page_step);
-            return;
-        }
-
-        if (key_code == OIS::KC_PGDOWN)
-        {
-            ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + g_hub_scroll_page_step);
-            return;
-        }
-
-        if (key_code == OIS::KC_UP)
-        {
-            ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset - kHubScrollLineStep);
-            return;
-        }
-
-        if (key_code == OIS::KC_DOWN)
-        {
-            ApplyHubScrollOffsetWithoutRebuild(g_hub_scroll_offset + kHubScrollLineStep);
-            return;
-        }
-    }
-
-    if (InputHandler_keyDownEvent_orig != 0)
-    {
-        InputHandler_keyDownEvent_orig(thisptr, key_code);
-    }
-}
-
-void InputHandler_keyUpEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code)
-{
-    if (key_code == OIS::KC_LCONTROL)
-    {
-        g_left_ctrl_down = false;
-    }
-    else if (key_code == OIS::KC_RCONTROL)
-    {
-        g_right_ctrl_down = false;
-    }
-
-    if (InputHandler_keyUpEvent_orig != 0)
-    {
-        InputHandler_keyUpEvent_orig(thisptr, key_code);
-    }
 }
 
 }
@@ -2667,24 +2951,6 @@ bool HubMenuBridge_InstallHooks(unsigned int platform, const std::string& versio
     if (KenshiLib::SUCCESS != KenshiLib::AddHook(g_fnOptionsSave, OptionsWindowSaveHook, &g_fnOptionsSaveOrig))
     {
         ErrorLog("Emkejs-Mod-Core: Could not hook options save");
-        return false;
-    }
-
-    if (KenshiLib::SUCCESS != KenshiLib::AddHook(
-        KenshiLib::GetRealAddress(&InputHandler::keyDownEvent),
-        InputHandler_keyDownEvent_hook,
-        &InputHandler_keyDownEvent_orig))
-    {
-        ErrorLog("Emkejs-Mod-Core: Could not hook InputHandler::keyDownEvent");
-        return false;
-    }
-
-    if (KenshiLib::SUCCESS != KenshiLib::AddHook(
-        KenshiLib::GetRealAddress(&InputHandler::keyUpEvent),
-        InputHandler_keyUpEvent_hook,
-        &InputHandler_keyUpEvent_orig))
-    {
-        ErrorLog("Emkejs-Mod-Core: Could not hook InputHandler::keyUpEvent");
         return false;
     }
 
