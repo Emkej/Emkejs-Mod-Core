@@ -2827,6 +2827,8 @@ void RebuildHubPanelWidgets()
         logical_y += 8;
     }
 
+    logical_y += 12;
+
     {
         std::ostringstream line;
         line << "rebuild_rows_complete logical_y=" << logical_y
