@@ -666,6 +666,24 @@ void BuildRenderNamespaces(std::vector<RenderNamespaceGroup>* out_namespaces)
     }
 }
 
+bool AreAllModsCollapsed(const RenderNamespaceGroup& namespace_group)
+{
+    if (namespace_group.mods.empty())
+    {
+        return false;
+    }
+
+    for (size_t index = 0; index < namespace_group.mods.size(); ++index)
+    {
+        if (!namespace_group.mods[index].collapsed)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 std::string FormatBoolButtonCaption(const HubUiRowView& row)
 {
     if (row.pending_bool_value == 0)
@@ -1581,6 +1599,38 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
         return;
     }
 
+    if (action == "mods_toggle_all")
+    {
+        std::vector<RenderNamespaceGroup> namespaces;
+        BuildRenderNamespaces(&namespaces);
+        EnsureSelectedNamespace(namespaces);
+
+        const RenderNamespaceGroup* target_namespace = 0;
+        for (size_t index = 0; index < namespaces.size(); ++index)
+        {
+            if (namespaces[index].namespace_id == namespace_id)
+            {
+                target_namespace = &namespaces[index];
+                break;
+            }
+        }
+
+        if (target_namespace != 0)
+        {
+            const bool collapse_all = !AreAllModsCollapsed(*target_namespace);
+            for (size_t index = 0; index < target_namespace->mods.size(); ++index)
+            {
+                HubUi_SetModCollapsed(
+                    namespace_id.c_str(),
+                    target_namespace->mods[index].mod_id.c_str(),
+                    collapse_all);
+            }
+        }
+
+        RebuildHubPanelWidgets();
+        return;
+    }
+
     if (action == "bool_toggle")
     {
         HubUiRowView row;
@@ -1744,7 +1794,8 @@ void CreateNumericRangeHintLabel(MyGUI::Widget* parent, int x, int y, int width,
     }
 
     hint_text->setCaption(hint);
-    hint_text->setTextColour(MyGUI::Colour(0.65f, 0.65f, 0.65f, 1.0f));
+    hint_text->setTextAlign(MyGUI::Align::Right);
+    hint_text->setTextColour(MyGUI::Colour(0.56f, 0.56f, 0.56f, 1.0f));
 }
 
 void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUiRowView& row, int* out_next_y)
@@ -1774,6 +1825,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
     if (label != 0)
     {
         label->setCaption(row.label != 0 ? row.label : row.setting_id);
+        label->setFontHeight(18);
     }
 
     if (row.kind == HUB_UI_ROW_KIND_BOOL)
@@ -1965,7 +2017,28 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
     int next_y = y + row_height;
     if (row.kind == HUB_UI_ROW_KIND_INT || row.kind == HUB_UI_ROW_KIND_FLOAT)
     {
-        CreateNumericRangeHintLabel(parent, label_x + 12, next_y, panel_width - 80, row);
+        int hint_x = label_x + 12;
+        int hint_width = panel_width - 80;
+        if (row.kind == HUB_UI_ROW_KIND_INT)
+        {
+            const int button_width = 44;
+            const int button_gap = 4;
+            const int value_box_width = 96;
+            const int group_width = (button_width * 6) + (button_gap * 6) + value_box_width;
+            hint_x = panel_width - 24 - group_width;
+            if (hint_x < value_x - 190)
+            {
+                hint_x = value_x - 190;
+            }
+            hint_width = group_width;
+        }
+        else
+        {
+            hint_x = value_x - 78;
+            hint_width = 224;
+        }
+
+        CreateNumericRangeHintLabel(parent, hint_x, next_y, hint_width, row);
         next_y += 20;
     }
 
@@ -2422,9 +2495,12 @@ void RebuildHubPanelWidgets()
 
     const std::string search_query_text = search_query != 0 ? search_query : "";
     const bool show_search_clear_button = !search_query_text.empty();
+    const bool all_mods_collapsed = AreAllModsCollapsed(*selected_namespace);
     const int clear_button_gap = 6;
     const int clear_button_width = 32;
     const int search_box_width = search_width - clear_button_width - clear_button_gap;
+    const int toggle_all_button_width = 146;
+    const int toggle_all_button_x = panel_width - 20 - toggle_all_button_width;
 
     MyGUI::EditBox* search_box = CreateTrackedSearchBox(
         g_active_hub_panel_widget,
@@ -2472,6 +2548,17 @@ void RebuildHubPanelWidgets()
             clear_search_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(clear_search_button, "search_clear", selected_namespace->namespace_id, "", "");
         }
+    }
+
+    MyGUI::Button* toggle_all_button = CreateTrackedWidget<MyGUI::Button>(
+        g_active_hub_panel_widget,
+        kValueButtonSkin,
+        MyGUI::IntCoord(toggle_all_button_x, y + 4, toggle_all_button_width, 32));
+    if (toggle_all_button != 0)
+    {
+        toggle_all_button->setCaption(all_mods_collapsed ? "Expand all" : "Collapse all");
+        toggle_all_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+        AttachHubAction(toggle_all_button, "mods_toggle_all", selected_namespace->namespace_id, "", "");
     }
 
     MyGUI::TextBox* search_hint = CreateTrackedWidget<MyGUI::TextBox>(
@@ -2728,6 +2815,11 @@ void RebuildHubPanelWidgets()
             {
                 int next_y = row_y;
                 CreateRowWidgets(content_parent, content_panel_width, row_y, row, &next_y);
+                if (has_persistent_scroll)
+                {
+                    logical_y = next_y;
+                    continue;
+                }
             }
             logical_y += row_height;
         }
