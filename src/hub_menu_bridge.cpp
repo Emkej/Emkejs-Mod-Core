@@ -153,7 +153,7 @@ std::string g_hub_search_snapshot_query;
 size_t g_hub_search_snapshot_cursor_position = 0;
 
 const int kHubScrollLineStep = 24;
-const int kHubScrollControlWidth = 44;
+const int kHubScrollControlWidth = 24;
 const int kHubScrollGutterWidth = 56;
 
 struct HubScrollableWidgetState
