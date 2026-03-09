@@ -91,6 +91,12 @@ Deterministic helper behavior:
 2. Row registration in table order.
 3. Fail-fast on first non-`EMC_OK`.
 
+Identity format constraints enforced by the hub registry:
+
+- `namespace_id`, `mod_id`, and `setting_id` accept only lowercase `a-z`, digits `0-9`, `_`, `.`, `-`
+- camelCase IDs are rejected with `EMC_ERR_INVALID_ARGUMENT`
+- recommended convention: dotted namespace IDs such as `myteam.qol`, snake_case mod/setting IDs such as `faster_looting` and `show_overlay`
+
 ## Helper Integration (Phase 7 / Phase 14 SSOT)
 
 `ModHubClient` entrypoints:

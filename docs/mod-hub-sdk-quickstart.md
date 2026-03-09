@@ -71,6 +71,13 @@ Use stable identity values for your mod:
 
 - `namespace_id`: shared bucket for related mods (for example `myteam.qol`)
 - `mod_id`: unique within the namespace (for example `faster_looting`)
+- `setting_id`: unique within the mod (for example `show_overlay`)
+
+ID format rule for `namespace_id`, `mod_id`, and `setting_id`:
+
+- allowed characters: lowercase `a-z`, digits `0-9`, `_`, `.`, `-`
+- disallowed examples: camelCase IDs such as `showSearchEntryCount`
+- recommended style: snake_case for `mod_id` / `setting_id`, dotted namespace for `namespace_id`
 
 You can set these during scaffold:
 
