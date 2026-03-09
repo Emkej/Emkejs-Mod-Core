@@ -22,6 +22,7 @@ Handshake constants:
 - `EMC_HUB_API_VERSION_1`
 - `EMC_HUB_API_V1_MIN_SIZE`
 - `EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE`
+- `EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE`
 
 Handshake entrypoint:
 
@@ -76,12 +77,14 @@ Core value type:
 - `emc::ModHubClientSettingRowV1`
 - `emc::ModHubClientTableRegistrationV1`
 - `emc::RegisterSettingsTableV1(...)`
+- `emc::RegisterSettingsTableWithApiSizeV1(...)`
 
 Supported row kinds:
 
 - `MOD_HUB_CLIENT_SETTING_KIND_BOOL`
 - `MOD_HUB_CLIENT_SETTING_KIND_KEYBIND`
 - `MOD_HUB_CLIENT_SETTING_KIND_INT`
+- `MOD_HUB_CLIENT_SETTING_KIND_INT_V2`
 - `MOD_HUB_CLIENT_SETTING_KIND_FLOAT`
 - `MOD_HUB_CLIENT_SETTING_KIND_ACTION`
 
@@ -134,6 +137,61 @@ SDK stamp warning behavior:
 
 - At startup attach, `ModHubClient` compares the expected stamp (`expected_sdk_api_version`, `expected_sdk_min_api_size`) against runtime `api_version` / `out_api_size`.
 - Drift emits a warning and continues using fallback-compatible behavior where possible.
+
+## Custom Int Row Buttons (Phase 20)
+
+New V2 surfaces:
+
+- `EMC_IntSettingDefV2`
+- `EMC_HubApiV1::register_int_setting_v2`
+- `MOD_HUB_CLIENT_SETTING_KIND_INT_V2`
+
+Behavior:
+
+1. V1 integer rows stay unchanged and keep the multiplier-based `-10/-5/-/+ /+5/+10` profile.
+2. V2 integer rows can disable slots with `0`.
+3. V2 integer rows apply exact deltas such as `-3` or `+7`.
+4. Button captions are derived automatically from the configured deltas.
+
+Validation rules:
+
+1. Non-zero deltas must be positive.
+2. Non-zero deltas must be multiples of `step`.
+3. Decrement deltas must be strictly descending when read left-to-right, ignoring `0` slots.
+4. Increment deltas must be strictly ascending when read left-to-right, ignoring `0` slots.
+5. Duplicate non-zero deltas on the same side are rejected.
+
+Fallback behavior:
+
+- If runtime `out_api_size` is smaller than `EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE`, `MOD_HUB_CLIENT_SETTING_KIND_INT_V2` rows fail with `EMC_ERR_API_SIZE_MISMATCH`.
+- The helper does not silently downgrade V2 rows to the legacy V1 layout.
+
+Minimal V2 example:
+
+```cpp
+const EMC_IntSettingDefV2 kCountSettingV2 = {
+    "count",
+    "Count",
+    "Custom int row",
+    &g_state,
+    0,
+    20,
+    1,
+    { 3, 0, 1 },
+    { 1, 0, 7 },
+    &GetCount,
+    &SetCount
+};
+
+const emc::ModHubClientSettingRowV1 kRows[] = {
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2, &kCountSettingV2 }
+};
+```
+
+Migration note:
+
+- `EMC_IntSettingDefV1` remains valid and unchanged for legacy rows.
+- Use V2 only when you need exact deltas or a reduced button set.
 
 ## Runtime Log Semantics (Hub Events)
 
@@ -616,6 +674,14 @@ Phase 5:
 ```
 
 This harness validates numeric snap/clamp behavior and pending-text normalization semantics.
+
+Phase 20:
+
+```powershell
+./scripts/phase20_int_button_layout_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```
+
+This harness validates V2 int-row registration, sparse/custom button layouts, exact-delta behavior, and deterministic rejection of invalid layouts.
 
 Phase 13:
 

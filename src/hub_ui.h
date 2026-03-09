@@ -41,6 +41,9 @@ struct HubUiRowView
     int32_t int_min_value;
     int32_t int_max_value;
     int32_t int_step;
+    bool int_use_custom_buttons;
+    int32_t int_dec_button_deltas[3];
+    int32_t int_inc_button_deltas[3];
     int32_t pending_int_value;
     const char* pending_int_text;
     bool int_text_parse_error;
@@ -78,6 +81,7 @@ bool HubUi_DoesSettingMatchNamespaceSearch(
 
 EMC_Result HubUi_SetPendingBool(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t value);
 EMC_Result HubUi_AdjustPendingIntStep(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t step_delta);
+EMC_Result HubUi_AdjustPendingIntDelta(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t delta);
 EMC_Result HubUi_SetPendingIntFromText(const char* namespace_id, const char* mod_id, const char* setting_id, const char* text);
 EMC_Result HubUi_NormalizePendingIntText(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_AdjustPendingFloatStep(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t step_delta);

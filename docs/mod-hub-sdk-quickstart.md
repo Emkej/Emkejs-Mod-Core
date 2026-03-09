@@ -111,11 +111,38 @@ Supported row kinds:
 - `MOD_HUB_CLIENT_SETTING_KIND_BOOL`
 - `MOD_HUB_CLIENT_SETTING_KIND_KEYBIND`
 - `MOD_HUB_CLIENT_SETTING_KIND_INT`
+- `MOD_HUB_CLIENT_SETTING_KIND_INT_V2`
 - `MOD_HUB_CLIENT_SETTING_KIND_FLOAT`
 - `MOD_HUB_CLIENT_SETTING_KIND_ACTION`
 
 Use your existing get/set callbacks in row definitions; the helper performs deterministic registration and commit ordering.
 Generated callback wrappers delegate to the shared consumer helper header to reduce repetitive state/update boilerplate.
+
+If you need fewer integer step buttons or exact deltas, switch that row to `EMC_IntSettingDefV2` + `MOD_HUB_CLIENT_SETTING_KIND_INT_V2`.
+
+Minimal V2 example:
+
+```cpp
+const EMC_IntSettingDefV2 kCountSettingV2 = {
+    "count",
+    "Count",
+    "Custom int row",
+    &g_state,
+    0,
+    20,
+    1,
+    { 3, 0, 1 },
+    { 1, 0, 7 },
+    &GetCount,
+    &SetCount
+};
+
+const emc::ModHubClientSettingRowV1 kRows[] = {
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2, &kCountSettingV2 }
+};
+```
+
+V2 rows require a host API size of at least `EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE`; otherwise registration fails deterministically instead of silently downgrading to V1.
 
 ## 4) Wire lifecycle calls
 

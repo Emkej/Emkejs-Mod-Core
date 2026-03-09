@@ -15,6 +15,7 @@ int32_t ModHubDummyConsumer_GetRegisterModCalls();
 int32_t ModHubDummyConsumer_GetRegisterBoolCalls();
 int32_t ModHubDummyConsumer_GetRegisterKeybindCalls();
 int32_t ModHubDummyConsumer_GetRegisterIntCalls();
+int32_t ModHubDummyConsumer_GetRegisterIntV2Calls();
 int32_t ModHubDummyConsumer_GetRegisterFloatCalls();
 int32_t ModHubDummyConsumer_GetRegisterActionCalls();
 int32_t ModHubDummyConsumer_GetOrderChecksPassed();

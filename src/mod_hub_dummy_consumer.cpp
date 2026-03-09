@@ -17,6 +17,8 @@ const int32_t kModeFailFloat = 4;
 const int32_t kModeFailAction = 5;
 const int32_t kModeInvalidRowKind = 6;
 const int32_t kModeNullRowDef = 7;
+const int32_t kModeUseIntV2 = 8;
+const int32_t kModeUseIntV2LegacyApi = 9;
 
 const char* kNamespaceId = "phase8.dummy_consumer";
 const char* kNamespaceDisplayName = "Phase8 Dummy Consumer";
@@ -180,6 +182,19 @@ const EMC_IntSettingDefV1 kIntSettingDef = {
     &GetInt,
     &SetInt};
 
+const EMC_IntSettingDefV2 kIntSettingDefV2 = {
+    kIntSettingId,
+    "Count",
+    "Example count",
+    &g_int_value,
+    0,
+    100,
+    5,
+    { 10, 5, 0 },
+    { 5, 10, 0 },
+    &GetInt,
+    &SetInt};
+
 const EMC_FloatSettingDefV1 kFloatSettingDef = {
     kFloatSettingId,
     "Radius",
@@ -221,6 +236,7 @@ struct DummyState
     int32_t register_bool_calls;
     int32_t register_keybind_calls;
     int32_t register_int_calls;
+    int32_t register_int_v2_calls;
     int32_t register_float_calls;
     int32_t register_action_calls;
 
@@ -262,6 +278,7 @@ void ResetCapture()
     g_state.register_bool_calls = 0;
     g_state.register_keybind_calls = 0;
     g_state.register_int_calls = 0;
+    g_state.register_int_v2_calls = 0;
     g_state.register_float_calls = 0;
     g_state.register_action_calls = 0;
     g_state.order_checks_passed = 1;
@@ -278,7 +295,9 @@ int32_t ExpectedKindForIndex(int32_t index)
     case 1:
         return emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND;
     case 2:
-        return emc::MOD_HUB_CLIENT_SETTING_KIND_INT;
+        return (g_state.mode == kModeUseIntV2 || g_state.mode == kModeUseIntV2LegacyApi)
+            ? emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2
+            : emc::MOD_HUB_CLIENT_SETTING_KIND_INT;
     case 3:
         return emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT;
     case 4:
@@ -341,6 +360,11 @@ void ApplyMode()
     else if (g_state.mode == kModeNullRowDef)
     {
         g_rows[2].def = 0;
+    }
+    else if (g_state.mode == kModeUseIntV2 || g_state.mode == kModeUseIntV2LegacyApi)
+    {
+        g_rows[2].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2;
+        g_rows[2].def = &kIntSettingDefV2;
     }
 }
 
@@ -428,6 +452,34 @@ EMC_Result __cdecl TestRegisterInt(EMC_ModHandle mod, const EMC_IntSettingDefV1*
     return ShouldFailKind(emc::MOD_HUB_CLIENT_SETTING_KIND_INT) ? EMC_ERR_INTERNAL : EMC_OK;
 }
 
+EMC_Result __cdecl TestRegisterIntV2(EMC_ModHandle mod, const EMC_IntSettingDefV2* def)
+{
+    g_state.register_int_v2_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kIntSettingId)
+        || def->min_value != 0
+        || def->max_value != 100
+        || def->step != 5
+        || def->dec_button_deltas[0] != 10
+        || def->dec_button_deltas[1] != 5
+        || def->dec_button_deltas[2] != 0
+        || def->inc_button_deltas[0] != 5
+        || def->inc_button_deltas[1] != 10
+        || def->inc_button_deltas[2] != 0
+        || def->get_value != &GetInt
+        || def->set_value != &SetInt
+        || def->user_data != &g_int_value)
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
 EMC_Result __cdecl TestRegisterFloat(EMC_ModHandle mod, const EMC_FloatSettingDefV1* def)
 {
     g_state.register_float_calls += 1;
@@ -482,7 +534,8 @@ const EMC_HubApiV1* GetTestApi()
         &TestRegisterFloat,
         &TestRegisterAction,
         0,
-        0};
+        0,
+        &TestRegisterIntV2};
     return &kApi;
 }
 
@@ -511,7 +564,9 @@ EMC_Result __cdecl TestGetApi(
     }
 
     *out_api = GetTestApi();
-    *out_api_size = (uint32_t)sizeof(EMC_HubApiV1);
+    *out_api_size = (g_state.mode == kModeUseIntV2LegacyApi)
+        ? EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE
+        : (uint32_t)sizeof(EMC_HubApiV1);
     return EMC_OK;
 }
 
@@ -605,6 +660,12 @@ int32_t ModHubDummyConsumer_GetRegisterIntCalls()
 {
     EnsureInitialized();
     return g_state.register_int_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterIntV2Calls()
+{
+    EnsureInitialized();
+    return g_state.register_int_v2_calls;
 }
 
 int32_t ModHubDummyConsumer_GetRegisterFloatCalls()

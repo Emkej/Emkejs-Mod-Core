@@ -55,6 +55,9 @@ struct HubUiSettingRow
     int32_t int_min_value;
     int32_t int_max_value;
     int32_t int_step;
+    bool int_use_custom_buttons;
+    int32_t int_dec_button_deltas[3];
+    int32_t int_inc_button_deltas[3];
     int32_t canonical_int_value;
     int32_t pending_int_value;
     std::string pending_int_text;
@@ -1023,6 +1026,9 @@ void __cdecl BuildSessionRow(
     row->int_min_value = setting_view->int_min_value;
     row->int_max_value = setting_view->int_max_value;
     row->int_step = setting_view->int_step;
+    row->int_use_custom_buttons = setting_view->int_use_custom_buttons;
+    std::memcpy(row->int_dec_button_deltas, setting_view->int_dec_button_deltas, sizeof(row->int_dec_button_deltas));
+    std::memcpy(row->int_inc_button_deltas, setting_view->int_inc_button_deltas, sizeof(row->int_inc_button_deltas));
     row->canonical_int_value = 0;
     row->pending_int_value = 0;
     row->pending_int_text = "0";
@@ -1337,11 +1343,11 @@ EMC_Result HubUi_SetPendingBool(const char* namespace_id, const char* mod_id, co
     return EMC_OK;
 }
 
-EMC_Result HubUi_AdjustPendingIntStep(
+EMC_Result HubUi_AdjustPendingIntDelta(
     const char* namespace_id,
     const char* mod_id,
     const char* setting_id,
-    int32_t step_delta)
+    int32_t delta)
 {
     HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
     if (row == nullptr || row->kind != HUB_UI_ROW_KIND_INT)
@@ -1350,7 +1356,7 @@ EMC_Result HubUi_AdjustPendingIntStep(
     }
 
     const int64_t next_value = static_cast<int64_t>(row->pending_int_value)
-        + (static_cast<int64_t>(step_delta) * static_cast<int64_t>(row->int_step));
+        + static_cast<int64_t>(delta);
     int32_t clamped = row->pending_int_value;
     if (next_value < static_cast<int64_t>(std::numeric_limits<int32_t>::min()))
     {
@@ -1371,6 +1377,36 @@ EMC_Result HubUi_AdjustPendingIntStep(
     row->inline_error.clear();
     RecomputeIntDirty(row);
     return EMC_OK;
+}
+
+EMC_Result HubUi_AdjustPendingIntStep(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t step_delta)
+{
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_INT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    const int64_t delta64 = static_cast<int64_t>(step_delta) * static_cast<int64_t>(row->int_step);
+    int32_t delta = 0;
+    if (delta64 < static_cast<int64_t>(std::numeric_limits<int32_t>::min()))
+    {
+        delta = std::numeric_limits<int32_t>::min();
+    }
+    else if (delta64 > static_cast<int64_t>(std::numeric_limits<int32_t>::max()))
+    {
+        delta = std::numeric_limits<int32_t>::max();
+    }
+    else
+    {
+        delta = static_cast<int32_t>(delta64);
+    }
+
+    return HubUi_AdjustPendingIntDelta(namespace_id, mod_id, setting_id, delta);
 }
 
 EMC_Result HubUi_SetPendingIntFromText(
@@ -1673,6 +1709,9 @@ bool HubUi_GetRowViewByIndex(uint32_t index, HubUiRowView* out_view)
     out_view->int_min_value = row->int_min_value;
     out_view->int_max_value = row->int_max_value;
     out_view->int_step = row->int_step;
+    out_view->int_use_custom_buttons = row->int_use_custom_buttons;
+    std::memcpy(out_view->int_dec_button_deltas, row->int_dec_button_deltas, sizeof(out_view->int_dec_button_deltas));
+    std::memcpy(out_view->int_inc_button_deltas, row->int_inc_button_deltas, sizeof(out_view->int_inc_button_deltas));
     out_view->pending_int_value = row->pending_int_value;
     out_view->pending_int_text = row->pending_int_text.c_str();
     out_view->int_text_parse_error = row->int_text_parse_error;

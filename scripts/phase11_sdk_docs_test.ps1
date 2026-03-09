@@ -60,6 +60,7 @@ $requiredSymbols = @(
     "EMC_HUB_API_VERSION_1",
     "EMC_HUB_API_V1_MIN_SIZE",
     "EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE",
+    "EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE",
     "EMC_MOD_HUB_GET_API_EXPORT_NAME",
     "EMC_MOD_HUB_GET_API_COMPAT_EXPORT_NAME",
     "EMC_MOD_HUB_GET_API_COMPAT_REMOVAL_TARGET",
@@ -80,9 +81,12 @@ $requiredSymbols = @(
     "EMC_ACTION_FORCE_REFRESH",
     "EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT",
     "RegisterSettingsTableV1",
+    "RegisterSettingsTableWithApiSizeV1",
+    "EMC_IntSettingDefV2",
     "MOD_HUB_CLIENT_SETTING_KIND_BOOL",
     "MOD_HUB_CLIENT_SETTING_KIND_KEYBIND",
     "MOD_HUB_CLIENT_SETTING_KIND_INT",
+    "MOD_HUB_CLIENT_SETTING_KIND_INT_V2",
     "MOD_HUB_CLIENT_SETTING_KIND_FLOAT",
     "MOD_HUB_CLIENT_SETTING_KIND_ACTION",
     "OnStartup()",
@@ -109,6 +113,9 @@ Assert-Condition -Condition ($docsText.Contains('"bool_settings": ["show_overlay
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase15_scaffold_single_tu_test.ps1")) -Message "docs/mod-hub-sdk.md should reference the phase15 scaffold validation harness."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase5_numeric_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase5 numeric harness command."
 Assert-Condition -Condition ($docsText.Contains("pending-text normalization semantics")) -Message "docs/mod-hub-sdk.md should describe phase5 pending-text normalization coverage."
+Assert-Condition -Condition ($docsText.Contains("./scripts/phase20_int_button_layout_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase20 int-layout harness command."
+Assert-Condition -Condition ($docsText.Contains("deterministic rejection of invalid layouts")) -Message "docs/mod-hub-sdk.md should describe phase20 layout coverage."
+Assert-Condition -Condition ($docsText.Contains("The helper does not silently downgrade V2 rows")) -Message "docs/mod-hub-sdk.md should describe V2 fallback behavior."
 Assert-Condition -Condition ($docsText.Contains("./scripts/build-and-package.ps1 -Configuration Debug -SkipSdkPackage -RunReliabilitySmoke [-SmokeKenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should document the Debug reliability smoke build wrapper command."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase16_hub_attach_reliability_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>] [-RepeatCount 2]")) -Message "docs/mod-hub-sdk.md should reference the phase16 reliability smoke harness."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase17_address_ssot_guard_test.ps1")) -Message "docs/mod-hub-sdk.md should reference the phase17 address SSOT guard."
@@ -151,6 +158,9 @@ $requiredQuickstartSymbols = @(
     "ModHubConsumerAdapter_OnStartup()",
     "ModHubConsumerAdapter_OnOptionsWindowInit()",
     "ModHubConsumerAdapter_ShouldCreateLocalTab()",
+    "MOD_HUB_CLIENT_SETTING_KIND_INT_V2",
+    "EMC_IntSettingDefV2",
+    "EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE",
     "no per-mod options-init RVA hook is required",
     "samples/mod_hub_consumer_single_tu.cpp",
     "./scripts/sync-mod-hub-sdk.ps1",

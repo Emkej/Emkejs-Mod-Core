@@ -23,6 +23,7 @@
 
 #include <Windows.h>
 
+#include <cstdlib>
 #include <cctype>
 #include <cstring>
 #include <sstream>
@@ -579,6 +580,25 @@ void AttachHubIdentity(MyGUI::Widget* widget, const std::string& namespace_id, c
     widget->setUserString("emc_ns", namespace_id);
     widget->setUserString("emc_mod", mod_id);
     widget->setUserString("emc_setting", setting_id);
+}
+
+void AttachHubExactIntDelta(
+    MyGUI::Widget* widget,
+    int32_t delta,
+    const std::string& namespace_id,
+    const std::string& mod_id,
+    const std::string& setting_id)
+{
+    if (widget == 0)
+    {
+        return;
+    }
+
+    AttachHubAction(widget, "int_delta_custom", namespace_id, mod_id, setting_id);
+
+    std::ostringstream value;
+    value << delta;
+    widget->setUserString("emc_int_delta", value.str());
 }
 
 void FindOrAddRenderNamespace(std::vector<RenderNamespaceGroup>* namespaces, const HubUiRowView& row, RenderNamespaceGroup** out_namespace)
@@ -1699,6 +1719,15 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
         return;
     }
 
+    if (action == "int_delta_custom")
+    {
+        const std::string delta_text = sender->getUserString("emc_int_delta");
+        const int32_t delta = static_cast<int32_t>(std::atoi(delta_text.c_str()));
+        HubUi_AdjustPendingIntDelta(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), delta);
+        RebuildHubPanelWidgets();
+        return;
+    }
+
     if (action == "float_step_dec")
     {
         HubUi_AdjustPendingFloatStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), -1);
@@ -1784,6 +1813,56 @@ std::string BuildNumericFooterText(const HubUiRowView& row)
     }
 
     return std::string();
+}
+
+int CountEnabledIntButtons(const int32_t deltas[3])
+{
+    int count = 0;
+    for (int32_t index = 0; index < 3; ++index)
+    {
+        if (deltas[index] > 0)
+        {
+            count += 1;
+        }
+    }
+
+    return count;
+}
+
+int GetIntControlGroupWidth(const HubUiRowView& row)
+{
+    const int button_width = 44;
+    const int button_gap = 4;
+    const int value_box_width = 96;
+    int button_count = 6;
+    if (row.int_use_custom_buttons)
+    {
+        button_count = CountEnabledIntButtons(row.int_dec_button_deltas) + CountEnabledIntButtons(row.int_inc_button_deltas);
+    }
+
+    return (button_width * button_count) + (button_gap * button_count) + value_box_width;
+}
+
+int GetIntControlX(const HubUiRowView& row, int panel_width, int value_x)
+{
+    int control_x = panel_width - 24 - GetIntControlGroupWidth(row);
+    if (control_x < value_x - 190)
+    {
+        control_x = value_x - 190;
+    }
+
+    return control_x;
+}
+
+std::string FormatExactIntDeltaButtonCaption(int32_t delta)
+{
+    std::ostringstream caption;
+    if (delta > 0)
+    {
+        caption << '+';
+    }
+    caption << delta;
+    return caption.str();
 }
 
 void CreateNumericRangeHintLabel(MyGUI::Widget* parent, int x, int y, int width, const HubUiRowView& row)
@@ -1888,48 +1967,74 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
         const int button_height = 34;
         const int button_gap = 4;
         const int value_box_width = 96;
-        const int group_width = (button_width * 6) + (button_gap * 6) + value_box_width;
-        int control_x = panel_width - 24 - group_width;
-        if (control_x < value_x - 190)
-        {
-            control_x = value_x - 190;
-        }
+        int control_x = GetIntControlX(row, panel_width, value_x);
 
-        MyGUI::Button* minus_ten_button = CreateTrackedWidget<MyGUI::Button>(
-            parent,
-            kValueButtonSkin,
-            MyGUI::IntCoord(control_x, y, button_width, button_height));
-        if (minus_ten_button != 0)
+        if (row.int_use_custom_buttons)
         {
-            minus_ten_button->setCaption("-10");
-            minus_ten_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
-            AttachHubAction(minus_ten_button, "int_step_dec_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
-        }
-        control_x += button_width + button_gap;
+            for (int32_t index = 0; index < 3; ++index)
+            {
+                const int32_t delta = row.int_dec_button_deltas[index];
+                if (delta <= 0)
+                {
+                    continue;
+                }
 
-        MyGUI::Button* minus_five_button = CreateTrackedWidget<MyGUI::Button>(
-            parent,
-            kValueButtonSkin,
-            MyGUI::IntCoord(control_x, y, button_width, button_height));
-        if (minus_five_button != 0)
-        {
-            minus_five_button->setCaption("-5");
-            minus_five_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
-            AttachHubAction(minus_five_button, "int_step_dec_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+                MyGUI::Button* button = CreateTrackedWidget<MyGUI::Button>(
+                    parent,
+                    kValueButtonSkin,
+                    MyGUI::IntCoord(control_x, y, button_width, button_height));
+                if (button != 0)
+                {
+                    button->setCaption(FormatExactIntDeltaButtonCaption(-delta));
+                    button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                    AttachHubExactIntDelta(
+                        button,
+                        -delta,
+                        row.namespace_id != 0 ? row.namespace_id : "",
+                        row.mod_id != 0 ? row.mod_id : "",
+                        row.setting_id != 0 ? row.setting_id : "");
+                }
+                control_x += button_width + button_gap;
+            }
         }
-        control_x += button_width + button_gap;
+        else
+        {
+            MyGUI::Button* minus_ten_button = CreateTrackedWidget<MyGUI::Button>(
+                parent,
+                kValueButtonSkin,
+                MyGUI::IntCoord(control_x, y, button_width, button_height));
+            if (minus_ten_button != 0)
+            {
+                minus_ten_button->setCaption("-10");
+                minus_ten_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(minus_ten_button, "int_step_dec_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            }
+            control_x += button_width + button_gap;
 
-        MyGUI::Button* minus_button = CreateTrackedWidget<MyGUI::Button>(
-            parent,
-            kValueButtonSkin,
-            MyGUI::IntCoord(control_x, y, button_width, button_height));
-        if (minus_button != 0)
-        {
-            minus_button->setCaption("-");
-            minus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
-            AttachHubAction(minus_button, "int_step_dec", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            MyGUI::Button* minus_five_button = CreateTrackedWidget<MyGUI::Button>(
+                parent,
+                kValueButtonSkin,
+                MyGUI::IntCoord(control_x, y, button_width, button_height));
+            if (minus_five_button != 0)
+            {
+                minus_five_button->setCaption("-5");
+                minus_five_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(minus_five_button, "int_step_dec_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            }
+            control_x += button_width + button_gap;
+
+            MyGUI::Button* minus_button = CreateTrackedWidget<MyGUI::Button>(
+                parent,
+                kValueButtonSkin,
+                MyGUI::IntCoord(control_x, y, button_width, button_height));
+            if (minus_button != 0)
+            {
+                minus_button->setCaption("-");
+                minus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(minus_button, "int_step_dec", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            }
+            control_x += button_width + button_gap;
         }
-        control_x += button_width + button_gap;
 
         MyGUI::EditBox* value_box = CreateTrackedSearchBox(
             parent,
@@ -1945,39 +2050,70 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
         }
         control_x += value_box_width + button_gap;
 
-        MyGUI::Button* plus_button = CreateTrackedWidget<MyGUI::Button>(
-            parent,
-            kValueButtonSkin,
-            MyGUI::IntCoord(control_x, y, button_width, button_height));
-        if (plus_button != 0)
+        if (row.int_use_custom_buttons)
         {
-            plus_button->setCaption("+");
-            plus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
-            AttachHubAction(plus_button, "int_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
-        }
-        control_x += button_width + button_gap;
+            for (int32_t index = 0; index < 3; ++index)
+            {
+                const int32_t delta = row.int_inc_button_deltas[index];
+                if (delta <= 0)
+                {
+                    continue;
+                }
 
-        MyGUI::Button* plus_five_button = CreateTrackedWidget<MyGUI::Button>(
-            parent,
-            kValueButtonSkin,
-            MyGUI::IntCoord(control_x, y, button_width, button_height));
-        if (plus_five_button != 0)
-        {
-            plus_five_button->setCaption("+5");
-            plus_five_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
-            AttachHubAction(plus_five_button, "int_step_inc_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+                MyGUI::Button* button = CreateTrackedWidget<MyGUI::Button>(
+                    parent,
+                    kValueButtonSkin,
+                    MyGUI::IntCoord(control_x, y, button_width, button_height));
+                if (button != 0)
+                {
+                    button->setCaption(FormatExactIntDeltaButtonCaption(delta));
+                    button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                    AttachHubExactIntDelta(
+                        button,
+                        delta,
+                        row.namespace_id != 0 ? row.namespace_id : "",
+                        row.mod_id != 0 ? row.mod_id : "",
+                        row.setting_id != 0 ? row.setting_id : "");
+                }
+                control_x += button_width + button_gap;
+            }
         }
-        control_x += button_width + button_gap;
-
-        MyGUI::Button* plus_ten_button = CreateTrackedWidget<MyGUI::Button>(
-            parent,
-            kValueButtonSkin,
-            MyGUI::IntCoord(control_x, y, button_width, button_height));
-        if (plus_ten_button != 0)
+        else
         {
-            plus_ten_button->setCaption("+10");
-            plus_ten_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
-            AttachHubAction(plus_ten_button, "int_step_inc_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            MyGUI::Button* plus_button = CreateTrackedWidget<MyGUI::Button>(
+                parent,
+                kValueButtonSkin,
+                MyGUI::IntCoord(control_x, y, button_width, button_height));
+            if (plus_button != 0)
+            {
+                plus_button->setCaption("+");
+                plus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(plus_button, "int_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            }
+            control_x += button_width + button_gap;
+
+            MyGUI::Button* plus_five_button = CreateTrackedWidget<MyGUI::Button>(
+                parent,
+                kValueButtonSkin,
+                MyGUI::IntCoord(control_x, y, button_width, button_height));
+            if (plus_five_button != 0)
+            {
+                plus_five_button->setCaption("+5");
+                plus_five_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(plus_five_button, "int_step_inc_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            }
+            control_x += button_width + button_gap;
+
+            MyGUI::Button* plus_ten_button = CreateTrackedWidget<MyGUI::Button>(
+                parent,
+                kValueButtonSkin,
+                MyGUI::IntCoord(control_x, y, button_width, button_height));
+            if (plus_ten_button != 0)
+            {
+                plus_ten_button->setCaption("+10");
+                plus_ten_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(plus_ten_button, "int_step_inc_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            }
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_FLOAT)
@@ -2038,10 +2174,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
         int hint_width = panel_width - 80;
         if (row.kind == HUB_UI_ROW_KIND_INT)
         {
-            const int button_width = 44;
-            const int button_gap = 4;
-            const int value_box_width = 96;
-            const int group_width = (button_width * 6) + (button_gap * 6) + value_box_width;
+            const int group_width = GetIntControlGroupWidth(row);
             const bool use_description_footer = row.description != 0 && row.description[0] != '\0';
             if (use_description_footer)
             {
@@ -2050,11 +2183,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             }
             else
             {
-                hint_x = panel_width - 24 - group_width;
-                if (hint_x < value_x - 190)
-                {
-                    hint_x = value_x - 190;
-                }
+                hint_x = GetIntControlX(row, panel_width, value_x);
                 hint_width = group_width;
             }
         }

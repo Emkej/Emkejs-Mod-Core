@@ -48,6 +48,9 @@ struct SettingEntry
     int32_t int_min_value;
     int32_t int_max_value;
     int32_t int_step;
+    bool int_use_custom_buttons;
+    int32_t int_dec_button_deltas[3];
+    int32_t int_inc_button_deltas[3];
 
     EMC_GetFloatCallback get_float;
     EMC_SetFloatCallback set_float;
@@ -85,6 +88,8 @@ bool g_registration_locked = false;
 std::vector<NamespaceEntry*> g_namespaces_in_order;
 std::map<std::string, NamespaceEntry*> g_namespaces_by_id;
 std::map<EMC_ModHandle, ModEntry*> g_mods_by_handle;
+const int32_t kDefaultIntDecButtonDeltas[3] = { 10, 5, 1 };
+const int32_t kDefaultIntIncButtonDeltas[3] = { 1, 5, 10 };
 
 const char* SafeLogValue(const char* value)
 {
@@ -308,6 +313,9 @@ void InitializeSettingDefaults(SettingEntry* setting)
     setting->int_min_value = 0;
     setting->int_max_value = 0;
     setting->int_step = 0;
+    setting->int_use_custom_buttons = false;
+    std::memcpy(setting->int_dec_button_deltas, kDefaultIntDecButtonDeltas, sizeof(setting->int_dec_button_deltas));
+    std::memcpy(setting->int_inc_button_deltas, kDefaultIntIncButtonDeltas, sizeof(setting->int_inc_button_deltas));
     setting->get_float = nullptr;
     setting->set_float = nullptr;
     setting->float_min_value = 0.0f;
@@ -316,6 +324,67 @@ void InitializeSettingDefaults(SettingEntry* setting)
     setting->float_display_decimals = 0;
     setting->on_action = nullptr;
     setting->action_flags = 0;
+}
+
+bool IntButtonLayoutsEqual(const int32_t* lhs, const int32_t* rhs)
+{
+    return std::memcmp(lhs, rhs, sizeof(int32_t) * 3u) == 0;
+}
+
+bool ValidateCustomIntButtonSide(const int32_t* deltas, int32_t step, bool is_decrement_side)
+{
+    int32_t previous_non_zero = 0;
+    for (int32_t index = 0; index < 3; ++index)
+    {
+        const int32_t delta = deltas[index];
+        if (delta == 0)
+        {
+            continue;
+        }
+
+        if (delta < 0 || step < 1 || (delta % step) != 0)
+        {
+            return false;
+        }
+
+        for (int32_t previous_index = 0; previous_index < index; ++previous_index)
+        {
+            if (deltas[previous_index] == delta)
+            {
+                return false;
+            }
+        }
+
+        if (previous_non_zero != 0)
+        {
+            if (is_decrement_side)
+            {
+                if (delta >= previous_non_zero)
+                {
+                    return false;
+                }
+            }
+            else if (delta <= previous_non_zero)
+            {
+                return false;
+            }
+        }
+
+        previous_non_zero = delta;
+    }
+
+    return true;
+}
+
+bool ValidateCustomIntButtonLayout(const EMC_IntSettingDefV2* def)
+{
+    if (def == 0 || def->step < 1)
+    {
+        return false;
+    }
+
+    return ValidateCustomIntButtonSide(def->dec_button_deltas, def->step, true)
+        && ValidateCustomIntButtonSide(def->inc_button_deltas, def->step, false);
 }
 
 bool EmitCommonSettingDriftWarnings(
@@ -375,6 +444,9 @@ void PopulateSettingView(const SettingEntry* setting, HubRegistrySettingView* ou
     out_view->int_min_value = setting->int_min_value;
     out_view->int_max_value = setting->int_max_value;
     out_view->int_step = setting->int_step;
+    out_view->int_use_custom_buttons = setting->int_use_custom_buttons;
+    std::memcpy(out_view->int_dec_button_deltas, setting->int_dec_button_deltas, sizeof(out_view->int_dec_button_deltas));
+    std::memcpy(out_view->int_inc_button_deltas, setting->int_inc_button_deltas, sizeof(out_view->int_inc_button_deltas));
 
     out_view->get_float = setting->get_float;
     out_view->set_float = setting->set_float;
@@ -656,7 +728,10 @@ EMC_Result __cdecl HubRegistry_RegisterIntSetting(EMC_ModHandle mod, const EMC_I
 
         if (existing->int_min_value != def->min_value
             || existing->int_max_value != def->max_value
-            || existing->int_step != def->step)
+            || existing->int_step != def->step
+            || existing->int_use_custom_buttons
+            || !IntButtonLayoutsEqual(existing->int_dec_button_deltas, kDefaultIntDecButtonDeltas)
+            || !IntButtonLayoutsEqual(existing->int_inc_button_deltas, kDefaultIntIncButtonDeltas))
         {
             LogSettingWarning(
                 mod_entry,
@@ -682,6 +757,93 @@ EMC_Result __cdecl HubRegistry_RegisterIntSetting(EMC_ModHandle mod, const EMC_I
     setting->int_min_value = def->min_value;
     setting->int_max_value = def->max_value;
     setting->int_step = def->step;
+    setting->int_use_custom_buttons = false;
+    std::memcpy(setting->int_dec_button_deltas, kDefaultIntDecButtonDeltas, sizeof(setting->int_dec_button_deltas));
+    std::memcpy(setting->int_inc_button_deltas, kDefaultIntIncButtonDeltas, sizeof(setting->int_inc_button_deltas));
+    AppendNewSetting(mod_entry, setting);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl HubRegistry_RegisterIntSettingV2(EMC_ModHandle mod, const EMC_IntSettingDefV2* def)
+{
+    ModEntry* mod_entry = nullptr;
+    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_int_setting_v2", &mod_entry);
+    if (validation_result != EMC_OK)
+    {
+        return validation_result;
+    }
+
+    if (!ValidateCommonSettingStrings(def->setting_id, def->label, def->description))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (def->get_value == nullptr || def->set_value == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (def->step < 1 || def->min_value > def->max_value || !ValidateCustomIntButtonLayout(def))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::map<std::string, SettingEntry*>::const_iterator it = mod_entry->settings_by_id.find(def->setting_id);
+    if (it != mod_entry->settings_by_id.end())
+    {
+        SettingEntry* existing = it->second;
+        if (existing->kind != SETTING_KIND_INT)
+        {
+            LogSettingRegistrationConflict(
+                mod_entry->namespace_id.c_str(),
+                mod_entry->mod_id.c_str(),
+                def->setting_id,
+                EMC_ERR_CONFLICT,
+                "setting_id_already_registered_with_different_kind");
+            return EMC_ERR_CONFLICT;
+        }
+
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        if (existing->get_int != def->get_value || existing->set_int != def->set_value)
+        {
+            LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
+            exact_match = false;
+        }
+
+        if (existing->int_min_value != def->min_value
+            || existing->int_max_value != def->max_value
+            || existing->int_step != def->step
+            || !existing->int_use_custom_buttons
+            || !IntButtonLayoutsEqual(existing->int_dec_button_deltas, def->dec_button_deltas)
+            || !IntButtonLayoutsEqual(existing->int_inc_button_deltas, def->inc_button_deltas))
+        {
+            LogSettingWarning(
+                mod_entry,
+                def->setting_id,
+                "description",
+                "numeric_metadata_drift_ignored_using_canonical");
+            exact_match = false;
+        }
+
+        (void)exact_match;
+        return EMC_OK;
+    }
+
+    SettingEntry* setting = new SettingEntry();
+    InitializeSettingDefaults(setting);
+    setting->kind = SETTING_KIND_INT;
+    setting->setting_id = def->setting_id;
+    setting->label = def->label;
+    setting->description = def->description;
+    setting->user_data = def->user_data;
+    setting->get_int = def->get_value;
+    setting->set_int = def->set_value;
+    setting->int_min_value = def->min_value;
+    setting->int_max_value = def->max_value;
+    setting->int_step = def->step;
+    setting->int_use_custom_buttons = true;
+    std::memcpy(setting->int_dec_button_deltas, def->dec_button_deltas, sizeof(setting->int_dec_button_deltas));
+    std::memcpy(setting->int_inc_button_deltas, def->inc_button_deltas, sizeof(setting->int_inc_button_deltas));
     AppendNewSetting(mod_entry, setting);
     return EMC_OK;
 }

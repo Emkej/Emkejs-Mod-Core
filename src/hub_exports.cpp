@@ -455,6 +455,17 @@ EMC_Result __cdecl RegisterIntSettingEntry(EMC_ModHandle mod, const EMC_IntSetti
     return HubRegistry_RegisterIntSetting(mod, def);
 }
 
+EMC_Result __cdecl RegisterIntSettingV2Entry(EMC_ModHandle mod, const EMC_IntSettingDefV2* def)
+{
+    EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_int_setting_v2");
+    if (gate_result != EMC_OK)
+    {
+        return gate_result;
+    }
+
+    return HubRegistry_RegisterIntSettingV2(mod, def);
+}
+
 EMC_Result __cdecl RegisterFloatSettingEntry(EMC_ModHandle mod, const EMC_FloatSettingDefV1* def)
 {
     EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_float_setting");
@@ -487,7 +498,8 @@ const EMC_HubApiV1 kHubApiV1 = {
     &RegisterFloatSettingEntry,
     &RegisterActionRowEntry,
     &RegisterOptionsWindowInitObserverEntry,
-    &UnregisterOptionsWindowInitObserverEntry};
+    &UnregisterOptionsWindowInitObserverEntry,
+    &RegisterIntSettingV2Entry};
 
 #if defined(EMC_ENABLE_TEST_EXPORTS)
 const int32_t kModHubClientTestGetApiModeSuccess = 0;
@@ -1097,6 +1109,7 @@ const EMC_HubApiV1* GetModHubClientTableTestApi()
         &ModHubClientTableTestRegisterFloat,
         &ModHubClientTableTestRegisterAction,
         0,
+        0,
         0};
     return &kTableApi;
 }
@@ -1274,6 +1287,15 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_AdjustPendingIn
     return HubUi_AdjustPendingIntStep(namespace_id, mod_id, setting_id, step_delta);
 }
 
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_AdjustPendingIntDelta(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t delta)
+{
+    return HubUi_AdjustPendingIntDelta(namespace_id, mod_id, setting_id, delta);
+}
+
 extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetPendingIntFromText(
     const char* namespace_id,
     const char* mod_id,
@@ -1315,6 +1337,38 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetPendingIntSt
     *out_value = row_view.pending_int_value;
     *out_parse_error = row_view.int_text_parse_error ? 1 : 0;
     CopyStringToBuffer(row_view.pending_int_text, out_text, out_text_size);
+    return EMC_OK;
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetIntButtonLayout(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t* out_use_custom_buttons,
+    int32_t* out_dec_button_deltas,
+    uint32_t dec_button_deltas_count,
+    int32_t* out_inc_button_deltas,
+    uint32_t inc_button_deltas_count)
+{
+    if (out_use_custom_buttons == 0
+        || out_dec_button_deltas == 0
+        || dec_button_deltas_count < 3u
+        || out_inc_button_deltas == 0
+        || inc_button_deltas_count < 3u)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    HubUiRowView row_view = {};
+    if (!TryGetRowViewById(namespace_id, mod_id, setting_id, &row_view)
+        || row_view.kind != HUB_UI_ROW_KIND_INT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    *out_use_custom_buttons = row_view.int_use_custom_buttons ? 1 : 0;
+    std::memcpy(out_dec_button_deltas, row_view.int_dec_button_deltas, sizeof(row_view.int_dec_button_deltas));
+    std::memcpy(out_inc_button_deltas, row_view.int_inc_button_deltas, sizeof(row_view.int_inc_button_deltas));
     return EMC_OK;
 }
 
@@ -1699,6 +1753,11 @@ extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegi
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterIntCalls()
 {
     return ModHubDummyConsumer_GetRegisterIntCalls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterIntV2Calls()
+{
+    return ModHubDummyConsumer_GetRegisterIntV2Calls();
 }
 
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterFloatCalls()

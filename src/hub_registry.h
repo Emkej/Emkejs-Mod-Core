@@ -47,6 +47,9 @@ struct HubRegistrySettingView
     int32_t int_min_value;
     int32_t int_max_value;
     int32_t int_step;
+    bool int_use_custom_buttons;
+    int32_t int_dec_button_deltas[3];
+    int32_t int_inc_button_deltas[3];
 
     EMC_GetFloatCallback get_float;
     EMC_SetFloatCallback set_float;
@@ -69,6 +72,7 @@ EMC_Result __cdecl HubRegistry_RegisterMod(const EMC_ModDescriptorV1* desc, EMC_
 EMC_Result __cdecl HubRegistry_RegisterBoolSetting(EMC_ModHandle mod, const EMC_BoolSettingDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterKeybindSetting(EMC_ModHandle mod, const EMC_KeybindSettingDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterIntSetting(EMC_ModHandle mod, const EMC_IntSettingDefV1* def);
+EMC_Result __cdecl HubRegistry_RegisterIntSettingV2(EMC_ModHandle mod, const EMC_IntSettingDefV2* def);
 EMC_Result __cdecl HubRegistry_RegisterFloatSetting(EMC_ModHandle mod, const EMC_FloatSettingDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterActionRow(EMC_ModHandle mod, const EMC_ActionRowDefV1* def);
 void HubRegistry_ForEachSettingInOrder(HubRegistryVisitSettingFn visitor, void* user_data);

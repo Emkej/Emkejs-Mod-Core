@@ -49,6 +49,8 @@ public static class ModHubClientPhase8TableHarness
     private const int MODE_FAIL_ACTION = 5;
     private const int MODE_INVALID_ROW_KIND = 6;
     private const int MODE_NULL_ROW_DEF = 7;
+    private const int MODE_USE_INT_V2 = 8;
+    private const int MODE_USE_INT_V2_LEGACY_API = 9;
 
     private static void Assert(bool condition, string message)
     {
@@ -115,6 +117,7 @@ public static class ModHubClientPhase8TableHarness
             ClientTableGetIntRaw getBoolCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterBoolCalls");
             ClientTableGetIntRaw getKeybindCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterKeybindCalls");
             ClientTableGetIntRaw getIntCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterIntCalls");
+            ClientTableGetIntRaw getIntV2Calls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterIntV2Calls");
             ClientTableGetIntRaw getFloatCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterFloatCalls");
             ClientTableGetIntRaw getActionCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterActionCalls");
             ClientTableGetIntRaw getOrderChecks = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetOrderChecksPassed");
@@ -172,6 +175,29 @@ public static class ModHubClientPhase8TableHarness
             AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getActionCalls,
                 1, 1, 1, 0, 0, 0, "table_null_def");
             Assert(getOrderChecks() == 1, "table_null_def order check mismatch");
+
+            // Case 6: V2 int registration uses the new API entry point.
+            reset();
+            setMode(MODE_USE_INT_V2);
+            Assert(onStartup() == ATTACH_SUCCESS, "table_int_v2_success startup result mismatch");
+            Assert(useHubUi() == 1, "table_int_v2_success use_hub_ui mismatch");
+            Assert(lastFailure() == EMC_OK, "table_int_v2_success last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getActionCalls,
+                1, 1, 1, 0, 1, 1, "table_int_v2_success");
+            Assert(getIntV2Calls() == 1, "table_int_v2_success int_v2 count mismatch");
+            Assert(getOrderChecks() == 1, "table_int_v2_success order check mismatch");
+            Assert(getDescriptorChecks() == 1, "table_int_v2_success descriptor check mismatch");
+
+            // Case 7: V2 rows fail cleanly against a legacy host API size.
+            reset();
+            setMode(MODE_USE_INT_V2_LEGACY_API);
+            Assert(onStartup() == REGISTRATION_FAILED, "table_int_v2_legacy startup result mismatch");
+            Assert(useHubUi() == 0, "table_int_v2_legacy use_hub_ui mismatch");
+            Assert(lastFailure() == 3, "table_int_v2_legacy last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getActionCalls,
+                1, 1, 1, 0, 0, 0, "table_int_v2_legacy");
+            Assert(getIntV2Calls() == 0, "table_int_v2_legacy int_v2 should not be called");
+            Assert(getOrderChecks() == 1, "table_int_v2_legacy order check mismatch");
 
             return "PASS";
         }
