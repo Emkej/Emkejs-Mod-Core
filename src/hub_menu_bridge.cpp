@@ -1856,6 +1856,16 @@ int GetIntControlX(const HubUiRowView& row, int panel_width, int value_x)
 
 std::string FormatExactIntDeltaButtonCaption(int32_t delta)
 {
+    if (delta == -1)
+    {
+        return "-";
+    }
+
+    if (delta == 1)
+    {
+        return "+";
+    }
+
     std::ostringstream caption;
     if (delta > 0)
     {
@@ -3039,6 +3049,23 @@ void ClearActiveUiState()
     g_active_options_window = 0;
 }
 
+void BindHubPanelWheelDelegateBestEffort(MyGUI::Widget* hub_panel_widget)
+{
+    if (hub_panel_widget == 0)
+    {
+        return;
+    }
+
+    __try
+    {
+        hub_panel_widget->eventMouseWheel += MyGUI::newDelegate(&OnHubWidgetMouseWheelDebug);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        ErrorLog("Emkejs-Mod-Core: EnsureHubPanel step=bind_wheel faulted; continuing without panel wheel delegate");
+    }
+}
+
 bool BuildHubPanelUnsafe(OptionsWindow* self, HubPanelCreationResult* out_result)
 {
     MyGUI::TabItem* hub_tab = self->optionsTab->addItem(kHubTabName);
@@ -3064,7 +3091,8 @@ bool BuildHubPanelUnsafe(OptionsWindow* self, HubPanelCreationResult* out_result
         ErrorLog("Emkejs-Mod-Core: Mod Hub panel widget is null");
         return false;
     }
-    hub_panel_widget->eventMouseWheel += MyGUI::newDelegate(&OnHubWidgetMouseWheelDebug);
+
+    BindHubPanelWheelDelegateBestEffort(hub_panel_widget);
 
     hub_tab->setVisible(false);
     self->optionsTab->setItemData(hub_tab, hub_panel);
