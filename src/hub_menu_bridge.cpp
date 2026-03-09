@@ -1771,6 +1771,21 @@ std::string BuildNumericRangeHint(const HubUiRowView& row)
     return std::string();
 }
 
+std::string BuildNumericFooterText(const HubUiRowView& row)
+{
+    if (row.kind == HUB_UI_ROW_KIND_INT || row.kind == HUB_UI_ROW_KIND_FLOAT)
+    {
+        if (row.description != 0 && row.description[0] != '\0')
+        {
+            return row.description;
+        }
+
+        return BuildNumericRangeHint(row);
+    }
+
+    return std::string();
+}
+
 void CreateNumericRangeHintLabel(MyGUI::Widget* parent, int x, int y, int width, const HubUiRowView& row)
 {
     if (parent == 0)
@@ -1778,7 +1793,7 @@ void CreateNumericRangeHintLabel(MyGUI::Widget* parent, int x, int y, int width,
         return;
     }
 
-    const std::string hint = BuildNumericRangeHint(row);
+    const std::string hint = BuildNumericFooterText(row);
     if (hint.empty())
     {
         return;
@@ -1794,7 +1809,9 @@ void CreateNumericRangeHintLabel(MyGUI::Widget* parent, int x, int y, int width,
     }
 
     hint_text->setCaption(hint);
-    hint_text->setTextAlign(MyGUI::Align::Right);
+    hint_text->setTextAlign((row.description != 0 && row.description[0] != '\0')
+        ? MyGUI::Align::Left
+        : MyGUI::Align::Right);
     hint_text->setTextColour(MyGUI::Colour(0.56f, 0.56f, 0.56f, 1.0f));
 }
 
@@ -2025,12 +2042,21 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             const int button_gap = 4;
             const int value_box_width = 96;
             const int group_width = (button_width * 6) + (button_gap * 6) + value_box_width;
-            hint_x = panel_width - 24 - group_width;
-            if (hint_x < value_x - 190)
+            const bool use_description_footer = row.description != 0 && row.description[0] != '\0';
+            if (use_description_footer)
             {
-                hint_x = value_x - 190;
+                hint_x = label_x + 12;
+                hint_width = panel_width - 80;
             }
-            hint_width = group_width;
+            else
+            {
+                hint_x = panel_width - 24 - group_width;
+                if (hint_x < value_x - 190)
+                {
+                    hint_x = value_x - 190;
+                }
+                hint_width = group_width;
+            }
         }
         else
         {
