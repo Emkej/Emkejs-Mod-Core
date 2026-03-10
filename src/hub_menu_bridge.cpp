@@ -144,6 +144,7 @@ MyGUI::Button* g_active_hub_scroll_line_up_button = 0;
 MyGUI::Button* g_active_hub_scroll_line_down_button = 0;
 MyGUI::Button* g_active_hub_scroll_page_up_button = 0;
 MyGUI::Button* g_active_hub_scroll_page_down_button = 0;
+MyGUI::TabControl* g_bound_options_tab_for_autofocus = 0;
 struct PendingHubSearchShortcut
 {
     bool active;
@@ -509,7 +510,7 @@ void EnsureEmcSettingsRegistered()
     const EMC_BoolSettingDefV1 auto_focus_search_setting = {
         kEmcAutoFocusSearchSettingId,
         "Auto focus search on open",
-        "Move keyboard focus to the Mod Hub search box when the Options window opens.",
+        "Move keyboard focus to the Mod Hub search box when the Mod Hub tab is opened.",
         0,
         &GetEmcAutoFocusSearchOnOpen,
         &SetEmcAutoFocusSearchOnOpen
@@ -1227,6 +1228,8 @@ void EnsureSelectedNamespace(const std::vector<RenderNamespaceGroup>& namespaces
 
 void RebuildHubPanelWidgets();
 void SetHubScrollOffset(int offset);
+void FocusHubSearchBoxBestEffort();
+bool IsModHubTabCurrentlySelected(OptionsWindow* self);
 
 void ResetTrackedModifierState()
 {}
@@ -1632,6 +1635,37 @@ bool HandleHubSearchCtrlShortcut(InputHandler* input_handler, OIS::KeyCode key_c
     const std::string updated_query = updated.asUTF8();
     ApplyHubSearchQueryAndRebuild(namespace_id, updated_query, delete_start);
     return true;
+}
+
+bool HandleHubSearchFocusShortcut(InputHandler* input_handler, OIS::KeyCode key_code)
+{
+    if (!g_hub_enabled || !HubUi_IsOptionsWindowOpen() || !IsModHubTabCurrentlySelected(g_active_options_window))
+    {
+        return false;
+    }
+
+    MyGUI::InputManager* input = MyGUI::InputManager::getInstancePtr();
+    MyGUI::Widget* focused_widget = input != 0 ? input->getKeyFocusWidget() : 0;
+    const bool search_box_already_focused = focused_widget == g_active_hub_search_box;
+
+    if (key_code == OIS::KC_SLASH)
+    {
+        if (search_box_already_focused)
+        {
+            return false;
+        }
+
+        FocusHubSearchBoxBestEffort();
+        return true;
+    }
+
+    if (key_code == OIS::KC_F && IsCtrlModifierDown(input_handler))
+    {
+        FocusHubSearchBoxBestEffort();
+        return true;
+    }
+
+    return false;
 }
 
 void OnHubSearchTextChanged(MyGUI::EditBox* sender)
@@ -3420,6 +3454,70 @@ void BindHubPanelWheelDelegateBestEffort(MyGUI::Widget* hub_panel_widget)
     }
 }
 
+void FocusHubSearchBoxBestEffort_WithSeh(MyGUI::InputManager* input, MyGUI::EditBox* search_box)
+{
+    __try
+    {
+        input->setKeyFocusWidget(search_box);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        ErrorLog("Emkejs-Mod-Core: Mod Hub search auto-focus faulted; continuing without focus change");
+    }
+}
+
+void FocusHubSearchBoxBestEffort()
+{
+    if (g_active_hub_search_box == 0)
+    {
+        g_restore_search_focus_after_rebuild = true;
+        g_restore_search_focus_namespace_id.clear();
+        return;
+    }
+
+    MyGUI::InputManager* input = MyGUI::InputManager::getInstancePtr();
+    if (input == 0)
+    {
+        return;
+    }
+
+    FocusHubSearchBoxBestEffort_WithSeh(input, g_active_hub_search_box);
+}
+
+void OnOptionsTabChangeSelect(MyGUI::TabControl* sender, size_t index)
+{
+    if (!g_hub_enabled || !g_emc_auto_focus_search_on_open || sender == 0)
+    {
+        return;
+    }
+
+    const MyGUI::UString& selected_name = sender->getItemNameAt(index);
+    if (selected_name != kHubTabName)
+    {
+        return;
+    }
+
+    FocusHubSearchBoxBestEffort();
+}
+
+void BindHubTabSelectDelegateBestEffort(MyGUI::TabControl* options_tab)
+{
+    if (options_tab == 0 || g_bound_options_tab_for_autofocus == options_tab)
+    {
+        return;
+    }
+
+    __try
+    {
+        options_tab->eventTabChangeSelect += MyGUI::newDelegate(&OnOptionsTabChangeSelect);
+        g_bound_options_tab_for_autofocus = options_tab;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        ErrorLog("Emkejs-Mod-Core: EnsureHubPanel step=bind_tab_select faulted; continuing without Mod Hub auto-focus delegate");
+    }
+}
+
 bool BuildHubPanelUnsafe(OptionsWindow* self, HubPanelCreationResult* out_result, volatile long* out_fault_stage)
 {
     if (out_fault_stage != 0)
@@ -3514,6 +3612,18 @@ bool TryBuildHubPanel(OptionsWindow* self, HubPanelCreationResult* out_result)
     }
 }
 
+bool IsModHubTabCurrentlySelected(OptionsWindow* self)
+{
+    if (self == 0 || self->optionsTab == 0)
+    {
+        return false;
+    }
+
+    const size_t selected_index = self->optionsTab->getIndexSelected();
+    const MyGUI::UString& selected_name = self->optionsTab->getItemNameAt(selected_index);
+    return selected_name == kHubTabName;
+}
+
 bool EnsureHubPanel(OptionsWindow* self)
 {
     if (self == 0 || self->optionsTab == 0 || g_ptrKenshiGUI == 0 || g_fnCreateDatapanel == 0)
@@ -3558,6 +3668,10 @@ void OptionsWindowInitHook(OptionsWindow* self)
     }
 
     RebuildHubPanelWidgets();
+    if (g_emc_auto_focus_search_on_open && IsModHubTabCurrentlySelected(self))
+    {
+        FocusHubSearchBoxBestEffort();
+    }
 }
 
 void OptionsWindowSaveHook(OptionsWindow* self)
@@ -3583,6 +3697,11 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
                 RebuildHubPanelWidgets();
                 return;
             }
+        }
+
+        if (HandleHubSearchFocusShortcut(thisptr, key_code))
+        {
+            return;
         }
 
         if (HandleHubSearchCtrlShortcut(thisptr, key_code))
@@ -3676,6 +3795,10 @@ void HubMenuBridge_OnOptionsWindowInit()
     }
 
     EnsureEmcSettingsRegistered();
+    if (g_active_options_window != 0)
+    {
+        BindHubTabSelectDelegateBestEffort(g_active_options_window->optionsTab);
+    }
     HubUi_SetOptionsWindowOpen(true);
     HubRegistry_SetRegistrationLocked(true);
     HubUi_RebuildSessionModelFromRegistry();
