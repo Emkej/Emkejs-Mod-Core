@@ -1,5 +1,6 @@
 #include <Debug.h>
 
+#include "src/logging.h"
 #include "src/hub_menu_bridge.h"
 
 #include <kenshi/Kenshi.h>
@@ -58,7 +59,7 @@ bool ResolveSupportedRuntime(unsigned int* out_platform, std::string* out_versio
     }
     __except (EXCEPTION_EXECUTE_HANDLER)
     {
-        ErrorLog("Emkejs-Mod-Core: GetKenshiVersion() faulted during startup");
+        LogErrorLine("GetKenshiVersion() faulted during startup");
         return false;
     }
 #endif
@@ -67,23 +68,24 @@ bool ResolveSupportedRuntime(unsigned int* out_platform, std::string* out_versio
 
 __declspec(dllexport) void startPlugin()
 {
-    DebugLog("Emkejs-Mod-Core: startPlugin()");
+    LogInfoLine("startPlugin()");
+    LoadLoggingConfig();
 
     unsigned int platform = KenshiLib::BinaryVersion::UNKNOWN;
     std::string version;
     if (!ResolveSupportedRuntime(&platform, &version))
     {
-        ErrorLog("Emkejs-Mod-Core: unsupported Kenshi version/platform");
+        LogErrorLine("unsupported Kenshi version/platform");
         return;
     }
     if (!HubMenuBridge_InstallHooks(platform, version))
     {
         HubMenuBridge_SetHubEnabled(false);
-        ErrorLog("Emkejs-Mod-Core: failed to install Mod Hub hooks; hub path disabled");
+        LogErrorLine("failed to install Mod Hub hooks; hub path disabled");
         return;
     }
 
-    DebugLog("Emkejs-Mod-Core INFO: startup complete");
+    LogInfoLine("startup complete");
 }
 
 BOOL APIENTRY DllMain(HMODULE, DWORD, LPVOID)

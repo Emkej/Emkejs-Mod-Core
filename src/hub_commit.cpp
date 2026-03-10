@@ -1,5 +1,6 @@
 #include "hub_commit.h"
 
+#include "logging.h"
 #include "hub_ui.h"
 
 #include <Debug.h>
@@ -79,7 +80,7 @@ void LogCommitSummary(const HubCommitSummary& summary)
          << " failed=" << summary.failed
          << " skipped=" << summary.skipped
          << " reason=" << SkipReasonToText(summary.skip_reason);
-    DebugLog(line.str().c_str());
+    LogDebugLine(line.str());
 }
 
 bool IsBoolValueValid(int32_t value)

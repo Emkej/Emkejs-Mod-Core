@@ -48,7 +48,7 @@ After deploy, expected files:
 - `[Kenshi install dir]\mods\Emkejs-Mod-Core\mod-config.json`
 
 ## Config
-`mod-config.json` is currently a minimal placeholder for future plugin settings.
+`mod-config.json` now includes logging flags (`debugLogging`, `debugSearchLogging`, `debugBindingLogging`) that default to `false`.
 
 ## Load Order Recommendation (Mod Hub Consumers)
 - If other mods use this Mod Hub integration, place `Emkejs-Mod-Core` before those consumer mods in load order.

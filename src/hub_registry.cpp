@@ -1,4 +1,5 @@
 #include "hub_registry.h"
+#include "logging.h"
 
 #include <Debug.h>
 
@@ -120,7 +121,7 @@ void LogRegistrationWarning(
          << " setting=" << SafeLogValue(setting_id)
          << " field=" << SafeLogValue(field)
          << " message=" << SafeLogValue(message);
-    DebugLog(line.str().c_str());
+    LogDebugLine(line.str());
 }
 
 void LogSettingRegistrationConflict(

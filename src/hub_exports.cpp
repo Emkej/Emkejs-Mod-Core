@@ -4,6 +4,7 @@
 #include "hub_menu_bridge.h"
 #include "hub_registry.h"
 #include "hub_ui.h"
+#include "logging.h"
 #include "mod_hub_dummy_consumer.h"
 
 #include <Debug.h>
@@ -377,7 +378,7 @@ void LogGetApiAliasDeprecatedOnce(const char* alias_name)
         return;
     }
 
-    DebugLog("event=hub_get_api_alias_deprecated alias=EMC_ModHub_GetApi_v1_compat canonical=EMC_ModHub_GetApi removal_target=v1.2.0");
+    LogDebugLine("event=hub_get_api_alias_deprecated alias=EMC_ModHub_GetApi_v1_compat canonical=EMC_ModHub_GetApi removal_target=v1.2.0");
 }
 
 void LogRegistrationRejected(const char* api_name, const char* reason, EMC_Result result, const char* message)

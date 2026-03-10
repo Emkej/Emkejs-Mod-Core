@@ -58,7 +58,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;EMC_MOD_HUB_BUILD_DLL;EMC_ENABLE_TEST_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;EMC_MOD_HUB_BUILD_DLL;EMC_ENABLE_TEST_EXPORTS;PLUGIN_ENABLE_VERBOSE_DIAGNOSTICS=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <ForcedIncludeFiles>$(KENSHILIB_DIR)\Include\kenshi\util\OgreUnordered.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
     </ClCompile>
@@ -88,6 +88,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Emkejs-Mod-Core.cpp" />
+    <ClCompile Include="src\logging.cpp" />
     <ClCompile Include="src\mod_hub_dummy_consumer.cpp" />
     <ClCompile Include="src\mod_hub_client.cpp" />
     <ClCompile Include="src\hub_commit.cpp" />
@@ -99,6 +100,7 @@
   <ItemGroup>
     <ClInclude Include="include\emc\mod_hub_api.h" />
     <ClInclude Include="include\emc\mod_hub_client.h" />
+    <ClInclude Include="src\logging.h" />
     <ClInclude Include="src\mod_hub_dummy_consumer.h" />
     <ClInclude Include="src\hub_commit.h" />
     <ClInclude Include="src\hub_menu_bridge.h" />
