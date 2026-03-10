@@ -103,6 +103,8 @@ struct HubUiNamespaceTab
 bool g_options_window_open = false;
 std::vector<HubUiNamespaceTab*> g_tabs_in_order;
 std::vector<HubUiSettingRow*> g_rows_in_order;
+bool g_search_persistence_enabled = true;
+std::map<std::string, std::string> g_persisted_search_queries;
 
 const char* SafeLogValue(const char* value)
 {
@@ -737,6 +739,22 @@ void ClearTabsAndRows()
     g_rows_in_order.clear();
 }
 
+std::string ResolveInitialNamespaceSearchQuery(const std::string& namespace_id)
+{
+    if (!g_search_persistence_enabled)
+    {
+        return "";
+    }
+
+    std::map<std::string, std::string>::const_iterator it = g_persisted_search_queries.find(namespace_id);
+    if (it == g_persisted_search_queries.end())
+    {
+        return "";
+    }
+
+    return it->second;
+}
+
 HubUiSettingRow* FindRow(const char* namespace_id, const char* mod_id, const char* setting_id)
 {
     if (namespace_id == nullptr || mod_id == nullptr || setting_id == nullptr)
@@ -943,7 +961,7 @@ void __cdecl BuildSessionRow(
         tab = new HubUiNamespaceTab();
         tab->namespace_id = namespace_view->namespace_id;
         tab->namespace_display_name = namespace_view->namespace_display_name;
-        tab->search_query.clear();
+        tab->search_query = ResolveInitialNamespaceSearchQuery(tab->namespace_id);
         g_tabs_in_order.push_back(tab);
         (*tabs_by_id)[tab->namespace_id] = tab;
     }
@@ -1177,6 +1195,20 @@ void HubUi_PerformInitialSync()
     }
 }
 
+void HubUi_SetSearchPersistenceEnabled(bool is_enabled)
+{
+    g_search_persistence_enabled = is_enabled;
+    if (!g_search_persistence_enabled)
+    {
+        g_persisted_search_queries.clear();
+    }
+}
+
+bool HubUi_IsSearchPersistenceEnabled()
+{
+    return g_search_persistence_enabled;
+}
+
 bool HubUi_IsAnyKeybindCaptureActive()
 {
     for (size_t row_index = 0; row_index < g_rows_in_order.size(); ++row_index)
@@ -1229,6 +1261,14 @@ EMC_Result HubUi_SetNamespaceSearchQuery(const char* namespace_id, const char* s
     }
 
     tab->search_query = search_query != nullptr ? search_query : "";
+    if (!g_search_persistence_enabled || tab->search_query.empty())
+    {
+        g_persisted_search_queries.erase(tab->namespace_id);
+    }
+    else
+    {
+        g_persisted_search_queries[tab->namespace_id] = tab->search_query;
+    }
     return EMC_OK;
 }
 

@@ -65,6 +65,8 @@ bool HubUi_IsOptionsWindowOpen();
 void HubUi_ClearSessionModel();
 void HubUi_RebuildSessionModelFromRegistry();
 void HubUi_PerformInitialSync();
+void HubUi_SetSearchPersistenceEnabled(bool is_enabled);
+bool HubUi_IsSearchPersistenceEnabled();
 
 bool HubUi_IsAnyKeybindCaptureActive();
 

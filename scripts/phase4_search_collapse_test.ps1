@@ -38,7 +38,13 @@ public static class HubPhase4SearchCollapseHarness
     public delegate void MenuCloseRaw();
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void MenuSaveRaw();
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int UiSetNamespaceSearchQueryRaw(IntPtr namespaceId, IntPtr searchQuery);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int UiSetPendingBoolRaw(IntPtr namespaceId, IntPtr modId, IntPtr settingId, int value);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int UiSetModCollapsedRaw(IntPtr namespaceId, IntPtr modId, int isCollapsed);
@@ -216,6 +222,7 @@ public static class HubPhase4SearchCollapseHarness
         MenuSetHubEnabledRaw setHubEnabled = null;
         MenuOpenRaw openOptions = null;
         MenuCloseRaw closeOptions = null;
+        MenuSaveRaw saveOptions = null;
 
         try
         {
@@ -239,8 +246,10 @@ public static class HubPhase4SearchCollapseHarness
             IntPtr setAttachProc = GetProcAddress(module, "EMC_ModHub_Test_SetRegistryAttachEnabled");
             IntPtr setHubEnabledProc = GetProcAddress(module, "EMC_ModHub_Test_Menu_SetHubEnabled");
             IntPtr openOptionsProc = GetProcAddress(module, "EMC_ModHub_Test_Menu_OpenOptionsWindow");
+            IntPtr saveOptionsProc = GetProcAddress(module, "EMC_ModHub_Test_Menu_SaveOptionsWindow");
             IntPtr closeOptionsProc = GetProcAddress(module, "EMC_ModHub_Test_Menu_CloseOptionsWindow");
             IntPtr setSearchProc = GetProcAddress(module, "EMC_ModHub_Test_UI_SetNamespaceSearchQuery");
+            IntPtr setPendingBoolProc = GetProcAddress(module, "EMC_ModHub_Test_UI_SetPendingBool");
             IntPtr setCollapsedProc = GetProcAddress(module, "EMC_ModHub_Test_UI_SetModCollapsed");
             IntPtr getCollapsedProc = GetProcAddress(module, "EMC_ModHub_Test_UI_GetModCollapsed");
             IntPtr doesMatchProc = GetProcAddress(module, "EMC_ModHub_Test_UI_DoesSettingMatchNamespaceSearch");
@@ -249,8 +258,10 @@ public static class HubPhase4SearchCollapseHarness
             Assert(setAttachProc != IntPtr.Zero, "Missing EMC_ModHub_Test_SetRegistryAttachEnabled export");
             Assert(setHubEnabledProc != IntPtr.Zero, "Missing EMC_ModHub_Test_Menu_SetHubEnabled export");
             Assert(openOptionsProc != IntPtr.Zero, "Missing EMC_ModHub_Test_Menu_OpenOptionsWindow export");
+            Assert(saveOptionsProc != IntPtr.Zero, "Missing EMC_ModHub_Test_Menu_SaveOptionsWindow export");
             Assert(closeOptionsProc != IntPtr.Zero, "Missing EMC_ModHub_Test_Menu_CloseOptionsWindow export");
             Assert(setSearchProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_SetNamespaceSearchQuery export");
+            Assert(setPendingBoolProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_SetPendingBool export");
             Assert(setCollapsedProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_SetModCollapsed export");
             Assert(getCollapsedProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_GetModCollapsed export");
             Assert(doesMatchProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_DoesSettingMatchNamespaceSearch export");
@@ -259,8 +270,10 @@ public static class HubPhase4SearchCollapseHarness
             setRegistryAttachEnabled = (TestSetRegistryAttachEnabledRaw)Marshal.GetDelegateForFunctionPointer(setAttachProc, typeof(TestSetRegistryAttachEnabledRaw));
             setHubEnabled = (MenuSetHubEnabledRaw)Marshal.GetDelegateForFunctionPointer(setHubEnabledProc, typeof(MenuSetHubEnabledRaw));
             openOptions = (MenuOpenRaw)Marshal.GetDelegateForFunctionPointer(openOptionsProc, typeof(MenuOpenRaw));
+            saveOptions = (MenuSaveRaw)Marshal.GetDelegateForFunctionPointer(saveOptionsProc, typeof(MenuSaveRaw));
             closeOptions = (MenuCloseRaw)Marshal.GetDelegateForFunctionPointer(closeOptionsProc, typeof(MenuCloseRaw));
             UiSetNamespaceSearchQueryRaw setSearch = (UiSetNamespaceSearchQueryRaw)Marshal.GetDelegateForFunctionPointer(setSearchProc, typeof(UiSetNamespaceSearchQueryRaw));
+            UiSetPendingBoolRaw setPendingBool = (UiSetPendingBoolRaw)Marshal.GetDelegateForFunctionPointer(setPendingBoolProc, typeof(UiSetPendingBoolRaw));
             UiSetModCollapsedRaw setCollapsed = (UiSetModCollapsedRaw)Marshal.GetDelegateForFunctionPointer(setCollapsedProc, typeof(UiSetModCollapsedRaw));
             UiGetModCollapsedRaw getCollapsed = (UiGetModCollapsedRaw)Marshal.GetDelegateForFunctionPointer(getCollapsedProc, typeof(UiGetModCollapsedRaw));
             UiDoesSettingMatchNamespaceSearchRaw doesMatch = (UiDoesSettingMatchNamespaceSearchRaw)Marshal.GetDelegateForFunctionPointer(doesMatchProc, typeof(UiDoesSettingMatchNamespaceSearchRaw));
@@ -312,6 +325,8 @@ public static class HubPhase4SearchCollapseHarness
             IntPtr settingGammaId = AllocUtf8(allocations, "gamma_guard");
             IntPtr settingGammaLabel = AllocUtf8(allocations, "Guard stance");
             IntPtr settingGammaDesc = AllocUtf8(allocations, "Gamma setting");
+            IntPtr modEmcId = AllocUtf8(allocations, "emkejs_mod_core");
+            IntPtr settingPersistSearchId = AllocUtf8(allocations, "persist_search_until_cleared");
 
             EMC_ModDescriptorV1 modAlphaDesc = new EMC_ModDescriptorV1
             {
@@ -407,6 +422,12 @@ public static class HubPhase4SearchCollapseHarness
 
             openOptions();
 
+            r = setPendingBool(nsQolId, modEmcId, settingPersistSearchId, 1);
+            ExpectResult(r, EMC_OK, "set_pending_bool(true) failed for EMC search persistence");
+            saveOptions();
+            closeOptions();
+            openOptions();
+
             AssertSearchMatch(doesMatch, nsQolId, modAlphaId, settingAlphaId, true, "default empty query / alpha");
             AssertSearchMatch(doesMatch, nsQolId, modBetaId, settingBetaId, true, "default empty query / beta");
             AssertSearchMatch(doesMatch, nsCombatId, modGammaId, settingGammaId, true, "default empty query / gamma");
@@ -467,6 +488,22 @@ public static class HubPhase4SearchCollapseHarness
             AssertSearchMatch(doesMatch, nsCombatId, modGammaId, settingGammaId, true, "ns2 independent filter");
 
             closeOptions();
+            openOptions();
+            AssertSearchMatch(doesMatch, nsQolId, modAlphaId, settingAlphaId, true, "session search persists after reopen / alpha");
+            AssertSearchMatch(doesMatch, nsQolId, modBetaId, settingBetaId, false, "session search persists after reopen / beta");
+            AssertSearchMatch(doesMatch, nsCombatId, modGammaId, settingGammaId, true, "session search persists after reopen / other namespace");
+
+            r = setPendingBool(nsQolId, modEmcId, settingPersistSearchId, 0);
+            ExpectResult(r, EMC_OK, "set_pending_bool(false) failed for EMC search persistence");
+            saveOptions();
+            closeOptions();
+            openOptions();
+
+            AssertSearchMatch(doesMatch, nsQolId, modAlphaId, settingAlphaId, true, "search cleared after reopen when persistence disabled / alpha");
+            AssertSearchMatch(doesMatch, nsQolId, modBetaId, settingBetaId, true, "search cleared after reopen when persistence disabled / beta");
+            AssertSearchMatch(doesMatch, nsCombatId, modGammaId, settingGammaId, true, "search cleared after reopen when persistence disabled / gamma");
+
+            closeOptions();
             return "PASS: phase4 search/filter/collapse matrix completed";
         }
         finally
@@ -524,5 +561,19 @@ if ([string]::IsNullOrWhiteSpace($resolvedKenshiPath) -and (Test-Path "H:\SteamL
     $resolvedKenshiPath = "H:\SteamLibrary\steamapps\common\Kenshi"
 }
 
-$result = [HubPhase4SearchCollapseHarness]::Run($DllPath, $resolvedKenshiPath)
-Write-Host $result
+$resolvedDllPath = (Resolve-Path $DllPath).Path
+$configDirectory = [System.IO.Path]::GetDirectoryName($resolvedDllPath)
+$configPath = Join-Path $configDirectory "emkejs-mod-core.ini"
+if (Test-Path $configPath) {
+    Remove-Item $configPath -Force
+}
+
+try {
+    $result = [HubPhase4SearchCollapseHarness]::Run($resolvedDllPath, $resolvedKenshiPath)
+    Write-Host $result
+}
+finally {
+    if (Test-Path $configPath) {
+        Remove-Item $configPath -Force
+    }
+}

@@ -88,6 +88,13 @@ const char* kTextSkin = "Kenshi_TextboxStandardText";
 const char* kEditBoxSkin = "Kenshi_EditBox";
 const char* kNoMatchesText = "No matches in this tab. Try checking other tabs?";
 const char* kSearchHintText = "Search settings, or use mod:term (example: loot:enable)";
+const char* kEmcNamespaceId = "emkej.qol";
+const char* kEmcNamespaceDisplayName = "Emkej QoL";
+const char* kEmcModId = "emkejs_mod_core";
+const char* kEmcModDisplayName = "Emkejs Mod Core";
+const char* kEmcConfigSectionName = "mod_hub";
+const char* kEmcConfigFileName = "emkejs-mod-core.ini";
+const char* kEmcPersistSearchSettingId = "persist_search_until_cleared";
 
 bool g_hub_enabled = true;
 bool g_hooks_installed = false;
@@ -98,6 +105,7 @@ FnOptionsInit g_fnOptionsInit = 0;
 FnOptionsSave g_fnOptionsSave = 0;
 FnOptionsInit g_fnOptionsInitOrig = 0;
 FnOptionsSave g_fnOptionsSaveOrig = 0;
+void (*InputHandler_keyDownEvent_orig)(InputHandler*, OIS::KeyCode) = 0;
 ForgottenGUI* g_ptrKenshiGUI = 0;
 
 OptionsWindow* g_active_options_window = 0;
@@ -108,6 +116,11 @@ std::vector<MyGUI::Widget*> g_dynamic_widgets;
 bool g_logged_missing_edit_box_skin = false;
 bool g_logged_missing_scrollbar_skin = false;
 bool g_logged_missing_scroll_view_skin = false;
+bool g_emc_config_loaded = false;
+bool g_emc_settings_registered = false;
+bool g_emc_persist_search_until_cleared = true;
+std::string g_emc_config_path;
+EMC_ModHandle g_emc_mod_handle = 0;
 bool g_restore_search_focus_after_rebuild = false;
 std::string g_restore_search_focus_namespace_id;
 bool g_restore_search_cursor_after_rebuild = false;
@@ -191,6 +204,194 @@ void OnHubWidgetMouseWheelDebug(MyGUI::Widget* sender, int rel);
 void OnHubScrollBarPositionChanged(MyGUI::ScrollBar* sender, size_t position);
 void OnHubSearchKeyPressed(MyGUI::Widget* sender, MyGUI::KeyCode key_code, MyGUI::Char character);
 void OnHubSearchKeyReleased(MyGUI::Widget* sender, MyGUI::KeyCode key_code);
+
+void CopyHubErrorMessage(char* err_buf, uint32_t err_buf_size, const char* message)
+{
+    if (err_buf == 0 || err_buf_size == 0u)
+    {
+        return;
+    }
+
+    err_buf[0] = '\0';
+    if (message == 0 || message[0] == '\0')
+    {
+        return;
+    }
+
+    const size_t copy_length = static_cast<size_t>(err_buf_size - 1u);
+    std::strncpy(err_buf, message, copy_length);
+    err_buf[copy_length] = '\0';
+}
+
+std::string ResolveEmcConfigPath()
+{
+    HMODULE module = 0;
+    if (!GetModuleHandleExA(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCSTR>(&ResolveEmcConfigPath),
+            &module))
+    {
+        return "";
+    }
+
+    char module_path[MAX_PATH] = {};
+    const DWORD module_path_len = GetModuleFileNameA(module, module_path, MAX_PATH);
+    if (module_path_len == 0 || module_path_len >= MAX_PATH)
+    {
+        return "";
+    }
+
+    std::string config_path(module_path, module_path_len);
+    const size_t separator = config_path.find_last_of("\\/");
+    if (separator == std::string::npos)
+    {
+        return kEmcConfigFileName;
+    }
+
+    config_path.erase(separator + 1u);
+    config_path += kEmcConfigFileName;
+    return config_path;
+}
+
+void EnsureEmcConfigLoaded()
+{
+    if (g_emc_config_loaded)
+    {
+        HubUi_SetSearchPersistenceEnabled(g_emc_persist_search_until_cleared);
+        return;
+    }
+
+    g_emc_config_loaded = true;
+    g_emc_persist_search_until_cleared = true;
+    g_emc_config_path = ResolveEmcConfigPath();
+    if (!g_emc_config_path.empty())
+    {
+        g_emc_persist_search_until_cleared =
+            GetPrivateProfileIntA(
+                kEmcConfigSectionName,
+                kEmcPersistSearchSettingId,
+                1,
+                g_emc_config_path.c_str()) != 0;
+    }
+
+    HubUi_SetSearchPersistenceEnabled(g_emc_persist_search_until_cleared);
+}
+
+bool SaveEmcConfig(const char** out_error)
+{
+    if (out_error != 0)
+    {
+        *out_error = "";
+    }
+
+    EnsureEmcConfigLoaded();
+    if (g_emc_config_path.empty())
+    {
+        if (out_error != 0)
+        {
+            *out_error = "config_path_unavailable";
+        }
+        return false;
+    }
+
+    if (!WritePrivateProfileStringA(
+            kEmcConfigSectionName,
+            kEmcPersistSearchSettingId,
+            g_emc_persist_search_until_cleared ? "1" : "0",
+            g_emc_config_path.c_str()))
+    {
+        if (out_error != 0)
+        {
+            *out_error = "config_write_failed";
+        }
+        return false;
+    }
+
+    return true;
+}
+
+EMC_Result __cdecl GetEmcPersistSearchUntilCleared(void*, int32_t* out_value)
+{
+    if (out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    *out_value = g_emc_persist_search_until_cleared ? 1 : 0;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetEmcPersistSearchUntilCleared(void*, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    if (value != 0 && value != 1)
+    {
+        CopyHubErrorMessage(err_buf, err_buf_size, "value_must_be_bool");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    const bool previous_value = g_emc_persist_search_until_cleared;
+    g_emc_persist_search_until_cleared = value != 0;
+
+    const char* save_error = "";
+    if (!SaveEmcConfig(&save_error))
+    {
+        g_emc_persist_search_until_cleared = previous_value;
+        HubUi_SetSearchPersistenceEnabled(previous_value);
+        CopyHubErrorMessage(err_buf, err_buf_size, save_error);
+        return EMC_ERR_CALLBACK_FAILED;
+    }
+
+    HubUi_SetSearchPersistenceEnabled(g_emc_persist_search_until_cleared);
+    return EMC_OK;
+}
+
+void EnsureEmcSettingsRegistered()
+{
+    EnsureEmcConfigLoaded();
+    if (g_emc_settings_registered)
+    {
+        return;
+    }
+
+    const EMC_ModDescriptorV1 mod_desc = {
+        kEmcNamespaceId,
+        kEmcNamespaceDisplayName,
+        kEmcModId,
+        kEmcModDisplayName,
+        0
+    };
+
+    const EMC_Result register_mod_result = HubRegistry_RegisterMod(&mod_desc, &g_emc_mod_handle);
+    if (register_mod_result != EMC_OK || g_emc_mod_handle == 0)
+    {
+        std::ostringstream line;
+        line << "Emkejs-Mod-Core: failed to register internal Mod Hub settings mod result=" << register_mod_result;
+        ErrorLog(line.str().c_str());
+        return;
+    }
+
+    const EMC_BoolSettingDefV1 persist_search_setting = {
+        kEmcPersistSearchSettingId,
+        "Persist search until cleared",
+        "Keep Mod Hub search text when Options is closed and reopened during the current game session. Search resets when Kenshi exits.",
+        0,
+        &GetEmcPersistSearchUntilCleared,
+        &SetEmcPersistSearchUntilCleared
+    };
+
+    const EMC_Result register_setting_result = HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &persist_search_setting);
+    if (register_setting_result != EMC_OK)
+    {
+        std::ostringstream line;
+        line << "Emkejs-Mod-Core: failed to register internal search persistence setting result=" << register_setting_result;
+        ErrorLog(line.str().c_str());
+        return;
+    }
+
+    g_emc_settings_registered = true;
+}
 
 void LogHubScrollDebug(const std::string& message)
 {
@@ -3218,6 +3419,31 @@ void OptionsWindowSaveHook(OptionsWindow* self)
     ClearActiveUiState();
 }
 
+void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code)
+{
+    if (g_hub_enabled && HubUi_IsOptionsWindowOpen())
+    {
+        if (HubUi_IsAnyKeybindCaptureActive())
+        {
+            if (HubUi_ApplyCapturedKeycodeToActiveRow(static_cast<int32_t>(key_code)) == EMC_OK)
+            {
+                RebuildHubPanelWidgets();
+                return;
+            }
+        }
+
+        if (HandleHubSearchCtrlShortcut(thisptr, key_code))
+        {
+            return;
+        }
+    }
+
+    if (InputHandler_keyDownEvent_orig != 0)
+    {
+        InputHandler_keyDownEvent_orig(thisptr, key_code);
+    }
+}
+
 }
 
 void HubMenuBridge_SetHubEnabled(bool is_enabled)
@@ -3268,6 +3494,15 @@ bool HubMenuBridge_InstallHooks(unsigned int platform, const std::string& versio
         return false;
     }
 
+    if (KenshiLib::SUCCESS != KenshiLib::AddHook(
+            KenshiLib::GetRealAddress(&InputHandler::keyDownEvent),
+            InputHandler_keyDownEvent_hook,
+            &InputHandler_keyDownEvent_orig))
+    {
+        ErrorLog("Emkejs-Mod-Core: Could not hook InputHandler::keyDownEvent");
+        return false;
+    }
+
     g_hooks_installed = true;
     return true;
 }
@@ -3287,6 +3522,7 @@ void HubMenuBridge_OnOptionsWindowInit()
         return;
     }
 
+    EnsureEmcSettingsRegistered();
     HubUi_SetOptionsWindowOpen(true);
     HubRegistry_SetRegistrationLocked(true);
     HubUi_RebuildSessionModelFromRegistry();
