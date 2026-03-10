@@ -194,7 +194,7 @@ void OnHubSearchKeyReleased(MyGUI::Widget* sender, MyGUI::KeyCode key_code);
 
 void LogHubScrollDebug(const std::string& message)
 {
-    DebugLog(std::string("Emkejs-Mod-Core DEBUG: hub_scroll ") + message);
+    (void)message;
 }
 
 std::string DescribeHubWidget(MyGUI::Widget* widget)
@@ -3066,8 +3066,12 @@ void BindHubPanelWheelDelegateBestEffort(MyGUI::Widget* hub_panel_widget)
     }
 }
 
-bool BuildHubPanelUnsafe(OptionsWindow* self, HubPanelCreationResult* out_result)
+bool BuildHubPanelUnsafe(OptionsWindow* self, HubPanelCreationResult* out_result, volatile long* out_fault_stage)
 {
+    if (out_fault_stage != 0)
+    {
+        *out_fault_stage = 1;
+    }
     MyGUI::TabItem* hub_tab = self->optionsTab->addItem(kHubTabName);
     if (hub_tab == 0)
     {
@@ -3075,6 +3079,10 @@ bool BuildHubPanelUnsafe(OptionsWindow* self, HubPanelCreationResult* out_result
         return false;
     }
 
+    if (out_fault_stage != 0)
+    {
+        *out_fault_stage = 2;
+    }
     DatapanelGUI* hub_panel = g_fnCreateDatapanel(g_ptrKenshiGUI, kHubPanelName, hub_tab, false);
     if (hub_panel == 0)
     {
@@ -3085,6 +3093,10 @@ bool BuildHubPanelUnsafe(OptionsWindow* self, HubPanelCreationResult* out_result
     hub_panel->vfunc0xc0(kHubPanelLineId);
     hub_panel->vfunc0xe0(25.0f);
 
+    if (out_fault_stage != 0)
+    {
+        *out_fault_stage = 3;
+    }
     MyGUI::Widget* hub_panel_widget = hub_panel->getWidget();
     if (hub_panel_widget == 0)
     {
@@ -3094,6 +3106,10 @@ bool BuildHubPanelUnsafe(OptionsWindow* self, HubPanelCreationResult* out_result
 
     BindHubPanelWheelDelegateBestEffort(hub_panel_widget);
 
+    if (out_fault_stage != 0)
+    {
+        *out_fault_stage = 4;
+    }
     hub_tab->setVisible(false);
     self->optionsTab->setItemData(hub_tab, hub_panel);
 
@@ -3109,13 +3125,33 @@ bool BuildHubPanelUnsafe(OptionsWindow* self, HubPanelCreationResult* out_result
 
 bool TryBuildHubPanel(OptionsWindow* self, HubPanelCreationResult* out_result)
 {
+    volatile long fault_stage = 0;
     __try
     {
-        return BuildHubPanelUnsafe(self, out_result);
+        return BuildHubPanelUnsafe(self, out_result, &fault_stage);
     }
     __except (EXCEPTION_EXECUTE_HANDLER)
     {
-        ErrorLog("Emkejs-Mod-Core: EnsureHubPanel UI mutation faulted; skipping Mod Hub attach");
+        if (fault_stage == 1)
+        {
+            ErrorLog("Emkejs-Mod-Core: EnsureHubPanel UI mutation faulted at stage=add_tab; skipping Mod Hub attach");
+        }
+        else if (fault_stage == 2)
+        {
+            ErrorLog("Emkejs-Mod-Core: EnsureHubPanel UI mutation faulted at stage=create_panel; skipping Mod Hub attach");
+        }
+        else if (fault_stage == 3)
+        {
+            ErrorLog("Emkejs-Mod-Core: EnsureHubPanel UI mutation faulted at stage=get_widget; skipping Mod Hub attach");
+        }
+        else if (fault_stage == 4)
+        {
+            ErrorLog("Emkejs-Mod-Core: EnsureHubPanel UI mutation faulted at stage=finalize; skipping Mod Hub attach");
+        }
+        else
+        {
+            ErrorLog("Emkejs-Mod-Core: EnsureHubPanel UI mutation faulted at stage=unknown; skipping Mod Hub attach");
+        }
         if (out_result != 0)
         {
             *out_result = HubPanelCreationResult();
@@ -3155,13 +3191,14 @@ void OptionsWindowInitHook(OptionsWindow* self)
         g_fnOptionsInitOrig(self);
     }
 
-    HubMenuBridge_OnOptionsWindowInit();
-    if (!g_hub_enabled)
+    if (g_hub_enabled && !EnsureHubPanel(self))
     {
+        HubMenuBridge_OnOptionsWindowInit();
         return;
     }
 
-    if (!EnsureHubPanel(self))
+    HubMenuBridge_OnOptionsWindowInit();
+    if (!g_hub_enabled)
     {
         return;
     }
