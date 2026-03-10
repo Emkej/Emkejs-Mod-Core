@@ -95,6 +95,8 @@ const char* kEmcModDisplayName = "Emkejs Mod Core";
 const char* kEmcConfigSectionName = "mod_hub";
 const char* kEmcConfigFileName = "emkejs-mod-core.ini";
 const char* kEmcPersistSearchSettingId = "persist_search_until_cleared";
+const char* kEmcPersistCollapseSettingId = "persist_collapse_state_until_exit";
+const char* kEmcAutoFocusSearchSettingId = "auto_focus_search_on_open";
 
 bool g_hub_enabled = true;
 bool g_hooks_installed = false;
@@ -119,6 +121,8 @@ bool g_logged_missing_scroll_view_skin = false;
 bool g_emc_config_loaded = false;
 bool g_emc_settings_registered = false;
 bool g_emc_persist_search_until_cleared = true;
+bool g_emc_persist_collapse_state_until_exit = true;
+bool g_emc_auto_focus_search_on_open = false;
 std::string g_emc_config_path;
 EMC_ModHandle g_emc_mod_handle = 0;
 bool g_restore_search_focus_after_rebuild = false;
@@ -258,11 +262,14 @@ void EnsureEmcConfigLoaded()
     if (g_emc_config_loaded)
     {
         HubUi_SetSearchPersistenceEnabled(g_emc_persist_search_until_cleared);
+        HubUi_SetCollapsePersistenceEnabled(g_emc_persist_collapse_state_until_exit);
         return;
     }
 
     g_emc_config_loaded = true;
     g_emc_persist_search_until_cleared = true;
+    g_emc_persist_collapse_state_until_exit = true;
+    g_emc_auto_focus_search_on_open = false;
     g_emc_config_path = ResolveEmcConfigPath();
     if (!g_emc_config_path.empty())
     {
@@ -272,9 +279,22 @@ void EnsureEmcConfigLoaded()
                 kEmcPersistSearchSettingId,
                 1,
                 g_emc_config_path.c_str()) != 0;
+        g_emc_persist_collapse_state_until_exit =
+            GetPrivateProfileIntA(
+                kEmcConfigSectionName,
+                kEmcPersistCollapseSettingId,
+                1,
+                g_emc_config_path.c_str()) != 0;
+        g_emc_auto_focus_search_on_open =
+            GetPrivateProfileIntA(
+                kEmcConfigSectionName,
+                kEmcAutoFocusSearchSettingId,
+                0,
+                g_emc_config_path.c_str()) != 0;
     }
 
     HubUi_SetSearchPersistenceEnabled(g_emc_persist_search_until_cleared);
+    HubUi_SetCollapsePersistenceEnabled(g_emc_persist_collapse_state_until_exit);
 }
 
 bool SaveEmcConfig(const char** out_error)
@@ -298,6 +318,32 @@ bool SaveEmcConfig(const char** out_error)
             kEmcConfigSectionName,
             kEmcPersistSearchSettingId,
             g_emc_persist_search_until_cleared ? "1" : "0",
+            g_emc_config_path.c_str()))
+    {
+        if (out_error != 0)
+        {
+            *out_error = "config_write_failed";
+        }
+        return false;
+    }
+
+    if (!WritePrivateProfileStringA(
+            kEmcConfigSectionName,
+            kEmcPersistCollapseSettingId,
+            g_emc_persist_collapse_state_until_exit ? "1" : "0",
+            g_emc_config_path.c_str()))
+    {
+        if (out_error != 0)
+        {
+            *out_error = "config_write_failed";
+        }
+        return false;
+    }
+
+    if (!WritePrivateProfileStringA(
+            kEmcConfigSectionName,
+            kEmcAutoFocusSearchSettingId,
+            g_emc_auto_focus_search_on_open ? "1" : "0",
             g_emc_config_path.c_str()))
     {
         if (out_error != 0)
@@ -347,6 +393,78 @@ EMC_Result __cdecl SetEmcPersistSearchUntilCleared(void*, int32_t value, char* e
     return EMC_OK;
 }
 
+EMC_Result __cdecl GetEmcPersistCollapseStateUntilExit(void*, int32_t* out_value)
+{
+    if (out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    *out_value = g_emc_persist_collapse_state_until_exit ? 1 : 0;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetEmcPersistCollapseStateUntilExit(void*, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    if (value != 0 && value != 1)
+    {
+        CopyHubErrorMessage(err_buf, err_buf_size, "value_must_be_bool");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    const bool previous_value = g_emc_persist_collapse_state_until_exit;
+    g_emc_persist_collapse_state_until_exit = value != 0;
+
+    const char* save_error = "";
+    if (!SaveEmcConfig(&save_error))
+    {
+        g_emc_persist_collapse_state_until_exit = previous_value;
+        HubUi_SetCollapsePersistenceEnabled(previous_value);
+        CopyHubErrorMessage(err_buf, err_buf_size, save_error);
+        return EMC_ERR_CALLBACK_FAILED;
+    }
+
+    HubUi_SetCollapsePersistenceEnabled(g_emc_persist_collapse_state_until_exit);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl GetEmcAutoFocusSearchOnOpen(void*, int32_t* out_value)
+{
+    if (out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    *out_value = g_emc_auto_focus_search_on_open ? 1 : 0;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetEmcAutoFocusSearchOnOpen(void*, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    if (value != 0 && value != 1)
+    {
+        CopyHubErrorMessage(err_buf, err_buf_size, "value_must_be_bool");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    const bool previous_value = g_emc_auto_focus_search_on_open;
+    g_emc_auto_focus_search_on_open = value != 0;
+
+    const char* save_error = "";
+    if (!SaveEmcConfig(&save_error))
+    {
+        g_emc_auto_focus_search_on_open = previous_value;
+        CopyHubErrorMessage(err_buf, err_buf_size, save_error);
+        return EMC_ERR_CALLBACK_FAILED;
+    }
+
+    return EMC_OK;
+}
+
 void EnsureEmcSettingsRegistered()
 {
     EnsureEmcConfigLoaded();
@@ -380,12 +498,46 @@ void EnsureEmcSettingsRegistered()
         &GetEmcPersistSearchUntilCleared,
         &SetEmcPersistSearchUntilCleared
     };
+    const EMC_BoolSettingDefV1 persist_collapse_setting = {
+        kEmcPersistCollapseSettingId,
+        "Persist collapse state until exit",
+        "Keep mod sections expanded or collapsed when Options is closed and reopened during the current Kenshi session.",
+        0,
+        &GetEmcPersistCollapseStateUntilExit,
+        &SetEmcPersistCollapseStateUntilExit
+    };
+    const EMC_BoolSettingDefV1 auto_focus_search_setting = {
+        kEmcAutoFocusSearchSettingId,
+        "Auto focus search on open",
+        "Move keyboard focus to the Mod Hub search box when the Options window opens.",
+        0,
+        &GetEmcAutoFocusSearchOnOpen,
+        &SetEmcAutoFocusSearchOnOpen
+    };
 
     const EMC_Result register_setting_result = HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &persist_search_setting);
     if (register_setting_result != EMC_OK)
     {
         std::ostringstream line;
         line << "Emkejs-Mod-Core: failed to register internal search persistence setting result=" << register_setting_result;
+        ErrorLog(line.str().c_str());
+        return;
+    }
+
+    const EMC_Result register_collapse_result = HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &persist_collapse_setting);
+    if (register_collapse_result != EMC_OK)
+    {
+        std::ostringstream line;
+        line << "Emkejs-Mod-Core: failed to register internal collapse persistence setting result=" << register_collapse_result;
+        ErrorLog(line.str().c_str());
+        return;
+    }
+
+    const EMC_Result register_focus_result = HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &auto_focus_search_setting);
+    if (register_focus_result != EMC_OK)
+    {
+        std::ostringstream line;
+        line << "Emkejs-Mod-Core: failed to register internal auto-focus setting result=" << register_focus_result;
         ErrorLog(line.str().c_str());
         return;
     }
@@ -2833,7 +2985,8 @@ void RebuildHubPanelWidgets()
     HubUi_GetNamespaceSearchQuery(selected_namespace->namespace_id.c_str(), &search_query);
     const bool should_restore_search_focus =
         g_restore_search_focus_after_rebuild
-        && selected_namespace->namespace_id == g_restore_search_focus_namespace_id;
+        && (g_restore_search_focus_namespace_id.empty()
+            || selected_namespace->namespace_id == g_restore_search_focus_namespace_id);
     const bool should_restore_search_cursor =
         g_restore_search_cursor_after_rebuild
         && selected_namespace->namespace_id == g_restore_search_cursor_namespace_id;
@@ -3527,6 +3680,11 @@ void HubMenuBridge_OnOptionsWindowInit()
     HubRegistry_SetRegistrationLocked(true);
     HubUi_RebuildSessionModelFromRegistry();
     HubUi_PerformInitialSync();
+    if (g_emc_auto_focus_search_on_open)
+    {
+        g_restore_search_focus_after_rebuild = true;
+        g_restore_search_focus_namespace_id.clear();
+    }
 }
 
 void HubMenuBridge_OnOptionsWindowSave()

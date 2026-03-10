@@ -327,6 +327,8 @@ public static class HubPhase4SearchCollapseHarness
             IntPtr settingGammaDesc = AllocUtf8(allocations, "Gamma setting");
             IntPtr modEmcId = AllocUtf8(allocations, "emkejs_mod_core");
             IntPtr settingPersistSearchId = AllocUtf8(allocations, "persist_search_until_cleared");
+            IntPtr settingPersistCollapseId = AllocUtf8(allocations, "persist_collapse_state_until_exit");
+            IntPtr settingAutoFocusSearchId = AllocUtf8(allocations, "auto_focus_search_on_open");
 
             EMC_ModDescriptorV1 modAlphaDesc = new EMC_ModDescriptorV1
             {
@@ -424,6 +426,10 @@ public static class HubPhase4SearchCollapseHarness
 
             r = setPendingBool(nsQolId, modEmcId, settingPersistSearchId, 1);
             ExpectResult(r, EMC_OK, "set_pending_bool(true) failed for EMC search persistence");
+            r = setPendingBool(nsQolId, modEmcId, settingPersistCollapseId, 1);
+            ExpectResult(r, EMC_OK, "set_pending_bool(true) failed for EMC collapse persistence");
+            r = setPendingBool(nsQolId, modEmcId, settingAutoFocusSearchId, 1);
+            ExpectResult(r, EMC_OK, "set_pending_bool(true) failed for EMC auto focus");
             saveOptions();
             closeOptions();
             openOptions();
@@ -480,6 +486,18 @@ public static class HubPhase4SearchCollapseHarness
             AssertCollapsed(getCollapsed, nsQolId, modAlphaId, false, "expanded while filtered");
             SetSearch(setSearch, nsQolId, "");
             AssertCollapsed(getCollapsed, nsQolId, modAlphaId, false, "expanded after clearing filter");
+
+            r = setCollapsed(nsQolId, modAlphaId, 1);
+            ExpectResult(r, EMC_OK, "set_mod_collapsed(true) failed for collapse persistence");
+            closeOptions();
+            openOptions();
+            AssertCollapsed(getCollapsed, nsQolId, modAlphaId, true, "collapse state persists after reopen");
+            r = setPendingBool(nsQolId, modEmcId, settingPersistCollapseId, 0);
+            ExpectResult(r, EMC_OK, "set_pending_bool(false) failed for EMC collapse persistence");
+            saveOptions();
+            closeOptions();
+            openOptions();
+            AssertCollapsed(getCollapsed, nsQolId, modAlphaId, false, "collapse state clears after reopen when persistence disabled");
 
             SetSearch(setSearch, nsQolId, "alpha:");
             SetSearch(setSearch, nsCombatId, "guard");

@@ -104,7 +104,9 @@ bool g_options_window_open = false;
 std::vector<HubUiNamespaceTab*> g_tabs_in_order;
 std::vector<HubUiSettingRow*> g_rows_in_order;
 bool g_search_persistence_enabled = true;
+bool g_collapse_persistence_enabled = true;
 std::map<std::string, std::string> g_persisted_search_queries;
+std::map<std::string, bool> g_persisted_mod_collapse_states;
 
 const char* SafeLogValue(const char* value)
 {
@@ -755,6 +757,28 @@ std::string ResolveInitialNamespaceSearchQuery(const std::string& namespace_id)
     return it->second;
 }
 
+std::string BuildPersistedCollapseStateKey(const std::string& namespace_id, const std::string& mod_id)
+{
+    return namespace_id + ":" + mod_id;
+}
+
+bool ResolveInitialModCollapsedState(const std::string& namespace_id, const std::string& mod_id)
+{
+    if (!g_collapse_persistence_enabled)
+    {
+        return false;
+    }
+
+    const std::map<std::string, bool>::const_iterator it =
+        g_persisted_mod_collapse_states.find(BuildPersistedCollapseStateKey(namespace_id, mod_id));
+    if (it == g_persisted_mod_collapse_states.end())
+    {
+        return false;
+    }
+
+    return it->second;
+}
+
 HubUiSettingRow* FindRow(const char* namespace_id, const char* mod_id, const char* setting_id)
 {
     if (namespace_id == nullptr || mod_id == nullptr || setting_id == nullptr)
@@ -987,7 +1011,7 @@ void __cdecl BuildSessionRow(
         mod->namespace_id = mod_view->namespace_id;
         mod->mod_id = mod_view->mod_id;
         mod->mod_display_name = mod_view->mod_display_name;
-        mod->collapsed = false;
+        mod->collapsed = ResolveInitialModCollapsedState(mod->namespace_id, mod->mod_id);
         tab->mods.push_back(mod);
     }
 
@@ -1209,6 +1233,20 @@ bool HubUi_IsSearchPersistenceEnabled()
     return g_search_persistence_enabled;
 }
 
+void HubUi_SetCollapsePersistenceEnabled(bool is_enabled)
+{
+    g_collapse_persistence_enabled = is_enabled;
+    if (!g_collapse_persistence_enabled)
+    {
+        g_persisted_mod_collapse_states.clear();
+    }
+}
+
+bool HubUi_IsCollapsePersistenceEnabled()
+{
+    return g_collapse_persistence_enabled;
+}
+
 bool HubUi_IsAnyKeybindCaptureActive()
 {
     for (size_t row_index = 0; row_index < g_rows_in_order.size(); ++row_index)
@@ -1232,6 +1270,15 @@ EMC_Result HubUi_SetModCollapsed(const char* namespace_id, const char* mod_id, b
     }
 
     mod->collapsed = is_collapsed;
+    const std::string persisted_key = BuildPersistedCollapseStateKey(mod->namespace_id, mod->mod_id);
+    if (!g_collapse_persistence_enabled || !mod->collapsed)
+    {
+        g_persisted_mod_collapse_states.erase(persisted_key);
+    }
+    else
+    {
+        g_persisted_mod_collapse_states[persisted_key] = mod->collapsed;
+    }
     return EMC_OK;
 }
 
