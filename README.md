@@ -4,6 +4,8 @@ This repository is a clean starter base for a `Emkejs-Mod-Core` RE_Kenshi native
 
 ## Setup
 Clone normally. Shared build scripts are tracked in `tools/build-scripts` via `git subtree`, so no submodule init step is required.
+This repo also keeps local wrapper scripts under `scripts/` that delegate into `tools/build-scripts`; shared build logic should stay in the subtree, not the wrappers.
+If you want to pull subtree updates from the shared build-tools repo, add a local `build-scripts` git remote in your clone and use the shared repo's documented `git subtree pull --prefix=tools/build-scripts build-scripts consumer-main` workflow.
 
 1) Open a PowerShell terminal in this repo.
 2) (Optional) Create `.env` from `.env.example` to set local paths.
