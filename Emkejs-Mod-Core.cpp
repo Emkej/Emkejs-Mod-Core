@@ -59,7 +59,7 @@ bool ResolveSupportedRuntime(unsigned int* out_platform, std::string* out_versio
     }
     __except (EXCEPTION_EXECUTE_HANDLER)
     {
-        LogErrorLine("GetKenshiVersion() faulted during startup");
+        ErrorLog("Emkejs-Mod-Core ERROR: GetKenshiVersion() faulted during startup");
         return false;
     }
 #endif
