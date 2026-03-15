@@ -97,6 +97,7 @@ const char* kEmcConfigFileName = "emkejs-mod-core.ini";
 const char* kEmcPersistSearchSettingId = "persist_search_until_cleared";
 const char* kEmcPersistCollapseSettingId = "persist_collapse_state_until_exit";
 const char* kEmcAutoFocusSearchSettingId = "auto_focus_search_on_open";
+const OIS::KeyCode kOpenModHubShortcutKey = OIS::KC_M;
 
 bool g_hub_enabled = true;
 bool g_hooks_installed = false;
@@ -1583,6 +1584,61 @@ bool HandleHubSearchFocusShortcut(InputHandler* input_handler, OIS::KeyCode key_
     }
 
     return false;
+}
+
+bool SelectModHubTabUnsafe(MyGUI::TabControl* options_tab)
+{
+    if (options_tab == 0)
+    {
+        return false;
+    }
+
+    const size_t hub_index = options_tab->findItemIndexWith(kHubTabName);
+    if (hub_index == MyGUI::ITEM_NONE)
+    {
+        return false;
+    }
+
+    if (options_tab->getIndexSelected() == hub_index)
+    {
+        return false;
+    }
+
+    options_tab->setIndexSelected(hub_index);
+    return true;
+}
+
+bool TrySelectModHubTabBestEffort()
+{
+    if (g_active_options_window == 0 || g_active_options_window->optionsTab == 0)
+    {
+        return false;
+    }
+
+    __try
+    {
+        return SelectModHubTabUnsafe(g_active_options_window->optionsTab);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        ErrorLog("Emkejs-Mod-Core: Mod Hub shortcut failed while selecting tab");
+        return false;
+    }
+}
+
+bool HandleHubOpenShortcut(InputHandler* input_handler, OIS::KeyCode key_code)
+{
+    if (!g_hub_enabled || !HubUi_IsOptionsWindowOpen() || input_handler == 0)
+    {
+        return false;
+    }
+
+    if (!IsCtrlModifierDown(input_handler) || key_code != kOpenModHubShortcutKey)
+    {
+        return false;
+    }
+
+    return TrySelectModHubTabBestEffort();
 }
 
 void OnHubSearchTextChanged(MyGUI::EditBox* sender)
@@ -3466,6 +3522,11 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
         }
 
         if (HandleHubSearchFocusShortcut(thisptr, key_code))
+        {
+            return;
+        }
+
+        if (HandleHubOpenShortcut(thisptr, key_code))
         {
             return;
         }
