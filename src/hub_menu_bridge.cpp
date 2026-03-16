@@ -1509,9 +1509,6 @@ void SetHubScrollOffset(int offset);
 void FocusHubSearchBoxBestEffort();
 bool IsModHubTabCurrentlySelected(OptionsWindow* self);
 
-void ResetTrackedModifierState()
-{}
-
 void ResetPendingHubSearchShortcut()
 {
     g_pending_hub_search_shortcut = PendingHubSearchShortcut();
@@ -3685,7 +3682,6 @@ void RebuildHubPanelWidgets()
 void ClearActiveUiState()
 {
     DestroyDynamicWidgets();
-    ResetTrackedModifierState();
     ResetPendingHubSearchShortcut();
     ResetHubSearchSnapshot();
     g_selected_namespace_id.clear();
