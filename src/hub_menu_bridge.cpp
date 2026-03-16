@@ -99,7 +99,14 @@ const char* kEmcConfigFileName = "emkejs-mod-core.ini";
 const char* kEmcPersistSearchSettingId = "persist_search_until_cleared";
 const char* kEmcPersistCollapseSettingId = "persist_collapse_state_until_exit";
 const char* kEmcAutoFocusSearchSettingId = "auto_focus_search_on_open";
-const OIS::KeyCode kOpenModHubShortcutKey = OIS::KC_M;
+const char* kEmcOpenModHubKeySettingId = "open_mod_hub_key";
+const char* kEmcOpenModHubRequireCtrlSettingId = "open_mod_hub_require_ctrl";
+const char* kEmcOpenModHubRequireShiftSettingId = "open_mod_hub_require_shift";
+const char* kEmcOpenModHubRequireAltSettingId = "open_mod_hub_require_alt";
+const int32_t kDefaultEmcOpenModHubKeycode = static_cast<int32_t>(OIS::KC_M);
+const bool kDefaultEmcOpenModHubRequireCtrl = true;
+const bool kDefaultEmcOpenModHubRequireShift = false;
+const bool kDefaultEmcOpenModHubRequireAlt = false;
 
 bool g_hub_enabled = true;
 bool g_hooks_installed = false;
@@ -128,6 +135,10 @@ bool g_emc_settings_registered = false;
 bool g_emc_persist_search_until_cleared = true;
 bool g_emc_persist_collapse_state_until_exit = true;
 bool g_emc_auto_focus_search_on_open = false;
+int32_t g_emc_open_mod_hub_keycode = kDefaultEmcOpenModHubKeycode;
+bool g_emc_open_mod_hub_require_ctrl = kDefaultEmcOpenModHubRequireCtrl;
+bool g_emc_open_mod_hub_require_shift = kDefaultEmcOpenModHubRequireShift;
+bool g_emc_open_mod_hub_require_alt = kDefaultEmcOpenModHubRequireAlt;
 std::string g_emc_config_path;
 EMC_ModHandle g_emc_mod_handle = 0;
 bool g_restore_search_focus_after_rebuild = false;
@@ -234,6 +245,42 @@ void CopyHubErrorMessage(char* err_buf, uint32_t err_buf_size, const char* messa
     err_buf[copy_length] = '\0';
 }
 
+bool IsValidEmcOpenModHubKeycode(int32_t keycode)
+{
+    if (keycode == EMC_KEY_UNBOUND)
+    {
+        return true;
+    }
+
+    if (keycode <= 0)
+    {
+        return false;
+    }
+
+    switch (keycode)
+    {
+    case OIS::KC_LSHIFT:
+    case OIS::KC_RSHIFT:
+    case OIS::KC_LCONTROL:
+    case OIS::KC_RCONTROL:
+    case OIS::KC_LMENU:
+    case OIS::KC_RMENU:
+        return false;
+    default:
+        return true;
+    }
+}
+
+int32_t NormalizeEmcOpenModHubKeycode(int32_t keycode)
+{
+    if (IsValidEmcOpenModHubKeycode(keycode))
+    {
+        return keycode;
+    }
+
+    return kDefaultEmcOpenModHubKeycode;
+}
+
 std::string ResolveEmcConfigPath()
 {
     HMODULE module = 0;
@@ -277,6 +324,10 @@ void EnsureEmcConfigLoaded()
     g_emc_persist_search_until_cleared = true;
     g_emc_persist_collapse_state_until_exit = true;
     g_emc_auto_focus_search_on_open = false;
+    g_emc_open_mod_hub_keycode = kDefaultEmcOpenModHubKeycode;
+    g_emc_open_mod_hub_require_ctrl = kDefaultEmcOpenModHubRequireCtrl;
+    g_emc_open_mod_hub_require_shift = kDefaultEmcOpenModHubRequireShift;
+    g_emc_open_mod_hub_require_alt = kDefaultEmcOpenModHubRequireAlt;
     g_emc_config_path = ResolveEmcConfigPath();
     if (!g_emc_config_path.empty())
     {
@@ -297,6 +348,30 @@ void EnsureEmcConfigLoaded()
                 kEmcConfigSectionName,
                 kEmcAutoFocusSearchSettingId,
                 0,
+                g_emc_config_path.c_str()) != 0;
+        g_emc_open_mod_hub_keycode = NormalizeEmcOpenModHubKeycode(
+            GetPrivateProfileIntA(
+                kEmcConfigSectionName,
+                kEmcOpenModHubKeySettingId,
+                kDefaultEmcOpenModHubKeycode,
+                g_emc_config_path.c_str()));
+        g_emc_open_mod_hub_require_ctrl =
+            GetPrivateProfileIntA(
+                kEmcConfigSectionName,
+                kEmcOpenModHubRequireCtrlSettingId,
+                kDefaultEmcOpenModHubRequireCtrl ? 1 : 0,
+                g_emc_config_path.c_str()) != 0;
+        g_emc_open_mod_hub_require_shift =
+            GetPrivateProfileIntA(
+                kEmcConfigSectionName,
+                kEmcOpenModHubRequireShiftSettingId,
+                kDefaultEmcOpenModHubRequireShift ? 1 : 0,
+                g_emc_config_path.c_str()) != 0;
+        g_emc_open_mod_hub_require_alt =
+            GetPrivateProfileIntA(
+                kEmcConfigSectionName,
+                kEmcOpenModHubRequireAltSettingId,
+                kDefaultEmcOpenModHubRequireAlt ? 1 : 0,
                 g_emc_config_path.c_str()) != 0;
     }
 
@@ -351,6 +426,60 @@ bool SaveEmcConfig(const char** out_error)
             kEmcConfigSectionName,
             kEmcAutoFocusSearchSettingId,
             g_emc_auto_focus_search_on_open ? "1" : "0",
+            g_emc_config_path.c_str()))
+    {
+        if (out_error != 0)
+        {
+            *out_error = "config_write_failed";
+        }
+        return false;
+    }
+
+    std::ostringstream open_mod_hub_keycode_stream;
+    open_mod_hub_keycode_stream << g_emc_open_mod_hub_keycode;
+    if (!WritePrivateProfileStringA(
+            kEmcConfigSectionName,
+            kEmcOpenModHubKeySettingId,
+            open_mod_hub_keycode_stream.str().c_str(),
+            g_emc_config_path.c_str()))
+    {
+        if (out_error != 0)
+        {
+            *out_error = "config_write_failed";
+        }
+        return false;
+    }
+
+    if (!WritePrivateProfileStringA(
+            kEmcConfigSectionName,
+            kEmcOpenModHubRequireCtrlSettingId,
+            g_emc_open_mod_hub_require_ctrl ? "1" : "0",
+            g_emc_config_path.c_str()))
+    {
+        if (out_error != 0)
+        {
+            *out_error = "config_write_failed";
+        }
+        return false;
+    }
+
+    if (!WritePrivateProfileStringA(
+            kEmcConfigSectionName,
+            kEmcOpenModHubRequireShiftSettingId,
+            g_emc_open_mod_hub_require_shift ? "1" : "0",
+            g_emc_config_path.c_str()))
+    {
+        if (out_error != 0)
+        {
+            *out_error = "config_write_failed";
+        }
+        return false;
+    }
+
+    if (!WritePrivateProfileStringA(
+            kEmcConfigSectionName,
+            kEmcOpenModHubRequireAltSettingId,
+            g_emc_open_mod_hub_require_alt ? "1" : "0",
             g_emc_config_path.c_str()))
     {
         if (out_error != 0)
@@ -472,6 +601,153 @@ EMC_Result __cdecl SetEmcAutoFocusSearchOnOpen(void*, int32_t value, char* err_b
     return EMC_OK;
 }
 
+EMC_Result __cdecl GetEmcOpenModHubKeybind(void*, EMC_KeybindValueV1* out_value)
+{
+    if (out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    out_value->keycode = g_emc_open_mod_hub_keycode;
+    out_value->modifiers = 0u;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetEmcOpenModHubKeybind(void*, EMC_KeybindValueV1 value, char* err_buf, uint32_t err_buf_size)
+{
+    if (value.modifiers != 0u)
+    {
+        CopyHubErrorMessage(err_buf, err_buf_size, "use_modifier_toggles");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (!IsValidEmcOpenModHubKeycode(value.keycode))
+    {
+        CopyHubErrorMessage(err_buf, err_buf_size, "invalid_keybind");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    const int32_t previous_value = g_emc_open_mod_hub_keycode;
+    g_emc_open_mod_hub_keycode = value.keycode;
+
+    const char* save_error = "";
+    if (!SaveEmcConfig(&save_error))
+    {
+        g_emc_open_mod_hub_keycode = previous_value;
+        CopyHubErrorMessage(err_buf, err_buf_size, save_error);
+        return EMC_ERR_CALLBACK_FAILED;
+    }
+
+    return EMC_OK;
+}
+
+EMC_Result __cdecl GetEmcOpenModHubRequireCtrl(void*, int32_t* out_value)
+{
+    if (out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    *out_value = g_emc_open_mod_hub_require_ctrl ? 1 : 0;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetEmcOpenModHubRequireCtrl(void*, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    if (value != 0 && value != 1)
+    {
+        CopyHubErrorMessage(err_buf, err_buf_size, "value_must_be_bool");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    const bool previous_value = g_emc_open_mod_hub_require_ctrl;
+    g_emc_open_mod_hub_require_ctrl = value != 0;
+
+    const char* save_error = "";
+    if (!SaveEmcConfig(&save_error))
+    {
+        g_emc_open_mod_hub_require_ctrl = previous_value;
+        CopyHubErrorMessage(err_buf, err_buf_size, save_error);
+        return EMC_ERR_CALLBACK_FAILED;
+    }
+
+    return EMC_OK;
+}
+
+EMC_Result __cdecl GetEmcOpenModHubRequireShift(void*, int32_t* out_value)
+{
+    if (out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    *out_value = g_emc_open_mod_hub_require_shift ? 1 : 0;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetEmcOpenModHubRequireShift(void*, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    if (value != 0 && value != 1)
+    {
+        CopyHubErrorMessage(err_buf, err_buf_size, "value_must_be_bool");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    const bool previous_value = g_emc_open_mod_hub_require_shift;
+    g_emc_open_mod_hub_require_shift = value != 0;
+
+    const char* save_error = "";
+    if (!SaveEmcConfig(&save_error))
+    {
+        g_emc_open_mod_hub_require_shift = previous_value;
+        CopyHubErrorMessage(err_buf, err_buf_size, save_error);
+        return EMC_ERR_CALLBACK_FAILED;
+    }
+
+    return EMC_OK;
+}
+
+EMC_Result __cdecl GetEmcOpenModHubRequireAlt(void*, int32_t* out_value)
+{
+    if (out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    *out_value = g_emc_open_mod_hub_require_alt ? 1 : 0;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetEmcOpenModHubRequireAlt(void*, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    if (value != 0 && value != 1)
+    {
+        CopyHubErrorMessage(err_buf, err_buf_size, "value_must_be_bool");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EnsureEmcConfigLoaded();
+    const bool previous_value = g_emc_open_mod_hub_require_alt;
+    g_emc_open_mod_hub_require_alt = value != 0;
+
+    const char* save_error = "";
+    if (!SaveEmcConfig(&save_error))
+    {
+        g_emc_open_mod_hub_require_alt = previous_value;
+        CopyHubErrorMessage(err_buf, err_buf_size, save_error);
+        return EMC_ERR_CALLBACK_FAILED;
+    }
+
+    return EMC_OK;
+}
+
 void EnsureEmcSettingsRegistered()
 {
     EnsureEmcConfigLoaded();
@@ -521,6 +797,38 @@ void EnsureEmcSettingsRegistered()
         &GetEmcAutoFocusSearchOnOpen,
         &SetEmcAutoFocusSearchOnOpen
     };
+    const EMC_KeybindSettingDefV1 open_mod_hub_key_setting = {
+        kEmcOpenModHubKeySettingId,
+        "Open Mod Hub key",
+        "Primary key used to open Mod Hub from gameplay or switch to the Mod Hub tab when Options is already open. Use the modifier toggles below for combos.",
+        0,
+        &GetEmcOpenModHubKeybind,
+        &SetEmcOpenModHubKeybind
+    };
+    const EMC_BoolSettingDefV1 open_mod_hub_require_ctrl_setting = {
+        kEmcOpenModHubRequireCtrlSettingId,
+        "Require Ctrl for open shortcut",
+        "Require Ctrl to be held with the Open Mod Hub key.",
+        0,
+        &GetEmcOpenModHubRequireCtrl,
+        &SetEmcOpenModHubRequireCtrl
+    };
+    const EMC_BoolSettingDefV1 open_mod_hub_require_shift_setting = {
+        kEmcOpenModHubRequireShiftSettingId,
+        "Require Shift for open shortcut",
+        "Require Shift to be held with the Open Mod Hub key.",
+        0,
+        &GetEmcOpenModHubRequireShift,
+        &SetEmcOpenModHubRequireShift
+    };
+    const EMC_BoolSettingDefV1 open_mod_hub_require_alt_setting = {
+        kEmcOpenModHubRequireAltSettingId,
+        "Require Alt for open shortcut",
+        "Require Alt to be held with the Open Mod Hub key.",
+        0,
+        &GetEmcOpenModHubRequireAlt,
+        &SetEmcOpenModHubRequireAlt
+    };
 
     const EMC_Result register_setting_result = HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &persist_search_setting);
     if (register_setting_result != EMC_OK)
@@ -545,6 +853,45 @@ void EnsureEmcSettingsRegistered()
     {
         std::ostringstream line;
         line << "Emkejs-Mod-Core: failed to register internal auto-focus setting result=" << register_focus_result;
+        ErrorLog(line.str().c_str());
+        return;
+    }
+
+    const EMC_Result register_open_key_result = HubRegistry_RegisterKeybindSetting(g_emc_mod_handle, &open_mod_hub_key_setting);
+    if (register_open_key_result != EMC_OK)
+    {
+        std::ostringstream line;
+        line << "Emkejs-Mod-Core: failed to register internal open shortcut key setting result=" << register_open_key_result;
+        ErrorLog(line.str().c_str());
+        return;
+    }
+
+    const EMC_Result register_open_ctrl_result =
+        HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &open_mod_hub_require_ctrl_setting);
+    if (register_open_ctrl_result != EMC_OK)
+    {
+        std::ostringstream line;
+        line << "Emkejs-Mod-Core: failed to register internal open shortcut Ctrl setting result=" << register_open_ctrl_result;
+        ErrorLog(line.str().c_str());
+        return;
+    }
+
+    const EMC_Result register_open_shift_result =
+        HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &open_mod_hub_require_shift_setting);
+    if (register_open_shift_result != EMC_OK)
+    {
+        std::ostringstream line;
+        line << "Emkejs-Mod-Core: failed to register internal open shortcut Shift setting result=" << register_open_shift_result;
+        ErrorLog(line.str().c_str());
+        return;
+    }
+
+    const EMC_Result register_open_alt_result =
+        HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &open_mod_hub_require_alt_setting);
+    if (register_open_alt_result != EMC_OK)
+    {
+        std::ostringstream line;
+        line << "Emkejs-Mod-Core: failed to register internal open shortcut Alt setting result=" << register_open_alt_result;
         ErrorLog(line.str().c_str());
         return;
     }
@@ -1183,6 +1530,36 @@ bool IsCtrlModifierDown(const InputHandler* input_handler)
     return input_handler != 0 && input_handler->ctrl;
 }
 
+bool IsShiftModifierDown(const InputHandler* input_handler)
+{
+    return input_handler != 0 && input_handler->shift;
+}
+
+bool IsAltModifierDown(const InputHandler* input_handler)
+{
+    return input_handler != 0 && input_handler->alt;
+}
+
+bool AreOpenModHubShortcutModifiersSatisfied(const InputHandler* input_handler)
+{
+    if (g_emc_open_mod_hub_require_ctrl && !IsCtrlModifierDown(input_handler))
+    {
+        return false;
+    }
+
+    if (g_emc_open_mod_hub_require_shift && !IsShiftModifierDown(input_handler))
+    {
+        return false;
+    }
+
+    if (g_emc_open_mod_hub_require_alt && !IsAltModifierDown(input_handler))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 bool IsSearchTokenSeparator(MyGUI::UString::unicode_char value)
 {
     if (value < 0x80u)
@@ -1676,7 +2053,14 @@ bool HandleHubOpenShortcut(InputHandler* input_handler, OIS::KeyCode key_code)
         return false;
     }
 
-    if (!IsCtrlModifierDown(input_handler) || key_code != kOpenModHubShortcutKey)
+    if (!g_emc_config_loaded)
+    {
+        EnsureEmcConfigLoaded();
+    }
+
+    if (g_emc_open_mod_hub_keycode == EMC_KEY_UNBOUND
+        || static_cast<int32_t>(key_code) != g_emc_open_mod_hub_keycode
+        || !AreOpenModHubShortcutModifiersSatisfied(input_handler))
     {
         return false;
     }
