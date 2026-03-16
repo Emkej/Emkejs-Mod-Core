@@ -25,6 +25,8 @@ runtime path.
 | --- | --- | --- | --- |
 | `FnOptionsInit` | `required` | `0x003F0260` | Core options-window init hook used by the hub-owned observer path. |
 | `FnOptionsSave` | `required` | `0x003ECA90` | Core options-window save hook for commit/apply behavior. |
+| `FnOpenOptionsWindow` | `required` | `0x003FB570` | Native options-window opener used by the gameplay `Ctrl+M` Mod Hub path. |
+| `FnGetOptionsWindow` | `required` | `0x00406F30` | Returns the native `OptionsWindow` singleton before opening it from gameplay. |
 | `FnCreateDatapanel` | `required` | `0x0073FFE0` | Creates the hub datapanel UI inside Kenshi's options flow. |
 | `ForgottenGUI* g_ptrKenshiGUI` | `required` | `0x021337B0` | GUI singleton pointer used by the hub menu bridge. |
 

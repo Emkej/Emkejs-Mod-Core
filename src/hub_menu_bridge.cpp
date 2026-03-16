@@ -75,6 +75,8 @@ public:
 typedef DatapanelGUI* (*FnCreateDatapanel)(ForgottenGUI*, const std::string&, MyGUI::Widget*, bool);
 typedef void (*FnOptionsInit)(OptionsWindow*);
 typedef void (*FnOptionsSave)(OptionsWindow*);
+typedef OptionsWindow* (*FnGetOptionsWindow)();
+typedef void (*FnOpenOptionsWindow)(OptionsWindow*);
 
 namespace
 {
@@ -106,6 +108,8 @@ HubMenuBridgeOptionsWindowInitObserver g_options_window_init_observer = 0;
 FnCreateDatapanel g_fnCreateDatapanel = 0;
 FnOptionsInit g_fnOptionsInit = 0;
 FnOptionsSave g_fnOptionsSave = 0;
+FnGetOptionsWindow g_fnGetOptionsWindow = 0;
+FnOpenOptionsWindow g_fnOpenOptionsWindow = 0;
 FnOptionsInit g_fnOptionsInitOrig = 0;
 FnOptionsSave g_fnOptionsSaveOrig = 0;
 void (*InputHandler_keyDownEvent_orig)(InputHandler*, OIS::KeyCode) = 0;
@@ -171,6 +175,7 @@ bool g_have_hub_search_snapshot = false;
 std::string g_hub_search_snapshot_namespace_id;
 std::string g_hub_search_snapshot_query;
 size_t g_hub_search_snapshot_cursor_position = 0;
+bool g_select_mod_hub_on_next_options_init = false;
 
 const int kHubScrollLineStep = 24;
 const int kHubScrollControlWidth = 24;
@@ -615,6 +620,8 @@ bool InitPluginMenuFunctions(unsigned int platform, const std::string& version, 
         {
             g_fnOptionsInit = reinterpret_cast<FnOptionsInit>(base_addr + 0x003F0120);
             g_fnOptionsSave = reinterpret_cast<FnOptionsSave>(base_addr + 0x003EC950);
+            g_fnGetOptionsWindow = reinterpret_cast<FnGetOptionsWindow>(base_addr + 0x00406B90);
+            g_fnOpenOptionsWindow = reinterpret_cast<FnOpenOptionsWindow>(base_addr + 0x003FB250);
             g_fnCreateDatapanel = reinterpret_cast<FnCreateDatapanel>(base_addr + 0x0073F4B0);
             g_ptrKenshiGUI = reinterpret_cast<ForgottenGUI*>(base_addr + 0x02132750);
             return true;
@@ -623,6 +630,8 @@ bool InitPluginMenuFunctions(unsigned int platform, const std::string& version, 
         {
             g_fnOptionsInit = reinterpret_cast<FnOptionsInit>(base_addr + 0x003F0260);
             g_fnOptionsSave = reinterpret_cast<FnOptionsSave>(base_addr + 0x003ECA90);
+            g_fnGetOptionsWindow = reinterpret_cast<FnGetOptionsWindow>(base_addr + 0x00406F30);
+            g_fnOpenOptionsWindow = reinterpret_cast<FnOpenOptionsWindow>(base_addr + 0x003FB570);
             g_fnCreateDatapanel = reinterpret_cast<FnCreateDatapanel>(base_addr + 0x0073FFE0);
             g_ptrKenshiGUI = reinterpret_cast<ForgottenGUI*>(base_addr + 0x021337B0);
             return true;
@@ -634,6 +643,8 @@ bool InitPluginMenuFunctions(unsigned int platform, const std::string& version, 
         {
             g_fnOptionsInit = reinterpret_cast<FnOptionsInit>(base_addr + 0x003EFD40);
             g_fnOptionsSave = reinterpret_cast<FnOptionsSave>(base_addr + 0x003EC570);
+            g_fnGetOptionsWindow = reinterpret_cast<FnGetOptionsWindow>(base_addr + 0x004067B0);
+            g_fnOpenOptionsWindow = reinterpret_cast<FnOpenOptionsWindow>(base_addr + 0x003FAE70);
             g_fnCreateDatapanel = reinterpret_cast<FnCreateDatapanel>(base_addr + 0x0073EE10);
             g_ptrKenshiGUI = reinterpret_cast<ForgottenGUI*>(base_addr + 0x021306C0);
             return true;
@@ -642,6 +653,8 @@ bool InitPluginMenuFunctions(unsigned int platform, const std::string& version, 
         {
             g_fnOptionsInit = reinterpret_cast<FnOptionsInit>(base_addr + 0x003EFC00);
             g_fnOptionsSave = reinterpret_cast<FnOptionsSave>(base_addr + 0x003EC430);
+            g_fnGetOptionsWindow = reinterpret_cast<FnGetOptionsWindow>(base_addr + 0x004068D0);
+            g_fnOpenOptionsWindow = reinterpret_cast<FnOpenOptionsWindow>(base_addr + 0x003FAF10);
             g_fnCreateDatapanel = reinterpret_cast<FnCreateDatapanel>(base_addr + 0x0073F980);
             g_ptrKenshiGUI = reinterpret_cast<ForgottenGUI*>(base_addr + 0x021326E0);
             return true;
@@ -1626,9 +1639,39 @@ bool TrySelectModHubTabBestEffort()
     }
 }
 
+bool OpenOptionsWindowForHubUnsafe()
+{
+    if (g_fnGetOptionsWindow == 0 || g_fnOpenOptionsWindow == 0)
+    {
+        return false;
+    }
+
+    OptionsWindow* options_window = g_fnGetOptionsWindow();
+    if (options_window == 0)
+    {
+        return false;
+    }
+
+    g_fnOpenOptionsWindow(options_window);
+    return true;
+}
+
+bool TryOpenOptionsWindowForHubBestEffort()
+{
+    __try
+    {
+        return OpenOptionsWindowForHubUnsafe();
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        ErrorLog("Emkejs-Mod-Core: Mod Hub shortcut failed while opening native OptionsWindow");
+        return false;
+    }
+}
+
 bool HandleHubOpenShortcut(InputHandler* input_handler, OIS::KeyCode key_code)
 {
-    if (!g_hub_enabled || !HubUi_IsOptionsWindowOpen() || input_handler == 0)
+    if (!g_hub_enabled || input_handler == 0)
     {
         return false;
     }
@@ -1638,7 +1681,20 @@ bool HandleHubOpenShortcut(InputHandler* input_handler, OIS::KeyCode key_code)
         return false;
     }
 
-    return TrySelectModHubTabBestEffort();
+    if (HubUi_IsOptionsWindowOpen())
+    {
+        return TrySelectModHubTabBestEffort();
+    }
+
+    g_select_mod_hub_on_next_options_init = true;
+    const bool opened = TryOpenOptionsWindowForHubBestEffort();
+    if (opened)
+    {
+        return true;
+    }
+
+    g_select_mod_hub_on_next_options_init = false;
+    return false;
 }
 
 void OnHubSearchTextChanged(MyGUI::EditBox* sender)
@@ -3257,6 +3313,7 @@ void ClearActiveUiState()
     g_active_hub_panel_widget = 0;
     g_active_hub_panel = 0;
     g_active_options_window = 0;
+    g_select_mod_hub_on_next_options_init = false;
 }
 
 void BindHubPanelWheelDelegateBestEffort(MyGUI::Widget* hub_panel_widget)
@@ -3472,12 +3529,16 @@ bool EnsureHubPanel(OptionsWindow* self)
 
 void OptionsWindowInitHook(OptionsWindow* self)
 {
+    const bool select_mod_hub_after_init = g_select_mod_hub_on_next_options_init;
+    g_select_mod_hub_on_next_options_init = false;
+
     if (g_fnOptionsInitOrig != 0)
     {
         g_fnOptionsInitOrig(self);
     }
 
-    if (g_hub_enabled && !EnsureHubPanel(self))
+    const bool ensured_hub_panel = !g_hub_enabled || EnsureHubPanel(self);
+    if (!ensured_hub_panel)
     {
         HubMenuBridge_OnOptionsWindowInit();
         return;
@@ -3490,6 +3551,10 @@ void OptionsWindowInitHook(OptionsWindow* self)
     }
 
     RebuildHubPanelWidgets();
+    if (select_mod_hub_after_init)
+    {
+        TrySelectModHubTabBestEffort();
+    }
     if (g_emc_auto_focus_search_on_open && IsModHubTabCurrentlySelected(self))
     {
         FocusHubSearchBoxBestEffort();
@@ -3535,6 +3600,10 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
         {
             return;
         }
+    }
+    else if (g_hub_enabled && HandleHubOpenShortcut(thisptr, key_code))
+    {
+        return;
     }
 
     if (InputHandler_keyDownEvent_orig != 0)
@@ -3652,4 +3721,5 @@ void HubMenuBridge_OnOptionsWindowClose()
     HubUi_SetOptionsWindowOpen(false);
     HubUi_ClearSessionModel();
     HubRegistry_SetRegistrationLocked(false);
+    g_select_mod_hub_on_next_options_init = false;
 }
