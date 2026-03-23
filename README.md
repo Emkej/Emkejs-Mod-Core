@@ -137,3 +137,7 @@ After deploy, expected files:
   - `pre-push` runs `./scripts/build-and-package.sh -Configuration Debug -SkipSdkPackage -RunReliabilitySmoke`
 - `pre-push` uses `KENSHI_PATH` / `KENSHI_DEFAULT_PATH` automatically when the Phase 16 smoke path needs Kenshi runtime DLLs.
 - Hooks are the intended automation path for this repo. They can still be bypassed with `--no-verify`.
+
+## License
+This project is licensed under the GNU General Public License v3.0.
+It uses KenshiLib, which is released under GPLv3.
