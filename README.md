@@ -1,6 +1,6 @@
-## Emkejs Mod Core (RE_Kenshi plugin base)
+## Emkejs Mod Core (shared RE_Kenshi Mod Hub runtime)
 
-This repository is a clean starter base for a `Emkejs-Mod-Core` RE_Kenshi native plugin.
+This repository contains the shared RE_Kenshi runtime and SDK surface behind `Emkejs-Mod-Core` Mod Hub integrations.
 
 ## Setup
 Clone normally. Shared build scripts are tracked in `tools/build-scripts` via `git subtree`, so no submodule init step is required.
@@ -87,21 +87,26 @@ After deploy, expected files:
 ## Reliability Harnesses (v1.1)
 - Phase 5 numeric harness:
   - `./scripts/phase5_numeric_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
+  - Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
   - Verifies numeric snap/clamp behavior plus pending-text normalization semantics (text remains user-entered until normalize, then canonicalizes).
 - Phase 12 deploy lock preflight harness:
   - `./scripts/phase12_deploy_lock_preflight_test.ps1`
 - Phase 13 export contract stability harness:
   - `./scripts/phase13_export_contract_stability_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
+  - Canonical + compatibility export checks work with Release or Debug DLLs; extra helper lookup assertions run when Debug test exports are present.
 - Phase 14 options-init observer harness:
   - `./scripts/phase14_options_init_observer_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
+  - Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
 - Phase 15 scaffold + single-TU sample harness:
   - `./scripts/phase15_scaffold_single_tu_test.ps1`
 - Phase 16 reliability smoke matrix harness:
   - `./scripts/phase16_hub_attach_reliability_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
+  - Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
 - Phase 17 address SSOT guard:
   - `./scripts/phase17_address_ssot_guard_test.ps1`
 - Phase 18 dummy-consumer menu smoke harness:
   - `./scripts/phase18_dummy_consumer_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]`
+  - Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
   - Verifies registration count plus one bool commit, one int commit, and bad-value rejection paths.
 - Use `-KenshiPath` / `-SmokeKenshiPath` when Kenshi runtime DLLs are not already on `PATH`.
 

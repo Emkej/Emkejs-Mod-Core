@@ -30,6 +30,9 @@ public static class HubApiHarness
     private const int EMC_ERR_UNSUPPORTED_VERSION = 2;
     private const int EMC_ERR_API_SIZE_MISMATCH = 3;
     private const uint DONT_RESOLVE_DLL_REFERENCES = 0x00000001u;
+    private const uint HUB_API_V1_MIN_SIZE = 56u;
+    private const uint HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE = 72u;
+    private const uint HUB_API_V1_INT_SETTING_V2_MIN_SIZE = 80u;
 
     private static void Assert(bool condition, string message)
     {
@@ -72,13 +75,13 @@ public static class HubApiHarness
             int r;
 
             // null out params
-            r = fn(1u, 56u, IntPtr.Zero, IntPtr.Zero);
+            r = fn(1u, HUB_API_V1_MIN_SIZE, IntPtr.Zero, IntPtr.Zero);
             Assert(r == EMC_ERR_INVALID_ARGUMENT, "Expected INVALID_ARGUMENT for both null out params");
 
             IntPtr outApiSizeOnly = AllocU32Block(1234);
             try
             {
-                r = fn(1u, 56u, IntPtr.Zero, outApiSizeOnly);
+                r = fn(1u, HUB_API_V1_MIN_SIZE, IntPtr.Zero, outApiSizeOnly);
                 Assert(r == EMC_ERR_INVALID_ARGUMENT, "Expected INVALID_ARGUMENT for null out_api");
             }
             finally
@@ -89,7 +92,7 @@ public static class HubApiHarness
             IntPtr outApiOnly = AllocPointerBlock();
             try
             {
-                r = fn(1u, 56u, outApiOnly, IntPtr.Zero);
+                r = fn(1u, HUB_API_V1_MIN_SIZE, outApiOnly, IntPtr.Zero);
                 Assert(r == EMC_ERR_INVALID_ARGUMENT, "Expected INVALID_ARGUMENT for null out_api_size");
             }
             finally
@@ -102,7 +105,7 @@ public static class HubApiHarness
             IntPtr outApiSize = AllocU32Block(9999);
             try
             {
-                r = fn(2u, 56u, outApi, outApiSize);
+                r = fn(2u, HUB_API_V1_MIN_SIZE, outApi, outApiSize);
                 Assert(r == EMC_ERR_UNSUPPORTED_VERSION, "Expected UNSUPPORTED_VERSION");
                 Assert(Marshal.ReadIntPtr(outApi) == IntPtr.Zero, "out_api not cleared on unsupported version");
                 Assert(Marshal.ReadInt32(outApiSize) == 0, "out_api_size not cleared on unsupported version");
@@ -118,7 +121,7 @@ public static class HubApiHarness
             outApiSize = AllocU32Block(9999);
             try
             {
-                r = fn(1u, 55u, outApi, outApiSize);
+                r = fn(1u, HUB_API_V1_MIN_SIZE - 1u, outApi, outApiSize);
                 Assert(r == EMC_ERR_API_SIZE_MISMATCH, "Expected API_SIZE_MISMATCH");
                 Assert(Marshal.ReadIntPtr(outApi) == IntPtr.Zero, "out_api not cleared on size mismatch");
                 Assert(Marshal.ReadInt32(outApiSize) == 0, "out_api_size not cleared on size mismatch");
@@ -134,25 +137,42 @@ public static class HubApiHarness
             outApiSize = AllocU32Block(0);
             try
             {
-                r = fn(1u, 56u, outApi, outApiSize);
+                r = fn(1u, HUB_API_V1_MIN_SIZE, outApi, outApiSize);
                 Assert(r == EMC_OK, "Expected OK on success path");
 
                 IntPtr apiPtr = Marshal.ReadIntPtr(outApi);
                 int apiSizeValue = Marshal.ReadInt32(outApiSize);
 
                 Assert(apiPtr != IntPtr.Zero, "API pointer is null on success");
-                Assert(apiSizeValue == 56, "out_api_size != sizeof(EMC_HubApiV1)");
+                Assert(apiSizeValue >= (int)HUB_API_V1_MIN_SIZE, "out_api_size smaller than minimum contract");
 
                 int apiVersion = Marshal.ReadInt32(apiPtr, 0);
                 int apiStructSize = Marshal.ReadInt32(apiPtr, 4);
                 Assert(apiVersion == 1, "api_version != 1");
-                Assert(apiStructSize == 56, "api_size field != 56");
+                Assert(apiStructSize >= (int)HUB_API_V1_MIN_SIZE, "api_size field smaller than minimum contract");
+                Assert(apiStructSize == apiSizeValue, "api_size field != out_api_size");
 
-                int[] fnOffsets = new int[] { 8, 16, 24, 32, 40, 48 };
-                for (int i = 0; i < fnOffsets.Length; i++)
+                int[] requiredFnOffsets = new int[] { 8, 16, 24, 32, 40, 48 };
+                for (int i = 0; i < requiredFnOffsets.Length; i++)
                 {
-                    IntPtr fnPtr = Marshal.ReadIntPtr(apiPtr, fnOffsets[i]);
-                    Assert(fnPtr != IntPtr.Zero, "Function pointer at offset " + fnOffsets[i] + " is null");
+                    IntPtr fnPtr = Marshal.ReadIntPtr(apiPtr, requiredFnOffsets[i]);
+                    Assert(fnPtr != IntPtr.Zero, "Function pointer at offset " + requiredFnOffsets[i] + " is null");
+                }
+
+                if (apiSizeValue >= (int)HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE)
+                {
+                    int[] observerFnOffsets = new int[] { 56, 64 };
+                    for (int i = 0; i < observerFnOffsets.Length; i++)
+                    {
+                        IntPtr fnPtr = Marshal.ReadIntPtr(apiPtr, observerFnOffsets[i]);
+                        Assert(fnPtr != IntPtr.Zero, "Observer function pointer at offset " + observerFnOffsets[i] + " is null");
+                    }
+                }
+
+                if (apiSizeValue >= (int)HUB_API_V1_INT_SETTING_V2_MIN_SIZE)
+                {
+                    IntPtr fnPtr = Marshal.ReadIntPtr(apiPtr, 72);
+                    Assert(fnPtr != IntPtr.Zero, "V2 int-setting function pointer at offset 72 is null");
                 }
             }
             finally

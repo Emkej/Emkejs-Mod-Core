@@ -46,7 +46,8 @@ Export stability policy (Phase 13):
 - Helper lookup tries canonical first, then compatibility aliases.
 - Current temporary alias: `EMC_ModHub_GetApi_v1_compat` (`EMC_MOD_HUB_GET_API_COMPAT_EXPORT_NAME`).
 - Alias removal target: `EMC_MOD_HUB_GET_API_COMPAT_REMOVAL_TARGET` (`v1.2.0`).
-- Alias usage emits one deprecation warning event per process: `event=hub_get_api_alias_deprecated`.
+- Alias usage keeps a one-time deprecation-warning guard internally.
+- When debug logging is enabled in a Kenshi process, alias usage emits at most one deprecation warning event per process: `event=hub_get_api_alias_deprecated`.
 
 Public result codes (`EMC_Result`):
 
@@ -195,7 +196,7 @@ Migration note:
 
 ## Runtime Log Semantics (Hub Events)
 
-Consumers should expect these event formats in RE_Kenshi logs:
+Consumers should expect these event formats in RE_Kenshi logs when the corresponding code path is active. The alias deprecation event is debug-only and appears only when debug logging is enabled:
 
 ```text
 event=hub_commit_failure namespace=<id> mod=<id> setting=<id> result=<code> message=<text>
@@ -673,6 +674,8 @@ Phase 5:
 ./scripts/phase5_numeric_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
 ```
 
+Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
+
 This harness validates numeric snap/clamp behavior and pending-text normalization semantics.
 
 Phase 20:
@@ -680,6 +683,8 @@ Phase 20:
 ```powershell
 ./scripts/phase20_int_button_layout_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
 ```
+
+Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
 
 This harness validates V2 int-row registration, sparse/custom button layouts, exact-delta behavior, and deterministic rejection of invalid layouts.
 
@@ -690,12 +695,15 @@ Phase 13:
 ```
 
 Use `-KenshiPath` when Kenshi runtime DLLs are not already on `PATH`.
+Canonical + compatibility export validation works with Release or Debug DLLs; helper default-lookup and alias-warning-count assertions run only when Debug test exports are present.
 
 Phase 14:
 
 ```powershell
 ./scripts/phase14_options_init_observer_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
 ```
+
+Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
 
 Phase 15:
 
@@ -710,6 +718,7 @@ Phase 16:
 ```
 
 Use `-KenshiPath` when Kenshi runtime DLLs are not already on `PATH`.
+Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
 
 Phase 17:
 
@@ -722,6 +731,8 @@ Phase 18:
 ```powershell
 ./scripts/phase18_dummy_consumer_smoke_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
 ```
+
+Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
 
 This smoke harness validates registration count and one bool/int commit path, plus bad-value rejection behavior.
 

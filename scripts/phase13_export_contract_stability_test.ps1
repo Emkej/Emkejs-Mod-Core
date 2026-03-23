@@ -16,167 +16,6 @@ function Assert-Condition {
     }
 }
 
-function Invoke-KenshiAliasLogProbe {
-    param(
-        [Parameter(Mandatory = $true)][string]$DllPath,
-        [Parameter(Mandatory = $false)][string]$KenshiPath
-    )
-
-    $runRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("emc_phase13_alias_log_" + [Guid]::NewGuid().ToString("N"))
-    $probeExePath = Join-Path $runRoot "kenshi_x64.exe"
-    $logPath = Join-Path $runRoot "RE_Kenshi_log.txt"
-    $probeTypeName = "Phase13KenshiAliasLogProbe_" + [Guid]::NewGuid().ToString("N")
-
-    $probeSource = @"
-using System;
-using System.Runtime.InteropServices;
-
-public sealed class __PROBE_TYPE_NAME__
-{
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate int GetApiRaw(uint requestedVersion, uint callerApiSize, IntPtr outApi, IntPtr outApiSize);
-
-    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern bool SetDllDirectory(string lpPathName);
-
-    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern IntPtr LoadLibrary(string lpFileName);
-
-    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
-
-    [DllImport("kernel32", SetLastError = true)]
-    private static extern bool FreeLibrary(IntPtr hModule);
-
-    private const int EMC_OK = 0;
-    private const uint HUB_API_V1 = 1u;
-    private const uint HUB_API_V1_SIZE = 56u;
-
-    public static int Main(string[] args)
-    {
-        IntPtr module = IntPtr.Zero;
-        IntPtr outApi = IntPtr.Zero;
-        IntPtr outApiSize = IntPtr.Zero;
-
-        try
-        {
-            if (args.Length < 1 || args.Length > 2)
-            {
-                Console.Error.WriteLine("usage: kenshi_x64.exe <dllPath> [kenshiPath]");
-                return 2;
-            }
-
-            string dllPath = args[0];
-            string kenshiPath = args.Length == 2 ? args[1] : string.Empty;
-            if (!string.IsNullOrEmpty(kenshiPath))
-            {
-                SetDllDirectory(kenshiPath);
-            }
-
-            module = LoadLibrary(dllPath);
-            if (module == IntPtr.Zero)
-            {
-                Console.Error.WriteLine("LoadLibrary failed for " + dllPath);
-                return 3;
-            }
-
-            IntPtr proc = GetProcAddress(module, "EMC_ModHub_GetApi_v1_compat");
-            if (proc == IntPtr.Zero)
-            {
-                Console.Error.WriteLine("Missing export: EMC_ModHub_GetApi_v1_compat");
-                return 4;
-            }
-
-            GetApiRaw getApiAlias = (GetApiRaw)Marshal.GetDelegateForFunctionPointer(proc, typeof(GetApiRaw));
-            outApi = Marshal.AllocHGlobal(IntPtr.Size);
-            outApiSize = Marshal.AllocHGlobal(4);
-
-            for (int i = 0; i < 2; ++i)
-            {
-                Marshal.WriteIntPtr(outApi, IntPtr.Zero);
-                Marshal.WriteInt32(outApiSize, 0);
-
-                int r = getApiAlias(HUB_API_V1, HUB_API_V1_SIZE, outApi, outApiSize);
-                if (r != EMC_OK)
-                {
-                    Console.Error.WriteLine("Alias export returned " + r);
-                    return 5;
-                }
-
-                if (Marshal.ReadIntPtr(outApi) == IntPtr.Zero)
-                {
-                    Console.Error.WriteLine("Alias export did not populate out_api");
-                    return 6;
-                }
-            }
-
-            return 0;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(ex.ToString());
-            return 10;
-        }
-        finally
-        {
-            if (outApi != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(outApi);
-            }
-
-            if (outApiSize != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(outApiSize);
-            }
-
-            if (module != IntPtr.Zero)
-            {
-                FreeLibrary(module);
-            }
-        }
-    }
-}
-"@.Replace("__PROBE_TYPE_NAME__", $probeTypeName)
-
-    New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
-
-    try {
-        Add-Type -TypeDefinition $probeSource -Language CSharp -OutputAssembly $probeExePath -OutputType ConsoleApplication | Out-Null
-
-        $probeArgs = @($DllPath)
-        if ($KenshiPath) {
-            $probeArgs += $KenshiPath
-        }
-
-        Push-Location $runRoot
-        try {
-            $probeOutput = & $probeExePath @probeArgs 2>&1
-            $probeExitCode = $LASTEXITCODE
-        }
-        finally {
-            Pop-Location
-        }
-
-        $probeOutputText = if ($probeOutput) { ($probeOutput | Out-String).Trim() } else { "" }
-        Assert-Condition -Condition ($probeExitCode -eq 0) -Message ("kenshi_x64.exe alias probe failed with exit code {0}. {1}" -f $probeExitCode, $probeOutputText)
-        Assert-Condition -Condition (Test-Path $logPath) -Message "Expected alias probe to create RE_Kenshi_log.txt."
-
-        $logLines = @(Get-Content -Path $logPath)
-        $aliasEvents = @($logLines | Where-Object { $_ -like "*event=hub_get_api_alias_deprecated*" })
-        Assert-Condition -Condition ($aliasEvents.Count -eq 1) -Message ("Expected exactly one alias deprecation event, found {0}. Log:`n{1}" -f $aliasEvents.Count, (($logLines | Out-String).Trim()))
-
-        $aliasEvent = [string]$aliasEvents[0]
-        Assert-Condition -Condition ($aliasEvent.Contains("alias=EMC_ModHub_GetApi_v1_compat")) -Message "Alias deprecation event missing alias symbol."
-        Assert-Condition -Condition ($aliasEvent.Contains("canonical=EMC_ModHub_GetApi")) -Message "Alias deprecation event missing canonical symbol."
-        Assert-Condition -Condition ($aliasEvent.Contains("removal_target=v1.2.0")) -Message "Alias deprecation event missing removal target."
-    }
-    finally {
-        if (Test-Path $runRoot) {
-            Remove-Item -Path $runRoot -Recurse -Force
-        }
-    }
-}
-
 $DllPath = (Resolve-Path -Path $DllPath).ProviderPath
 if ($KenshiPath) {
     $KenshiPath = (Resolve-Path -Path $KenshiPath).ProviderPath
@@ -233,11 +72,27 @@ public static class Phase13ExportContractHarness
         }
     }
 
+    private static IntPtr FindExport(IntPtr module, string exportName)
+    {
+        return GetProcAddress(module, exportName);
+    }
+
     private static T Bind<T>(IntPtr module, string exportName)
     {
-        IntPtr proc = GetProcAddress(module, exportName);
+        IntPtr proc = FindExport(module, exportName);
         Assert(proc != IntPtr.Zero, "Missing export: " + exportName);
         return (T)(object)Marshal.GetDelegateForFunctionPointer(proc, typeof(T));
+    }
+
+    private static T TryBind<T>(IntPtr module, string exportName) where T : class
+    {
+        IntPtr proc = FindExport(module, exportName);
+        if (proc == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        return Marshal.GetDelegateForFunctionPointer(proc, typeof(T)) as T;
     }
 
     private static void ExpectGetApiSuccess(GetApiRaw fn, string context)
@@ -304,21 +159,48 @@ public static class Phase13ExportContractHarness
             GetApiRaw getApiCanonical = Bind<GetApiRaw>(module, "EMC_ModHub_GetApi");
             GetApiRaw getApiAlias = Bind<GetApiRaw>(module, "EMC_ModHub_GetApi_v1_compat");
 
-            VoidRaw resetAliasWarningCount = Bind<VoidRaw>(module, "EMC_ModHub_Test_ResetGetApiAliasWarningCount");
-            GetIntRaw getAliasWarningCount = Bind<GetIntRaw>(module, "EMC_ModHub_Test_GetApiAliasWarningCount");
+            VoidRaw resetAliasWarningCount = TryBind<VoidRaw>(module, "EMC_ModHub_Test_ResetGetApiAliasWarningCount");
+            GetIntRaw getAliasWarningCount = TryBind<GetIntRaw>(module, "EMC_ModHub_Test_GetApiAliasWarningCount");
 
-            SetIntRaw setDefaultLookupMode = Bind<SetIntRaw>(module, "EMC_ModHub_Test_Client_DefaultLookup_SetMode");
-            VoidRaw resetDefaultLookup = Bind<VoidRaw>(module, "EMC_ModHub_Test_Client_DefaultLookup_Reset");
-            GetApiRaw callDefaultLookupGetApi = Bind<GetApiRaw>(module, "EMC_ModHub_Test_Client_DefaultLookup_CallGetApi");
+            SetIntRaw setDefaultLookupMode = TryBind<SetIntRaw>(module, "EMC_ModHub_Test_Client_DefaultLookup_SetMode");
+            VoidRaw resetDefaultLookup = TryBind<VoidRaw>(module, "EMC_ModHub_Test_Client_DefaultLookup_Reset");
+            GetApiRaw callDefaultLookupGetApi = TryBind<GetApiRaw>(module, "EMC_ModHub_Test_Client_DefaultLookup_CallGetApi");
+
+            int availableDebugHelpers = 0;
+            foreach (Delegate helper in new Delegate[] {
+                resetAliasWarningCount,
+                getAliasWarningCount,
+                setDefaultLookupMode,
+                resetDefaultLookup,
+                callDefaultLookupGetApi
+            })
+            {
+                if (helper != null)
+                {
+                    availableDebugHelpers += 1;
+                }
+            }
 
             // Canonical export path.
             ExpectGetApiSuccess(getApiCanonical, "canonical_export");
 
-            // Alias export path + one-time deprecation warning event.
-            resetAliasWarningCount();
             ExpectGetApiSuccess(getApiAlias, "alias_export_first");
             ExpectGetApiSuccess(getApiAlias, "alias_export_second");
-            Assert(getAliasWarningCount() == 1, "alias export should emit warning once");
+
+            Assert(
+                availableDebugHelpers == 0 || availableDebugHelpers == 5,
+                "Expected either zero or all phase13 debug helper exports.");
+
+            if (availableDebugHelpers == 0)
+            {
+                return "PASS";
+            }
+
+            // Debug-only helper path assertions.
+            resetAliasWarningCount();
+            ExpectGetApiSuccess(getApiAlias, "alias_export_debug_first");
+            ExpectGetApiSuccess(getApiAlias, "alias_export_debug_second");
+            Assert(getAliasWarningCount() == 1, "alias export should increment warning count once");
 
             // Helper default lookup: canonical first (no alias warning expected).
             resetAliasWarningCount();
@@ -356,5 +238,4 @@ public static class Phase13ExportContractHarness
 Add-Type -TypeDefinition $code -Language CSharp
 $result = [Phase13ExportContractHarness]::Run($DllPath, $KenshiPath)
 Assert-Condition -Condition ($result -eq "PASS") -Message "Phase 13 in-process export harness failed."
-Invoke-KenshiAliasLogProbe -DllPath $DllPath -KenshiPath $KenshiPath
 Write-Host "PASS"
