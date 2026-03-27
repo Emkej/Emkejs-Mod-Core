@@ -43,9 +43,21 @@ function Get-ApiHeaderStringDefine {
     throw "Required $DefineName define not found in: $ApiHeaderPath"
 }
 
-function Get-DefaultBoolScaffoldReplacements {
-    $stateFields = "    int32_t enabled;"
-    $stateInitializers = "    1,"
+function Get-DefaultHubScaffoldReplacements {
+    $stateFields = @"
+    int32_t enabled;
+    EMC_KeybindValueV1 hotkey;
+    int32_t count;
+    float radius;
+"@
+
+    $stateInitializers = @"
+    1,
+    { 42, 0u },
+    10,
+    2.5f
+"@
+
     $accessors = @"
 EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
 {
@@ -54,7 +66,94 @@ EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
 
 EMC_Result __cdecl SetEnabled(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
 {
-    return emc::consumer::SetBoolFieldValueWithRollback(user_data, value, err_buf, err_buf_size, &ExampleModState::enabled);
+    const EMC_Result boolValidation = emc::consumer::ValidateBoolValue(value, err_buf, err_buf_size);
+    if (boolValidation != EMC_OK)
+    {
+        return boolValidation;
+    }
+
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.enabled = value != 0 ? 1 : 0;
+        });
+}
+
+EMC_Result __cdecl GetHotkey(void* user_data, EMC_KeybindValueV1* out_value)
+{
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::hotkey);
+}
+
+EMC_Result __cdecl SetHotkey(void* user_data, EMC_KeybindValueV1 value, char* err_buf, uint32_t err_buf_size)
+{
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.hotkey = value;
+        });
+}
+
+EMC_Result __cdecl GetCount(void* user_data, int32_t* out_value)
+{
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::count);
+}
+
+EMC_Result __cdecl SetCount(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    const EMC_Result rangeValidation = emc::consumer::ValidateValueInRange<int32_t>(
+        value,
+        0,
+        100,
+        err_buf,
+        err_buf_size);
+    if (rangeValidation != EMC_OK)
+    {
+        return rangeValidation;
+    }
+
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.count = value;
+        });
+}
+
+EMC_Result __cdecl GetRadius(void* user_data, float* out_value)
+{
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::radius);
+}
+
+EMC_Result __cdecl SetRadius(void* user_data, float value, char* err_buf, uint32_t err_buf_size)
+{
+    const EMC_Result rangeValidation = emc::consumer::ValidateValueInRange<float>(
+        value,
+        0.0f,
+        10.0f,
+        err_buf,
+        err_buf_size);
+    if (rangeValidation != EMC_OK)
+    {
+        return rangeValidation;
+    }
+
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.radius = value;
+        });
+}
+
+EMC_Result __cdecl RefreshNow(void* user_data, char* err_buf, uint32_t err_buf_size)
+{
+    return emc::consumer::ActionNoopSuccess(user_data, err_buf, err_buf_size);
 }
 "@
 
@@ -66,9 +165,54 @@ const EMC_BoolSettingDefV1 kBoolSettingEnabled = {
     &g_state,
     &GetEnabled,
     &SetEnabled };
+
+const EMC_KeybindSettingDefV1 kKeybindSetting = {
+    "hotkey",
+    "Hotkey",
+    "Primary feature hotkey",
+    &g_state,
+    &GetHotkey,
+    &SetHotkey };
+
+const EMC_IntSettingDefV1 kIntSetting = {
+    "count",
+    "Count",
+    "Example integer setting",
+    &g_state,
+    0,
+    100,
+    5,
+    &GetCount,
+    &SetCount };
+
+const EMC_FloatSettingDefV1 kFloatSetting = {
+    "radius",
+    "Radius",
+    "Example float setting",
+    &g_state,
+    0.0f,
+    10.0f,
+    0.5f,
+    EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT,
+    &GetRadius,
+    &SetRadius };
+
+const EMC_ActionRowDefV1 kActionRow = {
+    "refresh_now",
+    "Refresh now",
+    "Re-sync values from runtime state",
+    &g_state,
+    EMC_ACTION_FORCE_REFRESH,
+    &RefreshNow };
 "@
 
-    $rowEntries = "    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kBoolSettingEnabled },"
+    $rowEntries = @"
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kBoolSettingEnabled },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, &kKeybindSetting },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, &kIntSetting },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, &kFloatSetting },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION, &kActionRow }
+"@
 
     return [ordered]@{
         "__BOOL_STATE_FIELDS__" = $stateFields
@@ -164,12 +308,33 @@ foreach ($dir in @($bundleIncludeDir, $bundleSrcDir, $bundleDocsDir, $bundleSamp
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
 }
 
+$bundleReadme = @'
+# __MOD_NAME__ Mod Hub SDK
+
+Start with `docs/mod-hub-sdk-quickstart.md`.
+
+Preferred path:
+
+1. Use `samples/minimal/mod_hub_consumer_adapter.h` and `samples/minimal/mod_hub_consumer_adapter.cpp` as the production starting point.
+2. Treat `samples/single-tu/mod_hub_consumer_single_tu.cpp` as a reference-only sample.
+3. Replace only the example row IDs you need.
+4. Implement `PersistExampleModState(...)` as your local persistence seam; the shared helper-backed callbacks already cover validation and rollback.
+
+Reference assets:
+
+- Quick start: `docs/mod-hub-sdk-quickstart.md`
+- Full reference: `docs/mod-hub-sdk.md`
+- Minimal sample: `samples/minimal/mod_hub_consumer_adapter.cpp`
+- Single-TU reference: `samples/single-tu/mod_hub_consumer_single_tu.cpp`
+'@.Replace("__MOD_NAME__", $ModName)
+
 Copy-Item -Path $apiHeaderPath -Destination (Join-Path $bundleIncludeDir "mod_hub_api.h") -Force
 Copy-Item -Path $clientHeaderPath -Destination (Join-Path $bundleIncludeDir "mod_hub_client.h") -Force
 Copy-Item -Path $consumerHelpersHeaderPath -Destination (Join-Path $bundleIncludeDir "mod_hub_consumer_helpers.h") -Force
 Copy-Item -Path $clientSourcePath -Destination (Join-Path $bundleSrcDir "mod_hub_client.cpp") -Force
 Copy-Item -Path $sdkDocPath -Destination (Join-Path $bundleDocsDir "mod-hub-sdk.md") -Force
 Copy-Item -Path $sdkQuickstartDocPath -Destination (Join-Path $bundleDocsDir "mod-hub-sdk-quickstart.md") -Force
+Set-Content -Path (Join-Path $bundleRoot "README.md") -Value $bundleReadme -NoNewline
 
 $sampleTokens = [ordered]@{
     "__NAMESPACE_ID__" = "example.mod_hub"
@@ -187,10 +352,10 @@ foreach ($token in $sampleTokens.Keys) {
     $singleTuSampleContent = $singleTuSampleContent.Replace($token, $sampleTokens[$token])
 }
 
-$defaultBoolReplacements = Get-DefaultBoolScaffoldReplacements
-foreach ($token in $defaultBoolReplacements.Keys) {
-    $sampleSourceContent = $sampleSourceContent.Replace($token, $defaultBoolReplacements[$token])
-    $singleTuSampleContent = $singleTuSampleContent.Replace($token, $defaultBoolReplacements[$token])
+$defaultHubReplacements = Get-DefaultHubScaffoldReplacements
+foreach ($token in $defaultHubReplacements.Keys) {
+    $sampleSourceContent = $sampleSourceContent.Replace($token, $defaultHubReplacements[$token])
+    $singleTuSampleContent = $singleTuSampleContent.Replace($token, $defaultHubReplacements[$token])
 }
 
 Set-Content -Path (Join-Path $bundleSampleDir "mod_hub_consumer_adapter.h") -Value $sampleHeaderContent -NoNewline
@@ -211,6 +376,7 @@ $sdkMetadata = [ordered]@{
         compatibility_alias_removal_target = $compatRemovalTarget
     }
     assets = [ordered]@{
+        bundle_readme = "README.md"
         api_header = "include/emc/mod_hub_api.h"
         client_header = "include/emc/mod_hub_client.h"
         client_source = "src/mod_hub_client.cpp"

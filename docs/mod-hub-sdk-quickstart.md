@@ -2,6 +2,13 @@
 
 Fast path for integrating a mod with `Emkejs-Mod-Core` Mod Hub using the public SDK/helper.
 
+Preferred path for new consumers:
+
+1. Generate `src/mod_hub_consumer_adapter.*` with `--with-hub`.
+2. Keep the adapter files as the production path.
+3. Use `samples/mod_hub_consumer_single_tu.cpp` as a reference only when you want a single-file example.
+4. Replace only the example row IDs you need and implement `PersistExampleModState(...)` as your local persistence seam.
+
 ## 1) Scaffold the adapter
 
 From your mod repo root (where `scripts/init-mod-template.*` is available):
@@ -19,7 +26,7 @@ This generates:
 - `src/mod_hub_consumer_adapter.h`
 - `src/mod_hub_consumer_adapter.cpp`
 
-Optional richer preset:
+Optional reference preset:
 
 ```bash
 ./scripts/init-mod-template.sh --with-hub --with-hub-single-tu-sample
@@ -35,22 +42,40 @@ That also generates:
 
 Use the `samples/mod_hub_consumer_single_tu.cpp` file as a single-file reference only; keep the adapter files as the default integration path.
 
-If your mod mostly needs simple bool toggles, you can also generate the bool
-callback/registration skeletons directly:
+If you want scaffolded rows instead of hand-editing the default examples, you
+can request specific row IDs directly:
 
 ```bash
-./scripts/init-mod-template.sh --with-hub --hub-bool-setting show_overlay --hub-bool-setting auto_save
+./scripts/init-mod-template.sh --with-hub \
+  --hub-bool-setting show_overlay \
+  --hub-bool-setting auto_save \
+  --hub-keybind-setting toggle_overlay \
+  --hub-int-setting max_markers \
+  --hub-float-setting search_radius \
+  --hub-action-row refresh_cache
 ```
 
 ```powershell
-./scripts/init-mod-template.ps1 -WithHub -HubBoolSetting "show_overlay", "auto_save"
+./scripts/init-mod-template.ps1 -WithHub `
+  -HubBoolSetting "show_overlay", "auto_save" `
+  -HubKeybindSetting "toggle_overlay" `
+  -HubIntSetting "max_markers" `
+  -HubFloatSetting "search_radius" `
+  -HubActionRow "refresh_cache"
 ```
 
-If you already have several toggles, put them in `hub-settings.json`:
+Bool-only generation still works; the new flags just let you replace the
+default keybind/int/float/action examples with named skeletons too.
+
+If you already know several row IDs, put them in `hub-settings.json`:
 
 ```json
 {
-  "bool_settings": ["show_overlay", "auto_save"]
+  "bool_settings": ["show_overlay", "auto_save"],
+  "keybind_settings": ["toggle_overlay"],
+  "int_settings": ["max_markers"],
+  "float_settings": ["search_radius"],
+  "action_rows": ["refresh_cache"]
 }
 ```
 
@@ -62,8 +87,13 @@ If you already have several toggles, put them in `hub-settings.json`:
 ./scripts/init-mod-template.ps1 -WithHub -HubSettingsManifest .\hub-settings.json
 ```
 
-Generated bool setters include a TODO placeholder for the common
-"persist-and-rollback-on-failure" path via `emc/mod_hub_consumer_helpers.h`.
+Generated setters now use `ValidateBoolValue`, `ValidateValueInRange`, and
+`ApplyUpdateWithRollback` from `emc/mod_hub_consumer_helpers.h`, plus a local
+`PersistExampleModState(...)` stub that marks the consumer-owned persistence
+seam explicitly.
+Most mods only need to replace the example row IDs and implement that
+`PersistExampleModState(...)` seam; the helper-backed callback structure can
+stay otherwise unchanged.
 
 ## 2) Set your namespace and mod IDs
 

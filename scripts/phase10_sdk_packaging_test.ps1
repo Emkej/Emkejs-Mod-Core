@@ -55,6 +55,7 @@ try {
     Assert-Condition -Condition ($null -ne $bundleDir) -Message "Extracted SDK bundle directory not found."
 
     $requiredRelPaths = @(
+        "README.md",
         "include\emc\mod_hub_api.h",
         "include\emc\mod_hub_client.h",
         "include\emc\mod_hub_consumer_helpers.h",
@@ -76,6 +77,7 @@ try {
     $metadataPath = Join-Path $bundleDir.FullName "sdk-metadata.json"
     $metadata = Get-Content -Path $metadataPath -Raw | ConvertFrom-Json
     Assert-Condition -Condition ($metadata.sdk_package_version -eq $sdkVersion) -Message "sdk_package_version mismatch in metadata."
+    Assert-Condition -Condition ($metadata.assets.bundle_readme -eq "README.md") -Message "Metadata bundle_readme path mismatch."
     Assert-Condition -Condition ($metadata.assets.integration_doc -eq "docs/mod-hub-sdk.md") -Message "Metadata integration_doc path mismatch."
     Assert-Condition -Condition ($metadata.assets.quickstart_doc -eq "docs/mod-hub-sdk-quickstart.md") -Message "Metadata quickstart_doc path mismatch."
     Assert-Condition -Condition ($metadata.assets.single_tu_sample_source -eq "samples/single-tu/mod_hub_consumer_single_tu.cpp") -Message "Metadata single_tu_sample_source path mismatch."
@@ -92,12 +94,21 @@ try {
 
     $sampleSourcePath = Join-Path $bundleDir.FullName "samples\minimal\mod_hub_consumer_adapter.cpp"
     $singleTuSamplePath = Join-Path $bundleDir.FullName "samples\single-tu\mod_hub_consumer_single_tu.cpp"
+    $readmePath = Join-Path $bundleDir.FullName "README.md"
+    $bundleReadme = Get-Content -Path $readmePath -Raw
     $sampleSource = Get-Content -Path $sampleSourcePath -Raw
     $singleTuSample = Get-Content -Path $singleTuSamplePath -Raw
+    Assert-Condition -Condition ($bundleReadme.Contains("docs/mod-hub-sdk-quickstart.md")) -Message "Bundle README should point consumers to the quick-start guide first."
+    Assert-Condition -Condition ($bundleReadme.Contains("samples/minimal/mod_hub_consumer_adapter.cpp")) -Message "Bundle README should point consumers to the minimal adapter sample."
+    Assert-Condition -Condition ($bundleReadme.Contains("samples/single-tu/mod_hub_consumer_single_tu.cpp")) -Message "Bundle README should label the single-TU sample as a reference asset."
+    Assert-Condition -Condition ($bundleReadme.Contains("PersistExampleModState")) -Message "Bundle README should call out the local persistence seam."
     Assert-Condition -Condition (-not $sampleSource.Contains("src/hub_")) -Message "Sample should not reference hub internals (src/hub_*)."
     Assert-Condition -Condition (-not $sampleSource.Contains('#include "hub_')) -Message "Sample should not include hub internal headers."
     Assert-Condition -Condition (-not $singleTuSample.Contains("src/hub_")) -Message "Single-TU sample should not reference hub internals (src/hub_*)."
     Assert-Condition -Condition (-not $singleTuSample.Contains('#include "hub_')) -Message "Single-TU sample should not include hub internal headers."
+    Assert-Condition -Condition ($sampleSource.Contains("ValidateBoolValue")) -Message "Packaged sample should use the shared bool-validation helper."
+    Assert-Condition -Condition ($sampleSource.Contains("ValidateValueInRange")) -Message "Packaged sample should use the shared range-validation helper."
+    Assert-Condition -Condition ($sampleSource.Contains("ApplyUpdateWithRollback")) -Message "Packaged sample should use the shared apply/persist/rollback helper."
 
     $cl = Get-Command "cl.exe" -ErrorAction SilentlyContinue
     if ($null -ne $cl) {

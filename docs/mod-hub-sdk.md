@@ -4,6 +4,13 @@ Consumer-facing SDK reference for integrating with `Emkejs-Mod-Core` Mod Hub.
 
 Need the shortest integration path first? Start with [Mod Hub SDK Quick Start](mod-hub-sdk-quickstart.md).
 
+Recommended path:
+
+1. Start from `src/mod_hub_consumer_adapter.*`.
+2. Keep `samples/mod_hub_consumer_single_tu.cpp` as a reference-only sample.
+3. Replace only the example rows you actually need.
+4. Keep persistence in one local `PersistExampleModState(...)` seam while shared helpers handle validation and rollback.
+
 ## SDK SSOT
 
 Canonical SDK surfaces:
@@ -242,21 +249,39 @@ Additional generated file:
 
 - `samples/mod_hub_consumer_single_tu.cpp`
 
-Optional bool-setting skeleton generation:
+Optional typed row skeleton generation:
 
 ```bash
-./scripts/init-mod-template.sh --with-hub --hub-bool-setting show_overlay --hub-bool-setting auto_save
+./scripts/init-mod-template.sh --with-hub \
+  --hub-bool-setting show_overlay \
+  --hub-bool-setting auto_save \
+  --hub-keybind-setting toggle_overlay \
+  --hub-int-setting max_markers \
+  --hub-float-setting search_radius \
+  --hub-action-row refresh_cache
 ```
 
 ```powershell
-./scripts/init-mod-template.ps1 -WithHub -HubBoolSetting "show_overlay", "auto_save"
+./scripts/init-mod-template.ps1 -WithHub `
+  -HubBoolSetting "show_overlay", "auto_save" `
+  -HubKeybindSetting "toggle_overlay" `
+  -HubIntSetting "max_markers" `
+  -HubFloatSetting "search_radius" `
+  -HubActionRow "refresh_cache"
 ```
+
+Bool-only generation remains valid. The extra flags simply replace the default
+keybind/int/float/action examples with named scaffold rows when you want them.
 
 For larger lists, use a small manifest instead of repeating flags:
 
 ```json
 {
-  "bool_settings": ["show_overlay", "auto_save"]
+  "bool_settings": ["show_overlay", "auto_save"],
+  "keybind_settings": ["toggle_overlay"],
+  "int_settings": ["max_markers"],
+  "float_settings": ["search_radius"],
+  "action_rows": ["refresh_cache"]
 }
 ```
 
@@ -268,10 +293,12 @@ For larger lists, use a small manifest instead of repeating flags:
 ./scripts/init-mod-template.ps1 -WithHub -HubSettingsManifest .\hub-settings.json
 ```
 
-This replaces the default single bool example with generated bool state fields,
-get/set callbacks, setting definitions, and row entries. Generated setters also
-include a small persistence/rollback TODO scaffold so the repetitive save-fail
-pattern is harder to miss, now centralized in `emc/mod_hub_consumer_helpers.h`.
+This replaces the per-kind example rows you requested with generated state
+fields, callbacks, setting definitions, and row entries. Generated setters now
+use `ValidateBoolValue`, `ValidateValueInRange`, and
+`ApplyUpdateWithRollback(...)` from `emc/mod_hub_consumer_helpers.h`, while a
+local `PersistExampleModState(...)` stub keeps the persistence boundary visible
+and consumer-owned.
 
 Migration note:
 
@@ -353,10 +380,11 @@ Source snippet:
 <!-- PHASE11_SAMPLE_SOURCE_BEGIN -->
 ```cpp
 #include "mod_hub_consumer_adapter.h"
+#include "emc/mod_hub_consumer_helpers.h"
 
 namespace
 {
-struct ExampleState
+struct ExampleModState
 {
     int32_t enabled;
     EMC_KeybindValueV1 hotkey;
@@ -364,120 +392,145 @@ struct ExampleState
     float radius;
 };
 
-ExampleState g_state = { 1, { 42, 0u }, 10, 2.5f };
+ExampleModState g_state = {
+    1,
+    { 42, 0u },
+    10,
+    2.5f};
 emc::ModHubClient g_client;
 bool g_client_configured = false;
 
-EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
+bool PersistExampleModState(const ExampleModState& next_state)
 {
-    if (user_data == 0 || out_value == 0)
+    (void)next_state;
+    // TODO: Persist next_state to your config store and return false on failure.
+    return true;
+}
+
+template <typename UpdateFn>
+EMC_Result ApplyExampleModStateUpdate(
+    void* user_data,
+    char* err_buf,
+    uint32_t err_buf_size,
+    UpdateFn update)
+{
+    if (user_data == 0)
     {
+        emc::consumer::WriteErrorMessage(err_buf, err_buf_size, "invalid_state");
         return EMC_ERR_INVALID_ARGUMENT;
     }
 
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    *out_value = state->enabled;
-    return EMC_OK;
+    ExampleModState* state = static_cast<ExampleModState*>(user_data);
+    const ExampleModState previous = *state;
+    ExampleModState updated = previous;
+    update(updated);
+
+    return emc::consumer::ApplyUpdateWithRollback(
+        previous,
+        updated,
+        err_buf,
+        err_buf_size,
+        [state](const ExampleModState& snapshot) {
+            *state = snapshot;
+        },
+        &PersistExampleModState);
+}
+
+EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
+{
+    return emc::consumer::GetBoolFieldValue(user_data, out_value, &ExampleModState::enabled);
 }
 
 EMC_Result __cdecl SetEnabled(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
 {
-    (void)err_buf;
-    (void)err_buf_size;
-    if (user_data == 0)
+    const EMC_Result boolValidation = emc::consumer::ValidateBoolValue(value, err_buf, err_buf_size);
+    if (boolValidation != EMC_OK)
     {
-        return EMC_ERR_INVALID_ARGUMENT;
+        return boolValidation;
     }
 
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    state->enabled = value != 0 ? 1 : 0;
-    return EMC_OK;
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.enabled = value != 0 ? 1 : 0;
+        });
 }
 
 EMC_Result __cdecl GetHotkey(void* user_data, EMC_KeybindValueV1* out_value)
 {
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    *out_value = state->hotkey;
-    return EMC_OK;
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::hotkey);
 }
 
 EMC_Result __cdecl SetHotkey(void* user_data, EMC_KeybindValueV1 value, char* err_buf, uint32_t err_buf_size)
 {
-    (void)err_buf;
-    (void)err_buf_size;
-    if (user_data == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    state->hotkey = value;
-    return EMC_OK;
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.hotkey = value;
+        });
 }
 
 EMC_Result __cdecl GetCount(void* user_data, int32_t* out_value)
 {
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    *out_value = state->count;
-    return EMC_OK;
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::count);
 }
 
 EMC_Result __cdecl SetCount(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
 {
-    (void)err_buf;
-    (void)err_buf_size;
-    if (user_data == 0)
+    const EMC_Result rangeValidation = emc::consumer::ValidateValueInRange<int32_t>(
+        value,
+        0,
+        100,
+        err_buf,
+        err_buf_size);
+    if (rangeValidation != EMC_OK)
     {
-        return EMC_ERR_INVALID_ARGUMENT;
+        return rangeValidation;
     }
 
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    state->count = value;
-    return EMC_OK;
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.count = value;
+        });
 }
 
 EMC_Result __cdecl GetRadius(void* user_data, float* out_value)
 {
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    *out_value = state->radius;
-    return EMC_OK;
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::radius);
 }
 
 EMC_Result __cdecl SetRadius(void* user_data, float value, char* err_buf, uint32_t err_buf_size)
 {
-    (void)err_buf;
-    (void)err_buf_size;
-    if (user_data == 0)
+    const EMC_Result rangeValidation = emc::consumer::ValidateValueInRange<float>(
+        value,
+        0.0f,
+        10.0f,
+        err_buf,
+        err_buf_size);
+    if (rangeValidation != EMC_OK)
     {
-        return EMC_ERR_INVALID_ARGUMENT;
+        return rangeValidation;
     }
 
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    state->radius = value;
-    return EMC_OK;
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.radius = value;
+        });
 }
 
 EMC_Result __cdecl RefreshNow(void* user_data, char* err_buf, uint32_t err_buf_size)
 {
-    (void)user_data;
-    (void)err_buf;
-    (void)err_buf_size;
-    return EMC_OK;
+    return emc::consumer::ActionNoopSuccess(user_data, err_buf, err_buf_size);
 }
 
 const EMC_ModDescriptorV1 kModDescriptor = {
@@ -485,17 +538,15 @@ const EMC_ModDescriptorV1 kModDescriptor = {
     "Example Mod Hub",
     "example_consumer",
     "Example Consumer",
-    &g_state
-};
+    &g_state };
 
-const EMC_BoolSettingDefV1 kBoolSetting = {
+const EMC_BoolSettingDefV1 kBoolSettingEnabled = {
     "enabled",
     "Enabled",
-    "Enable the feature",
+    "Generated bool setting for Enabled.",
     &g_state,
     &GetEnabled,
-    &SetEnabled
-};
+    &SetEnabled };
 
 const EMC_KeybindSettingDefV1 kKeybindSetting = {
     "hotkey",
@@ -503,8 +554,7 @@ const EMC_KeybindSettingDefV1 kKeybindSetting = {
     "Primary feature hotkey",
     &g_state,
     &GetHotkey,
-    &SetHotkey
-};
+    &SetHotkey };
 
 const EMC_IntSettingDefV1 kIntSetting = {
     "count",
@@ -515,8 +565,7 @@ const EMC_IntSettingDefV1 kIntSetting = {
     100,
     5,
     &GetCount,
-    &SetCount
-};
+    &SetCount };
 
 const EMC_FloatSettingDefV1 kFloatSetting = {
     "radius",
@@ -528,8 +577,7 @@ const EMC_FloatSettingDefV1 kFloatSetting = {
     0.5f,
     EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT,
     &GetRadius,
-    &SetRadius
-};
+    &SetRadius };
 
 const EMC_ActionRowDefV1 kActionRow = {
     "refresh_now",
@@ -537,11 +585,10 @@ const EMC_ActionRowDefV1 kActionRow = {
     "Re-sync values from runtime state",
     &g_state,
     EMC_ACTION_FORCE_REFRESH,
-    &RefreshNow
-};
+    &RefreshNow };
 
 const emc::ModHubClientSettingRowV1 kRows[] = {
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kBoolSetting },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kBoolSettingEnabled },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, &kKeybindSetting },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, &kIntSetting },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, &kFloatSetting },
@@ -551,8 +598,7 @@ const emc::ModHubClientSettingRowV1 kRows[] = {
 const emc::ModHubClientTableRegistrationV1 kRegistration = {
     &kModDescriptor,
     kRows,
-    (uint32_t)(sizeof(kRows) / sizeof(kRows[0]))
-};
+    (uint32_t)(sizeof(kRows) / sizeof(kRows[0])) };
 
 void EnsureClientConfigured()
 {

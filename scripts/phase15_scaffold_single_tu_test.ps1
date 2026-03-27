@@ -54,6 +54,10 @@ try {
         -WithHub `
         -WithHubSingleTuSample `
         -HubBoolSetting "show_overlay", "auto_save" `
+        -HubKeybindSetting "toggle_overlay" `
+        -HubIntSetting "max_markers" `
+        -HubFloatSetting "search_radius" `
+        -HubActionRow "refresh_cache" `
         -HubNamespaceId "phase15.scaffold" `
         -HubNamespaceDisplayName "Phase15 Scaffold" `
         -HubModId "phase15_consumer" `
@@ -79,14 +83,38 @@ try {
     Assert-Condition -Condition ($source.Contains("SetAutoSave")) -Message "Scaffold adapter missing generated auto_save setter."
     Assert-Condition -Condition ($source.Contains('const EMC_BoolSettingDefV1 kBoolSettingShowOverlay')) -Message "Scaffold adapter missing generated bool setting definition."
     Assert-Condition -Condition (-not $source.Contains('const EMC_BoolSettingDefV1 kBoolSetting =')) -Message "Scaffold adapter should replace the legacy single bool definition when custom bool settings are requested."
+    Assert-Condition -Condition ($source.Contains("GetToggleOverlay")) -Message "Scaffold adapter missing generated keybind getter."
+    Assert-Condition -Condition ($source.Contains('const EMC_KeybindSettingDefV1 kKeybindSettingToggleOverlay')) -Message "Scaffold adapter missing generated keybind setting definition."
+    Assert-Condition -Condition (-not $source.Contains('const EMC_KeybindSettingDefV1 kKeybindSetting =')) -Message "Scaffold adapter should replace the legacy single keybind definition when custom keybind settings are requested."
+    Assert-Condition -Condition ($source.Contains("GetMaxMarkers")) -Message "Scaffold adapter missing generated int getter."
+    Assert-Condition -Condition ($source.Contains('const EMC_IntSettingDefV1 kIntSettingMaxMarkers')) -Message "Scaffold adapter missing generated int setting definition."
+    Assert-Condition -Condition (-not $source.Contains('const EMC_IntSettingDefV1 kIntSetting =')) -Message "Scaffold adapter should replace the legacy single int definition when custom int settings are requested."
+    Assert-Condition -Condition ($source.Contains("GetSearchRadius")) -Message "Scaffold adapter missing generated float getter."
+    Assert-Condition -Condition ($source.Contains('const EMC_FloatSettingDefV1 kFloatSettingSearchRadius')) -Message "Scaffold adapter missing generated float setting definition."
+    Assert-Condition -Condition (-not $source.Contains('const EMC_FloatSettingDefV1 kFloatSetting =')) -Message "Scaffold adapter should replace the legacy single float definition when custom float settings are requested."
+    Assert-Condition -Condition ($source.Contains("RefreshCache")) -Message "Scaffold adapter missing generated action callback."
+    Assert-Condition -Condition ($source.Contains('const EMC_ActionRowDefV1 kActionRowRefreshCache')) -Message "Scaffold adapter missing generated action row definition."
+    Assert-Condition -Condition (-not $source.Contains('const EMC_ActionRowDefV1 kActionRow =')) -Message "Scaffold adapter should replace the legacy single action definition when custom action rows are requested."
     Assert-Condition -Condition ($singleTu.Contains("GetShowOverlay")) -Message "Single-TU sample missing generated show_overlay getter."
     Assert-Condition -Condition ($singleTu.Contains("SetAutoSave")) -Message "Single-TU sample missing generated auto_save setter."
-    Assert-Condition -Condition ($singleTu.Contains("SetBoolFieldValueWithRollback")) -Message "Generated bool setter should delegate to shared rollback helper."
+    Assert-Condition -Condition ($singleTu.Contains("GetToggleOverlay")) -Message "Single-TU sample missing generated keybind getter."
+    Assert-Condition -Condition ($singleTu.Contains("GetMaxMarkers")) -Message "Single-TU sample missing generated int getter."
+    Assert-Condition -Condition ($singleTu.Contains("GetSearchRadius")) -Message "Single-TU sample missing generated float getter."
+    Assert-Condition -Condition ($singleTu.Contains("RefreshCache")) -Message "Single-TU sample missing generated action callback."
+    Assert-Condition -Condition ($source.Contains("PersistExampleModState")) -Message "Scaffold adapter should include the local persistence seam helper."
+    Assert-Condition -Condition ($source.Contains("ApplyExampleModStateUpdate")) -Message "Scaffold adapter should include the local state-update helper."
+    Assert-Condition -Condition ($source.Contains("ValidateBoolValue")) -Message "Scaffold adapter should validate bool setters through the shared helper surface."
+    Assert-Condition -Condition ($source.Contains("ValidateValueInRange<int32_t>")) -Message "Scaffold adapter should validate int setters through the shared helper surface."
+    Assert-Condition -Condition ($source.Contains("ValidateValueInRange<float>")) -Message "Scaffold adapter should validate float setters through the shared helper surface."
+    Assert-Condition -Condition ($singleTu.Contains("ApplyUpdateWithRollback")) -Message "Single-TU sample should delegate persistence rollback through the shared helper."
 
     $consumerHelpersPath = Join-Path $RepoRoot "include\emc\mod_hub_consumer_helpers.h"
     Assert-Condition -Condition (Test-Path $consumerHelpersPath) -Message "Missing shared consumer helper header: $consumerHelpersPath"
     $consumerHelpers = Get-Content -Path $consumerHelpersPath -Raw
     Assert-Condition -Condition ($consumerHelpers.Contains("previous_value")) -Message "Shared consumer helper should retain persistence rollback placeholder state."
+    Assert-Condition -Condition ($consumerHelpers.Contains("ValidateBoolValue")) -Message "Shared consumer helper should expose bool validation."
+    Assert-Condition -Condition ($consumerHelpers.Contains("ValidateValueInRange")) -Message "Shared consumer helper should expose numeric range validation."
+    Assert-Condition -Condition ($consumerHelpers.Contains("ApplyUpdateWithRollback")) -Message "Shared consumer helper should expose the common apply/persist/rollback transaction helper."
 
     foreach ($text in @($source, $singleTu)) {
         Assert-Condition -Condition (-not $text.Contains("src/hub_")) -Message "Scaffold output should not reference hub internals (src/hub_*)."
@@ -107,6 +135,18 @@ try {
   "bool_settings": [
     "show_overlay",
     "auto_save"
+  ],
+  "keybind_settings": [
+    "toggle_overlay"
+  ],
+  "int_settings": [
+    "max_markers"
+  ],
+  "float_settings": [
+    "search_radius"
+  ],
+  "action_rows": [
+    "refresh_cache"
   ]
 }
 '@
@@ -130,6 +170,10 @@ try {
         $shellSource = Get-Content -Path $shellSourcePath -Raw
         Assert-Condition -Condition ($shellSource.Contains("GetShowOverlay")) -Message "Shell wrapper missing generated show_overlay getter."
         Assert-Condition -Condition ($shellSource.Contains("SetAutoSave")) -Message "Shell wrapper missing generated auto_save setter."
+        Assert-Condition -Condition ($shellSource.Contains("GetToggleOverlay")) -Message "Shell wrapper missing generated keybind getter."
+        Assert-Condition -Condition ($shellSource.Contains("GetMaxMarkers")) -Message "Shell wrapper missing generated int getter."
+        Assert-Condition -Condition ($shellSource.Contains("GetSearchRadius")) -Message "Shell wrapper missing generated float getter."
+        Assert-Condition -Condition ($shellSource.Contains("RefreshCache")) -Message "Shell wrapper missing generated action callback."
     }
 
     $includePath = Join-Path $RepoRoot "include"
