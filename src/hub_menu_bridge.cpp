@@ -10,6 +10,7 @@
 #include <kenshi/InputHandler.h>
 #include <kenshi/TitleScreen.h>
 #include <mygui/MyGUI_Button.h>
+#include <mygui/MyGUI_ComboBox.h>
 #include <mygui/MyGUI_EditBox.h>
 #include <mygui/MyGUI_Gui.h>
 #include <mygui/MyGUI_InputManager.h>
@@ -86,6 +87,7 @@ const int kHubPanelLineId = 0x454d43;
 const char* kNamespaceButtonSkin = "Kenshi_Button1";
 const char* kHeaderButtonSkin = "Kenshi_Button1";
 const char* kValueButtonSkin = "Kenshi_Button1";
+const char* kComboBoxSkin = "Kenshi_ComboBox";
 const char* kTextSkin = "Kenshi_TextboxStandardText";
 const char* kEditBoxSkin = "Kenshi_EditBox";
 const char* kNoMatchesText = "No matches in this tab. Try checking other tabs?";
@@ -2286,6 +2288,67 @@ void OnHubFloatEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
     NormalizeHubFloatEditText(sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0);
 }
 
+void OnHubSelectAccepted(MyGUI::ComboBox* sender, size_t index)
+{
+    if (sender == 0)
+    {
+        return;
+    }
+
+    const std::string namespace_id = sender->getUserString("emc_ns");
+    const std::string mod_id = sender->getUserString("emc_mod");
+    const std::string setting_id = sender->getUserString("emc_setting");
+    if (namespace_id.empty() || mod_id.empty() || setting_id.empty())
+    {
+        return;
+    }
+
+    HubUiRowView row;
+    if (!TryFindRowViewById(namespace_id, mod_id, setting_id, &row)
+        || row.kind != HUB_UI_ROW_KIND_SELECT
+        || row.select_options == 0
+        || index >= row.select_option_count)
+    {
+        return;
+    }
+
+    const int32_t value = row.select_options[index].value;
+    if (value == row.pending_select_value)
+    {
+        return;
+    }
+
+    HubUi_SetPendingSelect(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), value);
+}
+
+void OnHubTextChanged(MyGUI::EditBox* sender)
+{
+    if (sender == 0)
+    {
+        return;
+    }
+
+    const std::string namespace_id = sender->getUserString("emc_ns");
+    const std::string mod_id = sender->getUserString("emc_mod");
+    const std::string setting_id = sender->getUserString("emc_setting");
+    if (namespace_id.empty() || mod_id.empty() || setting_id.empty())
+    {
+        return;
+    }
+
+    const std::string text = sender->getOnlyText().asUTF8();
+
+    HubUiRowView row;
+    if (TryFindRowViewById(namespace_id, mod_id, setting_id, &row)
+        && row.pending_text != 0
+        && text == row.pending_text)
+    {
+        return;
+    }
+
+    HubUi_SetPendingText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), text.c_str());
+}
+
 void OnHubMouseWheel(MyGUI::Widget*, int rel)
 {
     if (!g_hub_enabled || !HubUi_IsOptionsWindowOpen() || g_hub_scroll_max_offset <= 0 || rel == 0)
@@ -2638,6 +2701,24 @@ std::string FormatExactIntDeltaButtonCaption(int32_t delta)
     return caption.str();
 }
 
+size_t FindSelectOptionIndex(const HubUiRowView& row, int32_t value)
+{
+    if (row.select_options == 0)
+    {
+        return MyGUI::ITEM_NONE;
+    }
+
+    for (uint32_t option_index = 0u; option_index < row.select_option_count; ++option_index)
+    {
+        if (row.select_options[option_index].value == value)
+        {
+            return static_cast<size_t>(option_index);
+        }
+    }
+
+    return MyGUI::ITEM_NONE;
+}
+
 void CreateNumericRangeHintLabel(MyGUI::Widget* parent, int x, int y, int width, const HubUiRowView& row)
 {
     if (parent == 0)
@@ -2924,6 +3005,44 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             plus_button->setCaption("+");
             plus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(plus_button, "float_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+        }
+    }
+    else if (row.kind == HUB_UI_ROW_KIND_SELECT)
+    {
+        MyGUI::ComboBox* combo_box = CreateTrackedWidget<MyGUI::ComboBox>(
+            parent,
+            kComboBoxSkin,
+            MyGUI::IntCoord(value_x, y, 200, 30));
+        if (combo_box != 0)
+        {
+            combo_box->setComboModeDrop(true);
+            combo_box->setSmoothShow(false);
+            AttachHubIdentity(combo_box, row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            for (uint32_t option_index = 0u; option_index < row.select_option_count; ++option_index)
+            {
+                combo_box->addItem(row.select_options[option_index].label != 0 ? row.select_options[option_index].label : "");
+            }
+
+            const size_t selected_index = FindSelectOptionIndex(row, row.pending_select_value);
+            if (selected_index != MyGUI::ITEM_NONE)
+            {
+                combo_box->setIndexSelected(selected_index);
+            }
+            combo_box->eventComboAccept += MyGUI::newDelegate(&OnHubSelectAccepted);
+        }
+    }
+    else if (row.kind == HUB_UI_ROW_KIND_TEXT)
+    {
+        MyGUI::EditBox* value_box = CreateTrackedSearchBox(
+            parent,
+            MyGUI::IntCoord(value_x, y, 200, 30));
+        if (value_box != 0)
+        {
+            value_box->setEditMultiLine(false);
+            value_box->setMaxTextLength(row.text_max_length);
+            value_box->setOnlyText(row.pending_text != 0 ? row.pending_text : "");
+            AttachHubIdentity(value_box, row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            value_box->eventEditTextChange += MyGUI::newDelegate(&OnHubTextChanged);
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_ACTION)

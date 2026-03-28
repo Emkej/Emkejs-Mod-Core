@@ -27,7 +27,15 @@ enum SettingKind
     SETTING_KIND_KEYBIND = 1,
     SETTING_KIND_INT = 2,
     SETTING_KIND_FLOAT = 3,
-    SETTING_KIND_ACTION = 4
+    SETTING_KIND_ACTION = 4,
+    SETTING_KIND_SELECT = 5,
+    SETTING_KIND_TEXT = 6
+};
+
+struct SelectOptionEntry
+{
+    int32_t value;
+    std::string label;
 };
 
 struct SettingEntry
@@ -60,6 +68,15 @@ struct SettingEntry
     float float_step;
     uint32_t float_display_decimals;
 
+    EMC_GetSelectCallback get_select;
+    EMC_SetSelectCallback set_select;
+    std::vector<SelectOptionEntry> select_options_storage;
+    std::vector<EMC_SelectOptionV1> select_options_view;
+
+    EMC_GetTextCallback get_text;
+    EMC_SetTextCallback set_text;
+    uint32_t text_max_length;
+
     EMC_ActionRowCallback on_action;
     uint32_t action_flags;
 };
@@ -91,6 +108,7 @@ std::map<std::string, NamespaceEntry*> g_namespaces_by_id;
 std::map<EMC_ModHandle, ModEntry*> g_mods_by_handle;
 const int32_t kDefaultIntDecButtonDeltas[3] = { 10, 5, 1 };
 const int32_t kDefaultIntIncButtonDeltas[3] = { 1, 5, 10 };
+const uint32_t kMaxTextSettingLength = 256u;
 
 const char* SafeLogValue(const char* value)
 {
@@ -323,6 +341,13 @@ void InitializeSettingDefaults(SettingEntry* setting)
     setting->float_max_value = 0.0f;
     setting->float_step = 0.0f;
     setting->float_display_decimals = 0;
+    setting->get_select = nullptr;
+    setting->set_select = nullptr;
+    setting->select_options_storage.clear();
+    setting->select_options_view.clear();
+    setting->get_text = nullptr;
+    setting->set_text = nullptr;
+    setting->text_max_length = 0u;
     setting->on_action = nullptr;
     setting->action_flags = 0;
 }
@@ -386,6 +411,75 @@ bool ValidateCustomIntButtonLayout(const EMC_IntSettingDefV2* def)
 
     return ValidateCustomIntButtonSide(def->dec_button_deltas, def->step, true)
         && ValidateCustomIntButtonSide(def->inc_button_deltas, def->step, false);
+}
+
+void RefreshSelectOptionViews(SettingEntry* setting)
+{
+    if (setting == nullptr)
+    {
+        return;
+    }
+
+    setting->select_options_view.clear();
+    setting->select_options_view.reserve(setting->select_options_storage.size());
+    for (size_t option_index = 0; option_index < setting->select_options_storage.size(); ++option_index)
+    {
+        EMC_SelectOptionV1 option_view = {};
+        option_view.value = setting->select_options_storage[option_index].value;
+        option_view.label = setting->select_options_storage[option_index].label.c_str();
+        setting->select_options_view.push_back(option_view);
+    }
+}
+
+bool SelectOptionsEqual(const SettingEntry* setting, const EMC_SelectOptionV1* options, uint32_t option_count)
+{
+    if (setting == nullptr)
+    {
+        return false;
+    }
+
+    if (setting->select_options_storage.size() != option_count)
+    {
+        return false;
+    }
+
+    for (uint32_t option_index = 0u; option_index < option_count; ++option_index)
+    {
+        const SelectOptionEntry& existing = setting->select_options_storage[option_index];
+        const EMC_SelectOptionV1& incoming = options[option_index];
+        if (existing.value != incoming.value || !StringEquals(existing.label, incoming.label))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ValidateSelectOptions(const EMC_SelectOptionV1* options, uint32_t option_count)
+{
+    if (options == nullptr || option_count == 0u)
+    {
+        return false;
+    }
+
+    for (uint32_t option_index = 0u; option_index < option_count; ++option_index)
+    {
+        if (options[option_index].label == nullptr || options[option_index].label[0] == '\0')
+        {
+            return false;
+        }
+
+        for (uint32_t previous_index = 0u; previous_index < option_index; ++previous_index)
+        {
+            if (options[previous_index].value == options[option_index].value)
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 bool EmitCommonSettingDriftWarnings(
@@ -455,6 +549,15 @@ void PopulateSettingView(const SettingEntry* setting, HubRegistrySettingView* ou
     out_view->float_max_value = setting->float_max_value;
     out_view->float_step = setting->float_step;
     out_view->float_display_decimals = setting->float_display_decimals;
+
+    out_view->get_select = setting->get_select;
+    out_view->set_select = setting->set_select;
+    out_view->select_options = setting->select_options_view.empty() ? nullptr : &setting->select_options_view[0];
+    out_view->select_option_count = static_cast<uint32_t>(setting->select_options_view.size());
+
+    out_view->get_text = setting->get_text;
+    out_view->set_text = setting->set_text;
+    out_view->text_max_length = setting->text_max_length;
 
     out_view->on_action = setting->on_action;
     out_view->action_flags = setting->action_flags;
@@ -925,6 +1028,144 @@ EMC_Result __cdecl HubRegistry_RegisterFloatSetting(EMC_ModHandle mod, const EMC
     setting->float_max_value = def->max_value;
     setting->float_step = def->step;
     setting->float_display_decimals = def->display_decimals;
+    AppendNewSetting(mod_entry, setting);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl HubRegistry_RegisterSelectSetting(EMC_ModHandle mod, const EMC_SelectSettingDefV1* def)
+{
+    ModEntry* mod_entry = nullptr;
+    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_select_setting", &mod_entry);
+    if (validation_result != EMC_OK)
+    {
+        return validation_result;
+    }
+
+    if (!ValidateCommonSettingStrings(def->setting_id, def->label, def->description))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (def->get_value == nullptr || def->set_value == nullptr || !ValidateSelectOptions(def->options, def->option_count))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::map<std::string, SettingEntry*>::const_iterator it = mod_entry->settings_by_id.find(def->setting_id);
+    if (it != mod_entry->settings_by_id.end())
+    {
+        SettingEntry* existing = it->second;
+        if (existing->kind != SETTING_KIND_SELECT)
+        {
+            LogSettingRegistrationConflict(
+                mod_entry->namespace_id.c_str(),
+                mod_entry->mod_id.c_str(),
+                def->setting_id,
+                EMC_ERR_CONFLICT,
+                "setting_id_already_registered_with_different_kind");
+            return EMC_ERR_CONFLICT;
+        }
+
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        if (existing->get_select != def->get_value || existing->set_select != def->set_value)
+        {
+            LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
+            exact_match = false;
+        }
+
+        if (!SelectOptionsEqual(existing, def->options, def->option_count))
+        {
+            LogSettingWarning(mod_entry, def->setting_id, "options", "options_drift_ignored_using_canonical");
+            exact_match = false;
+        }
+
+        (void)exact_match;
+        return EMC_OK;
+    }
+
+    SettingEntry* setting = new SettingEntry();
+    InitializeSettingDefaults(setting);
+    setting->kind = SETTING_KIND_SELECT;
+    setting->setting_id = def->setting_id;
+    setting->label = def->label;
+    setting->description = def->description;
+    setting->user_data = def->user_data;
+    setting->get_select = def->get_value;
+    setting->set_select = def->set_value;
+    setting->select_options_storage.reserve(def->option_count);
+    for (uint32_t option_index = 0u; option_index < def->option_count; ++option_index)
+    {
+        SelectOptionEntry option = {};
+        option.value = def->options[option_index].value;
+        option.label = def->options[option_index].label;
+        setting->select_options_storage.push_back(option);
+    }
+    RefreshSelectOptionViews(setting);
+    AppendNewSetting(mod_entry, setting);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl HubRegistry_RegisterTextSetting(EMC_ModHandle mod, const EMC_TextSettingDefV1* def)
+{
+    ModEntry* mod_entry = nullptr;
+    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_text_setting", &mod_entry);
+    if (validation_result != EMC_OK)
+    {
+        return validation_result;
+    }
+
+    if (!ValidateCommonSettingStrings(def->setting_id, def->label, def->description))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (def->get_value == nullptr || def->set_value == nullptr || def->max_length == 0u || def->max_length > kMaxTextSettingLength)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::map<std::string, SettingEntry*>::const_iterator it = mod_entry->settings_by_id.find(def->setting_id);
+    if (it != mod_entry->settings_by_id.end())
+    {
+        SettingEntry* existing = it->second;
+        if (existing->kind != SETTING_KIND_TEXT)
+        {
+            LogSettingRegistrationConflict(
+                mod_entry->namespace_id.c_str(),
+                mod_entry->mod_id.c_str(),
+                def->setting_id,
+                EMC_ERR_CONFLICT,
+                "setting_id_already_registered_with_different_kind");
+            return EMC_ERR_CONFLICT;
+        }
+
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        if (existing->get_text != def->get_value || existing->set_text != def->set_value)
+        {
+            LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
+            exact_match = false;
+        }
+
+        if (existing->text_max_length != def->max_length)
+        {
+            LogSettingWarning(mod_entry, def->setting_id, "max_length", "max_length_drift_ignored_using_canonical");
+            exact_match = false;
+        }
+
+        (void)exact_match;
+        return EMC_OK;
+    }
+
+    SettingEntry* setting = new SettingEntry();
+    InitializeSettingDefaults(setting);
+    setting->kind = SETTING_KIND_TEXT;
+    setting->setting_id = def->setting_id;
+    setting->label = def->label;
+    setting->description = def->description;
+    setting->user_data = def->user_data;
+    setting->get_text = def->get_value;
+    setting->set_text = def->set_value;
+    setting->text_max_length = def->max_length;
     AppendNewSetting(mod_entry, setting);
     return EMC_OK;
 }

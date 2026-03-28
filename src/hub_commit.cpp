@@ -7,6 +7,8 @@
 
 #include <cstring>
 #include <sstream>
+#include <string>
+#include <vector>
 
 namespace
 {
@@ -14,6 +16,8 @@ const char* kLogNone = "none";
 const char* kSetCallbackFailedMessage = "set_callback_failed";
 const char* kGetCallbackFailedMessage = "get_callback_failed";
 const char* kInvalidBoolValueMessage = "invalid_bool_value";
+const char* kInvalidSelectValueMessage = "invalid_select_value";
+const char* kTextExceedsMaxLengthMessage = "text_exceeds_max_length";
 
 HubCommitSummary g_last_summary = { 0u, 0u, 0u, 0u, HUB_COMMIT_SKIP_REASON_NONE };
 
@@ -96,6 +100,76 @@ bool FloatBitsEqual(float lhs, float rhs)
     std::memcpy(&rhs_bits, &rhs, sizeof(rhs_bits));
     return lhs_bits == rhs_bits;
 }
+
+bool IsSelectValueValid(const HubUiRowView& row, int32_t value)
+{
+    for (uint32_t option_index = 0u; option_index < row.select_option_count; ++option_index)
+    {
+        if (row.select_options != nullptr && row.select_options[option_index].value == value)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool TryReadCommittedText(
+    const HubUiRowView& row,
+    std::string* out_value,
+    EMC_Result* out_result,
+    const char** out_message)
+{
+    if (row.get_text == nullptr)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = EMC_ERR_INVALID_ARGUMENT;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "missing_get_callback";
+        }
+        return false;
+    }
+
+    std::vector<char> buffer(row.text_max_length + 1u, '\0');
+    const EMC_Result result = row.get_text(row.user_data, &buffer[0], row.text_max_length + 1u);
+    if (result != EMC_OK)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = result;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = kGetCallbackFailedMessage;
+        }
+        return false;
+    }
+
+    const void* terminator = std::memchr(&buffer[0], '\0', buffer.size());
+    if (terminator == nullptr)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = EMC_ERR_CALLBACK_FAILED;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = kTextExceedsMaxLengthMessage;
+        }
+        return false;
+    }
+
+    if (out_value != nullptr)
+    {
+        const size_t length = static_cast<const char*>(terminator) - &buffer[0];
+        out_value->assign(&buffer[0], length);
+    }
+
+    return true;
+}
 }
 
 void HubCommit_RunOptionsSave()
@@ -133,7 +207,9 @@ void HubCommit_RunOptionsSave()
         if (row.kind != HUB_UI_ROW_KIND_BOOL
             && row.kind != HUB_UI_ROW_KIND_KEYBIND
             && row.kind != HUB_UI_ROW_KIND_INT
-            && row.kind != HUB_UI_ROW_KIND_FLOAT)
+            && row.kind != HUB_UI_ROW_KIND_FLOAT
+            && row.kind != HUB_UI_ROW_KIND_SELECT
+            && row.kind != HUB_UI_ROW_KIND_TEXT)
         {
             continue;
         }
@@ -264,6 +340,83 @@ void HubCommit_RunOptionsSave()
             }
 
             HubUi_OnCommitSyncInt(row.token, canonical_value);
+            continue;
+        }
+
+        if (row.kind == HUB_UI_ROW_KIND_SELECT)
+        {
+            EMC_Result set_result = EMC_ERR_INVALID_ARGUMENT;
+            if (row.set_select != nullptr)
+            {
+                set_result = row.set_select(row.user_data, row.pending_select_value, err_buf, (uint32_t)sizeof(err_buf));
+            }
+
+            if (set_result != EMC_OK)
+            {
+                summary.failed += 1u;
+                const char* message = ResolveErrorMessage(err_buf, kSetCallbackFailedMessage);
+                HubUi_OnCommitSetFailure(row.token, message);
+                LogCommitFailure(row, set_result, message);
+                continue;
+            }
+
+            summary.succeeded += 1u;
+
+            int32_t canonical_value = row.pending_select_value;
+            EMC_Result get_result = EMC_ERR_INVALID_ARGUMENT;
+            const char* get_message = kGetCallbackFailedMessage;
+            if (row.get_select != nullptr)
+            {
+                get_result = row.get_select(row.user_data, &canonical_value);
+                if (get_result == EMC_OK && !IsSelectValueValid(row, canonical_value))
+                {
+                    get_result = EMC_ERR_CALLBACK_FAILED;
+                    get_message = kInvalidSelectValueMessage;
+                }
+            }
+
+            if (get_result != EMC_OK)
+            {
+                LogCommitGetFailure(row, get_result, get_message);
+                HubUi_OnCommitSyncSelect(row.token, row.pending_select_value);
+                continue;
+            }
+
+            HubUi_OnCommitSyncSelect(row.token, canonical_value);
+            continue;
+        }
+
+        if (row.kind == HUB_UI_ROW_KIND_TEXT)
+        {
+            const char* pending_text = row.pending_text != nullptr ? row.pending_text : "";
+            EMC_Result set_result = EMC_ERR_INVALID_ARGUMENT;
+            if (row.set_text != nullptr)
+            {
+                set_result = row.set_text(row.user_data, pending_text, err_buf, (uint32_t)sizeof(err_buf));
+            }
+
+            if (set_result != EMC_OK)
+            {
+                summary.failed += 1u;
+                const char* message = ResolveErrorMessage(err_buf, kSetCallbackFailedMessage);
+                HubUi_OnCommitSetFailure(row.token, message);
+                LogCommitFailure(row, set_result, message);
+                continue;
+            }
+
+            summary.succeeded += 1u;
+
+            std::string canonical_value;
+            EMC_Result get_result = EMC_ERR_INVALID_ARGUMENT;
+            const char* get_message = kGetCallbackFailedMessage;
+            if (!TryReadCommittedText(row, &canonical_value, &get_result, &get_message))
+            {
+                LogCommitGetFailure(row, get_result, get_message);
+                HubUi_OnCommitSyncText(row.token, pending_text);
+                continue;
+            }
+
+            HubUi_OnCommitSyncText(row.token, canonical_value.c_str());
             continue;
         }
 

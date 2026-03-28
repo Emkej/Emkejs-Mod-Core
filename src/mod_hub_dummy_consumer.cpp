@@ -29,14 +29,24 @@ const char* kBoolSettingId = "enabled";
 const char* kKeybindSettingId = "hotkey";
 const char* kIntSettingId = "count";
 const char* kFloatSettingId = "radius";
+const char* kSelectSettingId = "palette";
+const char* kTextSettingId = "title";
 const char* kActionSettingId = "refresh_now";
+const uint32_t kTextMaxLength = 32u;
 
 int32_t g_mod_user_data = 11;
 int32_t g_bool_value = 1;
 EMC_KeybindValueV1 g_keybind_value = { 42, 0u };
 int32_t g_int_value = 10;
 float g_float_value = 2.5f;
+int32_t g_select_value = 1;
+char g_text_value[kTextMaxLength + 1u] = "Example title";
 int32_t g_action_count = 0;
+
+const EMC_SelectOptionV1 kSelectOptions[] = {
+    { 0, "Default" },
+    { 1, "Warm" },
+    { 2, "Cool" } };
 
 EMC_Result __cdecl GetBool(void* user_data, int32_t* out_value)
 {
@@ -134,6 +144,67 @@ EMC_Result __cdecl SetFloat(void* user_data, float value, char* err_buf, uint32_
     return EMC_OK;
 }
 
+EMC_Result __cdecl GetSelect(void* user_data, int32_t* out_value)
+{
+    if (user_data == 0 || out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_value = *static_cast<int32_t*>(user_data);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetSelect(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    (void)err_buf;
+    (void)err_buf_size;
+    if (user_data == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *static_cast<int32_t*>(user_data) = value;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl GetText(void* user_data, char* out_value, uint32_t out_value_size)
+{
+    if (user_data == 0 || out_value == 0 || out_value_size == 0u)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    const char* value = static_cast<const char*>(user_data);
+    const size_t length = std::strlen(value);
+    if (length + 1u > out_value_size)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::memcpy(out_value, value, length + 1u);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetText(void* user_data, const char* value, char* err_buf, uint32_t err_buf_size)
+{
+    (void)err_buf;
+    (void)err_buf_size;
+    if (user_data == 0 || value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    const size_t length = std::strlen(value);
+    if (length > kTextMaxLength)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::memcpy(static_cast<char*>(user_data), value, length + 1u);
+    return EMC_OK;
+}
+
 EMC_Result __cdecl InvokeAction(void* user_data, char* err_buf, uint32_t err_buf_size)
 {
     (void)err_buf;
@@ -207,6 +278,25 @@ const EMC_FloatSettingDefV1 kFloatSettingDef = {
     &GetFloat,
     &SetFloat};
 
+const EMC_SelectSettingDefV1 kSelectSettingDef = {
+    kSelectSettingId,
+    "Palette",
+    "Example select",
+    &g_select_value,
+    kSelectOptions,
+    (uint32_t)(sizeof(kSelectOptions) / sizeof(kSelectOptions[0])),
+    &GetSelect,
+    &SetSelect};
+
+const EMC_TextSettingDefV1 kTextSettingDef = {
+    kTextSettingId,
+    "Title",
+    "Example text",
+    g_text_value,
+    kTextMaxLength,
+    &GetText,
+    &SetText};
+
 const EMC_ActionRowDefV1 kActionSettingDef = {
     kActionSettingId,
     "Refresh now",
@@ -238,6 +328,8 @@ struct DummyState
     int32_t register_int_calls;
     int32_t register_int_v2_calls;
     int32_t register_float_calls;
+    int32_t register_select_calls;
+    int32_t register_text_calls;
     int32_t register_action_calls;
 
     int32_t order_checks_passed;
@@ -248,11 +340,11 @@ struct DummyState
 DummyState g_state;
 bool g_initialized = false;
 
-emc::ModHubClientSettingRowV1 g_rows[5];
+emc::ModHubClientSettingRowV1 g_rows[7];
 emc::ModHubClientTableRegistrationV1 g_table_registration = {
     &kModDescriptor,
     g_rows,
-    5u};
+    7u};
 
 void ResetRows()
 {
@@ -268,8 +360,14 @@ void ResetRows()
     g_rows[3].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT;
     g_rows[3].def = &kFloatSettingDef;
 
-    g_rows[4].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
-    g_rows[4].def = &kActionSettingDef;
+    g_rows[4].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT;
+    g_rows[4].def = &kSelectSettingDef;
+
+    g_rows[5].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT;
+    g_rows[5].def = &kTextSettingDef;
+
+    g_rows[6].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
+    g_rows[6].def = &kActionSettingDef;
 }
 
 void ResetCapture()
@@ -280,6 +378,8 @@ void ResetCapture()
     g_state.register_int_calls = 0;
     g_state.register_int_v2_calls = 0;
     g_state.register_float_calls = 0;
+    g_state.register_select_calls = 0;
+    g_state.register_text_calls = 0;
     g_state.register_action_calls = 0;
     g_state.order_checks_passed = 1;
     g_state.descriptor_checks_passed = 1;
@@ -301,6 +401,10 @@ int32_t ExpectedKindForIndex(int32_t index)
     case 3:
         return emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT;
     case 4:
+        return emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT;
+    case 5:
+        return emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT;
+    case 6:
         return emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
     default:
         break;
@@ -503,6 +607,53 @@ EMC_Result __cdecl TestRegisterFloat(EMC_ModHandle mod, const EMC_FloatSettingDe
     return ShouldFailKind(emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT) ? EMC_ERR_INTERNAL : EMC_OK;
 }
 
+EMC_Result __cdecl TestRegisterSelect(EMC_ModHandle mod, const EMC_SelectSettingDefV1* def)
+{
+    g_state.register_select_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kSelectSettingId)
+        || def->option_count != (uint32_t)(sizeof(kSelectOptions) / sizeof(kSelectOptions[0]))
+        || def->options == 0
+        || def->options[0].value != 0
+        || !StringEquals(def->options[0].label, "Default")
+        || def->options[1].value != 1
+        || !StringEquals(def->options[1].label, "Warm")
+        || def->options[2].value != 2
+        || !StringEquals(def->options[2].label, "Cool")
+        || def->get_value != &GetSelect
+        || def->set_value != &SetSelect
+        || def->user_data != &g_select_value)
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
+EMC_Result __cdecl TestRegisterText(EMC_ModHandle mod, const EMC_TextSettingDefV1* def)
+{
+    g_state.register_text_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kTextSettingId)
+        || def->max_length != kTextMaxLength
+        || def->get_value != &GetText
+        || def->set_value != &SetText
+        || def->user_data != g_text_value)
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
 EMC_Result __cdecl TestRegisterAction(EMC_ModHandle mod, const EMC_ActionRowDefV1* def)
 {
     g_state.register_action_calls += 1;
@@ -535,7 +686,9 @@ const EMC_HubApiV1* GetTestApi()
         &TestRegisterAction,
         0,
         0,
-        &TestRegisterIntV2};
+        &TestRegisterIntV2,
+        &TestRegisterSelect,
+        &TestRegisterText};
     return &kApi;
 }
 
@@ -672,6 +825,18 @@ int32_t ModHubDummyConsumer_GetRegisterFloatCalls()
 {
     EnsureInitialized();
     return g_state.register_float_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterSelectCalls()
+{
+    EnsureInitialized();
+    return g_state.register_select_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterTextCalls()
+{
+    EnsureInitialized();
+    return g_state.register_text_calls;
 }
 
 int32_t ModHubDummyConsumer_GetRegisterActionCalls()

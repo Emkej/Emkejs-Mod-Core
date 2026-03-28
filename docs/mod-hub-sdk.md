@@ -30,6 +30,8 @@ Handshake constants:
 - `EMC_HUB_API_V1_MIN_SIZE`
 - `EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE`
 - `EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE`
+- `EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE`
+- `EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE`
 
 Handshake entrypoint:
 
@@ -94,6 +96,8 @@ Supported row kinds:
 - `MOD_HUB_CLIENT_SETTING_KIND_INT`
 - `MOD_HUB_CLIENT_SETTING_KIND_INT_V2`
 - `MOD_HUB_CLIENT_SETTING_KIND_FLOAT`
+- `MOD_HUB_CLIENT_SETTING_KIND_SELECT`
+- `MOD_HUB_CLIENT_SETTING_KIND_TEXT`
 - `MOD_HUB_CLIENT_SETTING_KIND_ACTION`
 
 Deterministic helper behavior:
@@ -200,6 +204,74 @@ Migration note:
 
 - `EMC_IntSettingDefV1` remains valid and unchanged for legacy rows.
 - Use V2 only when you need exact deltas or a reduced button set.
+
+## Select and Text Rows (Phase 25)
+
+New surfaces:
+
+- `EMC_SelectOptionV1`
+- `EMC_SelectSettingDefV1`
+- `EMC_TextSettingDefV1`
+- `EMC_HubApiV1::register_select_setting`
+- `EMC_HubApiV1::register_text_setting`
+- `MOD_HUB_CLIENT_SETTING_KIND_SELECT`
+- `MOD_HUB_CLIENT_SETTING_KIND_TEXT`
+
+Behavior:
+
+1. Select rows model fixed enum-style choices with stable integer values and labels.
+2. Text rows model bounded single-line strings with an explicit `max_length`.
+3. Helper registration fails deterministically when a runtime host is older than the required API-size gate.
+
+Validation rules:
+
+1. Select rows require at least one option.
+2. Select option values must be unique.
+3. Select option labels must be non-empty.
+4. Text rows require `max_length > 0`.
+5. Text rows reject `max_length` above the current host cap (`256`).
+
+Fallback behavior:
+
+- `MOD_HUB_CLIENT_SETTING_KIND_SELECT` requires `EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE`.
+- `MOD_HUB_CLIENT_SETTING_KIND_TEXT` requires `EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE`.
+- Older hosts fail with `EMC_ERR_API_SIZE_MISMATCH`; the helper does not silently remap these rows to another kind.
+
+Minimal example:
+
+```cpp
+const EMC_SelectOptionV1 kPaletteOptions[] = {
+    { 0, "Default" },
+    { 1, "Warm" },
+    { 2, "Cool" }
+};
+
+const EMC_SelectSettingDefV1 kPaletteSetting = {
+    "palette",
+    "Palette",
+    "Choose a preset palette",
+    &g_state,
+    kPaletteOptions,
+    3u,
+    &GetPalette,
+    &SetPalette
+};
+
+const EMC_TextSettingDefV1 kTitleSetting = {
+    "title",
+    "Title",
+    "Single-line title",
+    &g_state,
+    64u,
+    &GetTitle,
+    &SetTitle
+};
+
+const emc::ModHubClientSettingRowV1 kRows[] = {
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT, &kPaletteSetting },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT, &kTitleSetting }
+};
+```
 
 ## Runtime Log Semantics (Hub Events)
 
@@ -733,6 +805,16 @@ Phase 20:
 Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
 
 This harness validates V2 int-row registration, sparse/custom button layouts, exact-delta behavior, and deterministic rejection of invalid layouts.
+
+Phase 25:
+
+```powershell
+./scripts/phase25_select_text_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```
+
+Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
+
+This harness validates select/text registration, pending-state updates, bounded text rejection, and select/text commit resync.
 
 Phase 13:
 

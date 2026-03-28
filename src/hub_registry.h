@@ -9,7 +9,9 @@ enum HubRegistrySettingKind
     HUB_REGISTRY_SETTING_KIND_KEYBIND = 1,
     HUB_REGISTRY_SETTING_KIND_INT = 2,
     HUB_REGISTRY_SETTING_KIND_FLOAT = 3,
-    HUB_REGISTRY_SETTING_KIND_ACTION = 4
+    HUB_REGISTRY_SETTING_KIND_ACTION = 4,
+    HUB_REGISTRY_SETTING_KIND_SELECT = 5,
+    HUB_REGISTRY_SETTING_KIND_TEXT = 6
 };
 
 struct HubRegistryNamespaceView
@@ -58,6 +60,15 @@ struct HubRegistrySettingView
     float float_step;
     uint32_t float_display_decimals;
 
+    EMC_GetSelectCallback get_select;
+    EMC_SetSelectCallback set_select;
+    const EMC_SelectOptionV1* select_options;
+    uint32_t select_option_count;
+
+    EMC_GetTextCallback get_text;
+    EMC_SetTextCallback set_text;
+    uint32_t text_max_length;
+
     EMC_ActionRowCallback on_action;
     uint32_t action_flags;
 };
@@ -74,6 +85,8 @@ EMC_Result __cdecl HubRegistry_RegisterKeybindSetting(EMC_ModHandle mod, const E
 EMC_Result __cdecl HubRegistry_RegisterIntSetting(EMC_ModHandle mod, const EMC_IntSettingDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterIntSettingV2(EMC_ModHandle mod, const EMC_IntSettingDefV2* def);
 EMC_Result __cdecl HubRegistry_RegisterFloatSetting(EMC_ModHandle mod, const EMC_FloatSettingDefV1* def);
+EMC_Result __cdecl HubRegistry_RegisterSelectSetting(EMC_ModHandle mod, const EMC_SelectSettingDefV1* def);
+EMC_Result __cdecl HubRegistry_RegisterTextSetting(EMC_ModHandle mod, const EMC_TextSettingDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterActionRow(EMC_ModHandle mod, const EMC_ActionRowDefV1* def);
 void HubRegistry_ForEachSettingInOrder(HubRegistryVisitSettingFn visitor, void* user_data);
 

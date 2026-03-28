@@ -28,6 +28,12 @@ const float kFloatSnapEpsilon = 1e-6f;
 
 struct HubUiModSection;
 
+struct HubUiSelectOption
+{
+    int32_t value;
+    std::string label;
+};
+
 struct HubUiSettingRow
 {
     int32_t kind;
@@ -73,6 +79,19 @@ struct HubUiSettingRow
     float pending_float_value;
     std::string pending_float_text;
     bool float_text_parse_error;
+
+    EMC_GetSelectCallback get_select;
+    EMC_SetSelectCallback set_select;
+    std::vector<HubUiSelectOption> select_options;
+    std::vector<EMC_SelectOptionV1> select_option_views;
+    int32_t canonical_select_value;
+    int32_t pending_select_value;
+
+    EMC_GetTextCallback get_text;
+    EMC_SetTextCallback set_text;
+    uint32_t text_max_length;
+    std::string canonical_text;
+    std::string pending_text;
 
     EMC_ActionRowCallback on_action;
     uint32_t action_flags;
@@ -135,6 +154,71 @@ bool FloatBitsEqual(float lhs, float rhs)
     std::memcpy(&lhs_bits, &lhs, sizeof(lhs_bits));
     std::memcpy(&rhs_bits, &rhs, sizeof(rhs_bits));
     return lhs_bits == rhs_bits;
+}
+
+void RefreshSelectOptionViews(HubUiSettingRow* row)
+{
+    if (row == nullptr)
+    {
+        return;
+    }
+
+    row->select_option_views.clear();
+    row->select_option_views.reserve(row->select_options.size());
+    for (size_t option_index = 0; option_index < row->select_options.size(); ++option_index)
+    {
+        EMC_SelectOptionV1 option_view = {};
+        option_view.value = row->select_options[option_index].value;
+        option_view.label = row->select_options[option_index].label.c_str();
+        row->select_option_views.push_back(option_view);
+    }
+}
+
+bool TryFindSelectOptionLabel(const HubUiSettingRow* row, int32_t value, const char** out_label)
+{
+    if (out_label != nullptr)
+    {
+        *out_label = nullptr;
+    }
+
+    if (row == nullptr)
+    {
+        return false;
+    }
+
+    for (size_t option_index = 0; option_index < row->select_options.size(); ++option_index)
+    {
+        if (row->select_options[option_index].value == value)
+        {
+            if (out_label != nullptr)
+            {
+                *out_label = row->select_options[option_index].label.c_str();
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void RecomputeSelectDirty(HubUiSettingRow* row)
+{
+    if (row == nullptr)
+    {
+        return;
+    }
+
+    row->dirty = row->pending_select_value != row->canonical_select_value;
+}
+
+void RecomputeTextDirty(HubUiSettingRow* row)
+{
+    if (row == nullptr)
+    {
+        return;
+    }
+
+    row->dirty = row->pending_text != row->canonical_text;
 }
 
 int32_t ClampIntValue(int32_t value, int32_t min_value, int32_t max_value)
@@ -718,6 +802,110 @@ bool TryReadFloat(HubUiSettingRow* row, float* out_value, EMC_Result* out_result
     return true;
 }
 
+bool TryReadSelect(HubUiSettingRow* row, int32_t* out_value, EMC_Result* out_result, const char** out_message)
+{
+    if (row->get_select == nullptr)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = EMC_ERR_INVALID_ARGUMENT;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "missing_get_callback";
+        }
+        return false;
+    }
+
+    int32_t value = 0;
+    const EMC_Result result = row->get_select(row->user_data, &value);
+    if (result != EMC_OK)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = result;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "get_callback_failed";
+        }
+        return false;
+    }
+
+    if (!TryFindSelectOptionLabel(row, value, nullptr))
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = EMC_ERR_CALLBACK_FAILED;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "invalid_select_value";
+        }
+        return false;
+    }
+
+    if (out_value != nullptr)
+    {
+        *out_value = value;
+    }
+
+    return true;
+}
+
+bool TryReadText(HubUiSettingRow* row, std::string* out_value, EMC_Result* out_result, const char** out_message)
+{
+    if (row->get_text == nullptr)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = EMC_ERR_INVALID_ARGUMENT;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "missing_get_callback";
+        }
+        return false;
+    }
+
+    std::vector<char> buffer(row->text_max_length + 1u, '\0');
+    const EMC_Result result = row->get_text(row->user_data, &buffer[0], row->text_max_length + 1u);
+    if (result != EMC_OK)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = result;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "get_callback_failed";
+        }
+        return false;
+    }
+
+    const void* terminator = std::memchr(&buffer[0], '\0', buffer.size());
+    if (terminator == nullptr)
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = EMC_ERR_CALLBACK_FAILED;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "text_exceeds_max_length";
+        }
+        return false;
+    }
+
+    if (out_value != nullptr)
+    {
+        const size_t length = static_cast<const char*>(terminator) - &buffer[0];
+        out_value->assign(&buffer[0], length);
+    }
+
+    return true;
+}
+
 void ClearTabsAndRows()
 {
     for (size_t tab_index = 0; tab_index < g_tabs_in_order.size(); ++tab_index)
@@ -862,7 +1050,9 @@ void RefreshValueRowsForMod(HubUiModSection* mod, bool force_refresh)
             if (row->kind == HUB_UI_ROW_KIND_BOOL
                 || row->kind == HUB_UI_ROW_KIND_KEYBIND
                 || row->kind == HUB_UI_ROW_KIND_INT
-                || row->kind == HUB_UI_ROW_KIND_FLOAT)
+                || row->kind == HUB_UI_ROW_KIND_FLOAT
+                || row->kind == HUB_UI_ROW_KIND_SELECT
+                || row->kind == HUB_UI_ROW_KIND_TEXT)
             {
                 row->dirty = false;
                 row->capture_active = false;
@@ -878,7 +1068,9 @@ void RefreshValueRowsForMod(HubUiModSection* mod, bool force_refresh)
         if (row->kind != HUB_UI_ROW_KIND_BOOL
             && row->kind != HUB_UI_ROW_KIND_KEYBIND
             && row->kind != HUB_UI_ROW_KIND_INT
-            && row->kind != HUB_UI_ROW_KIND_FLOAT)
+            && row->kind != HUB_UI_ROW_KIND_FLOAT
+            && row->kind != HUB_UI_ROW_KIND_SELECT
+            && row->kind != HUB_UI_ROW_KIND_TEXT)
         {
             continue;
         }
@@ -946,19 +1138,55 @@ void RefreshValueRowsForMod(HubUiModSection* mod, bool force_refresh)
             continue;
         }
 
-        float value = 0.0f;
+        if (row->kind == HUB_UI_ROW_KIND_FLOAT)
+        {
+            float value = 0.0f;
+            EMC_Result get_result = EMC_OK;
+            const char* message = kLogNone;
+            if (!TryReadFloat(row, &value, &get_result, &message))
+            {
+                LogActionRefreshGetFailure(row, get_result, message);
+                continue;
+            }
+
+            row->canonical_float_value = value;
+            row->pending_float_value = value;
+            row->pending_float_text = FormatFloatText(value, row->float_display_decimals);
+            row->float_text_parse_error = false;
+            row->dirty = false;
+            row->inline_error.clear();
+            continue;
+        }
+
+        if (row->kind == HUB_UI_ROW_KIND_SELECT)
+        {
+            int32_t value = 0;
+            EMC_Result get_result = EMC_OK;
+            const char* message = kLogNone;
+            if (!TryReadSelect(row, &value, &get_result, &message))
+            {
+                LogActionRefreshGetFailure(row, get_result, message);
+                continue;
+            }
+
+            row->canonical_select_value = value;
+            row->pending_select_value = value;
+            row->dirty = false;
+            row->inline_error.clear();
+            continue;
+        }
+
+        std::string value;
         EMC_Result get_result = EMC_OK;
         const char* message = kLogNone;
-        if (!TryReadFloat(row, &value, &get_result, &message))
+        if (!TryReadText(row, &value, &get_result, &message))
         {
             LogActionRefreshGetFailure(row, get_result, message);
             continue;
         }
 
-        row->canonical_float_value = value;
-        row->pending_float_value = value;
-        row->pending_float_text = FormatFloatText(value, row->float_display_decimals);
-        row->float_text_parse_error = false;
+        row->canonical_text = value;
+        row->pending_text = value;
         row->dirty = false;
         row->inline_error.clear();
     }
@@ -1019,6 +1247,8 @@ void __cdecl BuildSessionRow(
         && setting_view->kind != HUB_REGISTRY_SETTING_KIND_KEYBIND
         && setting_view->kind != HUB_REGISTRY_SETTING_KIND_INT
         && setting_view->kind != HUB_REGISTRY_SETTING_KIND_FLOAT
+        && setting_view->kind != HUB_REGISTRY_SETTING_KIND_SELECT
+        && setting_view->kind != HUB_REGISTRY_SETTING_KIND_TEXT
         && setting_view->kind != HUB_REGISTRY_SETTING_KIND_ACTION)
     {
         return;
@@ -1040,6 +1270,14 @@ void __cdecl BuildSessionRow(
     else if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_FLOAT)
     {
         row->kind = HUB_UI_ROW_KIND_FLOAT;
+    }
+    else if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_SELECT)
+    {
+        row->kind = HUB_UI_ROW_KIND_SELECT;
+    }
+    else if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_TEXT)
+    {
+        row->kind = HUB_UI_ROW_KIND_TEXT;
     }
     else
     {
@@ -1085,12 +1323,36 @@ void __cdecl BuildSessionRow(
     row->pending_float_value = 0.0f;
     row->pending_float_text = FormatFloatText(0.0f, row->float_display_decimals);
     row->float_text_parse_error = false;
+    row->get_select = setting_view->get_select;
+    row->set_select = setting_view->set_select;
+    row->canonical_select_value = 0;
+    row->pending_select_value = 0;
+    row->get_text = setting_view->get_text;
+    row->set_text = setting_view->set_text;
+    row->text_max_length = setting_view->text_max_length;
+    row->canonical_text.clear();
+    row->pending_text.clear();
     row->on_action = setting_view->on_action;
     row->action_flags = setting_view->action_flags;
     row->dirty = false;
     row->capture_active = false;
     row->inline_error.clear();
     row->parent_mod = mod;
+
+    if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_SELECT)
+    {
+        row->select_options.reserve(setting_view->select_option_count);
+        for (uint32_t option_index = 0u; option_index < setting_view->select_option_count; ++option_index)
+        {
+            HubUiSelectOption option = {};
+            option.value = setting_view->select_options[option_index].value;
+            option.label = setting_view->select_options[option_index].label != nullptr
+                ? setting_view->select_options[option_index].label
+                : "";
+            row->select_options.push_back(option);
+        }
+        RefreshSelectOptionViews(row);
+    }
 
     mod->rows.push_back(row);
     g_rows_in_order.push_back(row);
@@ -1212,6 +1474,47 @@ void HubUi_PerformInitialSync()
             row->pending_float_value = value;
             row->pending_float_text = FormatFloatText(value, row->float_display_decimals);
             row->float_text_parse_error = false;
+            row->dirty = false;
+            row->inline_error.clear();
+            continue;
+        }
+
+        if (row->kind == HUB_UI_ROW_KIND_SELECT)
+        {
+            int32_t value = 0;
+            EMC_Result get_result = EMC_OK;
+            const char* message = kLogNone;
+            if (!TryReadSelect(row, &value, &get_result, &message))
+            {
+                row->dirty = false;
+                row->inline_error = kUnavailableMessage;
+                LogUiGetFailure(row, get_result, message);
+                continue;
+            }
+
+            row->canonical_select_value = value;
+            row->pending_select_value = value;
+            row->dirty = false;
+            row->inline_error.clear();
+            continue;
+        }
+
+        if (row->kind == HUB_UI_ROW_KIND_TEXT)
+        {
+            std::string value;
+            EMC_Result get_result = EMC_OK;
+            const char* message = kLogNone;
+            if (!TryReadText(row, &value, &get_result, &message))
+            {
+                row->dirty = false;
+                row->pending_text.clear();
+                row->inline_error = kUnavailableMessage;
+                LogUiGetFailure(row, get_result, message);
+                continue;
+            }
+
+            row->canonical_text = value;
+            row->pending_text = value;
             row->dirty = false;
             row->inline_error.clear();
             continue;
@@ -1627,6 +1930,45 @@ EMC_Result HubUi_NormalizePendingFloatText(
     return EMC_OK;
 }
 
+EMC_Result HubUi_SetPendingSelect(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t value)
+{
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_SELECT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    if (!TryFindSelectOptionLabel(row, value, nullptr))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    row->pending_select_value = value;
+    row->inline_error.clear();
+    RecomputeSelectDirty(row);
+    return EMC_OK;
+}
+
+EMC_Result HubUi_SetPendingText(const char* namespace_id, const char* mod_id, const char* setting_id, const char* text)
+{
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_TEXT)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    const char* next_text = text != nullptr ? text : "";
+    if (std::strlen(next_text) > row->text_max_length)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    row->pending_text = next_text;
+    row->inline_error.clear();
+    RecomputeTextDirty(row);
+    return EMC_OK;
+}
+
 EMC_Result HubUi_BeginKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id)
 {
     HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
@@ -1811,6 +2153,15 @@ bool HubUi_GetRowViewByIndex(uint32_t index, HubUiRowView* out_view)
     out_view->pending_float_value = row->pending_float_value;
     out_view->pending_float_text = row->pending_float_text.c_str();
     out_view->float_text_parse_error = row->float_text_parse_error;
+    out_view->get_select = row->get_select;
+    out_view->set_select = row->set_select;
+    out_view->select_options = row->select_option_views.empty() ? nullptr : &row->select_option_views[0];
+    out_view->select_option_count = static_cast<uint32_t>(row->select_option_views.size());
+    out_view->pending_select_value = row->pending_select_value;
+    out_view->get_text = row->get_text;
+    out_view->set_text = row->set_text;
+    out_view->text_max_length = row->text_max_length;
+    out_view->pending_text = row->pending_text.c_str();
     return true;
 }
 
@@ -1902,6 +2253,44 @@ void HubUi_OnCommitSyncFloat(void* token, float canonical_value)
     row->pending_float_value = canonical_value;
     row->pending_float_text = FormatFloatText(canonical_value, row->float_display_decimals);
     row->float_text_parse_error = false;
+    row->dirty = false;
+    row->inline_error.clear();
+}
+
+void HubUi_OnCommitSyncSelect(void* token, int32_t canonical_value)
+{
+    if (token == nullptr)
+    {
+        return;
+    }
+
+    HubUiSettingRow* row = static_cast<HubUiSettingRow*>(token);
+    if (row->kind != HUB_UI_ROW_KIND_SELECT || !TryFindSelectOptionLabel(row, canonical_value, nullptr))
+    {
+        return;
+    }
+
+    row->canonical_select_value = canonical_value;
+    row->pending_select_value = canonical_value;
+    row->dirty = false;
+    row->inline_error.clear();
+}
+
+void HubUi_OnCommitSyncText(void* token, const char* canonical_value)
+{
+    if (token == nullptr)
+    {
+        return;
+    }
+
+    HubUiSettingRow* row = static_cast<HubUiSettingRow*>(token);
+    if (row->kind != HUB_UI_ROW_KIND_TEXT)
+    {
+        return;
+    }
+
+    row->canonical_text = canonical_value != nullptr ? canonical_value : "";
+    row->pending_text = row->canonical_text;
     row->dirty = false;
     row->inline_error.clear();
 }

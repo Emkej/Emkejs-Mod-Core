@@ -180,6 +180,22 @@ bool HasIntSettingV2Support(const EMC_HubApiV1* api, uint32_t api_size)
         && api->register_int_setting_v2 != 0;
 }
 
+bool HasSelectSettingSupport(const EMC_HubApiV1* api, uint32_t api_size)
+{
+    return api != 0
+        && api_size >= EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE
+        && api->api_size >= EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE
+        && api->register_select_setting != 0;
+}
+
+bool HasTextSettingSupport(const EMC_HubApiV1* api, uint32_t api_size)
+{
+    return api != 0
+        && api_size >= EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE
+        && api->api_size >= EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE
+        && api->register_text_setting != 0;
+}
+
 uint32_t ResolveExpectedSdkApiVersion(const emc::ModHubClient::Config& config)
 {
     return config.expected_sdk_api_version != 0u
@@ -338,6 +354,20 @@ EMC_Result RegisterSettingsRow(
             return EMC_ERR_INTERNAL;
         }
         return api->register_action_row(mod_handle, static_cast<const EMC_ActionRowDefV1*>(row->def));
+
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT:
+        if (!HasSelectSettingSupport(api, api_size))
+        {
+            return EMC_ERR_API_SIZE_MISMATCH;
+        }
+        return api->register_select_setting(mod_handle, static_cast<const EMC_SelectSettingDefV1*>(row->def));
+
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT:
+        if (!HasTextSettingSupport(api, api_size))
+        {
+            return EMC_ERR_API_SIZE_MISMATCH;
+        }
+        return api->register_text_setting(mod_handle, static_cast<const EMC_TextSettingDefV1*>(row->def));
 
     default:
         return EMC_ERR_INVALID_ARGUMENT;

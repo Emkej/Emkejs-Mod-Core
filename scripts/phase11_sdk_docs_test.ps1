@@ -143,6 +143,12 @@ Assert-Condition -Condition ($docsText.Contains("does not edit changelog")) -Mes
 Assert-Condition -Condition ($docsText.Contains("ValidateBoolValue")) -Message "docs/mod-hub-sdk.md should document shared bool validation."
 Assert-Condition -Condition ($docsText.Contains("ValidateValueInRange")) -Message "docs/mod-hub-sdk.md should document shared range validation."
 Assert-Condition -Condition ($docsText.Contains("ApplyUpdateWithRollback")) -Message "docs/mod-hub-sdk.md should document the shared apply/persist/rollback helper."
+Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the select-row API size gate."
+Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the text-row API size gate."
+Assert-Condition -Condition ($docsText.Contains("EMC_SelectSettingDefV1")) -Message "docs/mod-hub-sdk.md should document the select setting definition."
+Assert-Condition -Condition ($docsText.Contains("EMC_TextSettingDefV1")) -Message "docs/mod-hub-sdk.md should document the text setting definition."
+Assert-Condition -Condition ($docsText.Contains("./scripts/phase25_select_text_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase25 select/text harness command."
+Assert-Condition -Condition ($docsText.Contains("bounded text rejection")) -Message "docs/mod-hub-sdk.md should describe phase25 select/text coverage."
 
 $requiredLogEvents = @(
     "event=hub_commit_failure",

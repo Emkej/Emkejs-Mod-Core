@@ -9,7 +9,9 @@ enum HubUiRowKind
     HUB_UI_ROW_KIND_KEYBIND = 1,
     HUB_UI_ROW_KIND_ACTION = 2,
     HUB_UI_ROW_KIND_INT = 3,
-    HUB_UI_ROW_KIND_FLOAT = 4
+    HUB_UI_ROW_KIND_FLOAT = 4,
+    HUB_UI_ROW_KIND_SELECT = 5,
+    HUB_UI_ROW_KIND_TEXT = 6
 };
 
 struct HubUiRowView
@@ -57,6 +59,17 @@ struct HubUiRowView
     float pending_float_value;
     const char* pending_float_text;
     bool float_text_parse_error;
+
+    EMC_GetSelectCallback get_select;
+    EMC_SetSelectCallback set_select;
+    const EMC_SelectOptionV1* select_options;
+    uint32_t select_option_count;
+    int32_t pending_select_value;
+
+    EMC_GetTextCallback get_text;
+    EMC_SetTextCallback set_text;
+    uint32_t text_max_length;
+    const char* pending_text;
 };
 
 void HubUi_SetOptionsWindowOpen(bool is_open);
@@ -91,6 +104,8 @@ EMC_Result HubUi_NormalizePendingIntText(const char* namespace_id, const char* m
 EMC_Result HubUi_AdjustPendingFloatStep(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t step_delta);
 EMC_Result HubUi_SetPendingFloatFromText(const char* namespace_id, const char* mod_id, const char* setting_id, const char* text);
 EMC_Result HubUi_NormalizePendingFloatText(const char* namespace_id, const char* mod_id, const char* setting_id);
+EMC_Result HubUi_SetPendingSelect(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t value);
+EMC_Result HubUi_SetPendingText(const char* namespace_id, const char* mod_id, const char* setting_id, const char* text);
 EMC_Result HubUi_BeginKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_CancelKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_ApplyCapturedKeycode(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t keycode);
@@ -106,5 +121,7 @@ void HubUi_OnCommitSyncBool(void* token, int32_t canonical_value);
 void HubUi_OnCommitSyncKeybind(void* token, EMC_KeybindValueV1 canonical_value);
 void HubUi_OnCommitSyncInt(void* token, int32_t canonical_value);
 void HubUi_OnCommitSyncFloat(void* token, float canonical_value);
+void HubUi_OnCommitSyncSelect(void* token, int32_t canonical_value);
+void HubUi_OnCommitSyncText(void* token, const char* canonical_value);
 
 #endif
