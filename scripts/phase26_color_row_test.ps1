@@ -35,6 +35,15 @@ public static class HubPhase26ColorHarness
     public delegate int UiSetPendingColorRaw(IntPtr nsId, IntPtr modId, IntPtr settingId, IntPtr value);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int UiSetPendingColorFromTextRaw(IntPtr nsId, IntPtr modId, IntPtr settingId, IntPtr value);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int UiNormalizePendingColorTextRaw(IntPtr nsId, IntPtr modId, IntPtr settingId);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int UiSetColorHexModeRaw(IntPtr nsId, IntPtr modId, IntPtr settingId, int isHexMode);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int UiSetColorPaletteExpandedRaw(IntPtr nsId, IntPtr modId, IntPtr settingId, int isExpanded);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -44,7 +53,11 @@ public static class HubPhase26ColorHarness
         IntPtr settingId,
         IntPtr outText,
         uint outTextSize,
+        IntPtr outInputText,
+        uint outInputTextSize,
         out int outPreviewKind,
+        out int outHexMode,
+        out int outParseError,
         out int outPaletteExpanded,
         out uint outPresetCount);
 
@@ -117,7 +130,7 @@ public static class HubPhase26ColorHarness
     private static readonly List<Delegate> CallbackRoots = new List<Delegate>();
 
     private static string AccentColorValue = "40ff40";
-    private static string RelationColorValue = "#ff3333";
+    private static string RelationColorValue = "#123abc";
     private static int AccentGetCount = 0;
     private static int AccentSetCount = 0;
     private static int RelationGetCount = 0;
@@ -205,30 +218,53 @@ public static class HubPhase26ColorHarness
         IntPtr modId,
         IntPtr settingId,
         string expectedText,
+        string expectedInputText,
         int expectedPreviewKind,
+        int expectedHexMode,
+        int expectedParseError,
         int expectedPaletteExpanded,
         uint expectedPresetCount,
         string context)
     {
         IntPtr buffer = Marshal.AllocHGlobal(64);
+        IntPtr inputBuffer = Marshal.AllocHGlobal(64);
         try
         {
             Marshal.WriteByte(buffer, 0, 0);
+            Marshal.WriteByte(inputBuffer, 0, 0);
             int previewKind;
+            int hexMode;
+            int parseError;
             int paletteExpanded;
             uint presetCount;
             ExpectResult(
-                getPendingColorState(nsId, modId, settingId, buffer, 64u, out previewKind, out paletteExpanded, out presetCount),
+                getPendingColorState(
+                    nsId,
+                    modId,
+                    settingId,
+                    buffer,
+                    64u,
+                    inputBuffer,
+                    64u,
+                    out previewKind,
+                    out hexMode,
+                    out parseError,
+                    out paletteExpanded,
+                    out presetCount),
                 EMC_OK,
                 context + " get pending color state failed");
             Assert(ReadAnsiBuffer(buffer) == expectedText, context + " pending text mismatch");
+            Assert(ReadAnsiBuffer(inputBuffer) == expectedInputText, context + " input text mismatch");
             Assert(previewKind == expectedPreviewKind, context + " preview kind mismatch");
+            Assert(hexMode == expectedHexMode, context + " hex mode mismatch");
+            Assert(parseError == expectedParseError, context + " parse error mismatch");
             Assert(paletteExpanded == expectedPaletteExpanded, context + " palette expanded mismatch");
             Assert(presetCount == expectedPresetCount, context + " preset count mismatch");
         }
         finally
         {
             Marshal.FreeHGlobal(buffer);
+            Marshal.FreeHGlobal(inputBuffer);
         }
     }
 
@@ -315,6 +351,12 @@ public static class HubPhase26ColorHarness
                 GetProcAddress(module, "EMC_ModHub_Test_UI_CountSettingsForMod"), typeof(CountSettingsForModRaw));
             UiSetPendingColorRaw setPendingColor = (UiSetPendingColorRaw)Marshal.GetDelegateForFunctionPointer(
                 GetProcAddress(module, "EMC_ModHub_Test_UI_SetPendingColor"), typeof(UiSetPendingColorRaw));
+            UiSetPendingColorFromTextRaw setPendingColorFromText = (UiSetPendingColorFromTextRaw)Marshal.GetDelegateForFunctionPointer(
+                GetProcAddress(module, "EMC_ModHub_Test_UI_SetPendingColorFromText"), typeof(UiSetPendingColorFromTextRaw));
+            UiNormalizePendingColorTextRaw normalizePendingColorText = (UiNormalizePendingColorTextRaw)Marshal.GetDelegateForFunctionPointer(
+                GetProcAddress(module, "EMC_ModHub_Test_UI_NormalizePendingColorText"), typeof(UiNormalizePendingColorTextRaw));
+            UiSetColorHexModeRaw setColorHexMode = (UiSetColorHexModeRaw)Marshal.GetDelegateForFunctionPointer(
+                GetProcAddress(module, "EMC_ModHub_Test_UI_SetColorHexMode"), typeof(UiSetColorHexModeRaw));
             UiSetColorPaletteExpandedRaw setColorPaletteExpanded = (UiSetColorPaletteExpandedRaw)Marshal.GetDelegateForFunctionPointer(
                 GetProcAddress(module, "EMC_ModHub_Test_UI_SetColorPaletteExpanded"), typeof(UiSetColorPaletteExpandedRaw));
             UiGetPendingColorStateRaw getPendingColorState = (UiGetPendingColorStateRaw)Marshal.GetDelegateForFunctionPointer(
@@ -441,7 +483,10 @@ public static class HubPhase26ColorHarness
                 modId,
                 accentSettingId,
                 "#40FF40",
+                "#40FF40",
                 COLOR_PREVIEW_KIND_SWATCH,
+                0,
+                0,
                 0,
                 25u,
                 "phase26 accent initial");
@@ -450,8 +495,11 @@ public static class HubPhase26ColorHarness
                 namespaceId,
                 modId,
                 relationSettingId,
-                "#FF3333",
+                "#123ABC",
+                "#123ABC",
                 COLOR_PREVIEW_KIND_TEXT,
+                1,
+                0,
                 0,
                 3u,
                 "phase26 relation initial");
@@ -464,13 +512,75 @@ public static class HubPhase26ColorHarness
                 modId,
                 accentSettingId,
                 "#DEE85A",
+                "#DEE85A",
                 COLOR_PREVIEW_KIND_SWATCH,
+                0,
+                0,
                 0,
                 25u,
                 "phase26 accent normalized");
 
-            IntPtr invalidColor = AllocAnsi(allocations, "#123456");
-            ExpectResult(setPendingColor(namespaceId, modId, accentSettingId, invalidColor), EMC_ERR_INVALID_ARGUMENT, "phase26 invalid palette color should fail");
+            ExpectResult(setColorHexMode(namespaceId, modId, accentSettingId, 1), EMC_OK, "phase26 enable hex mode failed");
+            AssertColorState(
+                getPendingColorState,
+                namespaceId,
+                modId,
+                accentSettingId,
+                "#DEE85A",
+                "#DEE85A",
+                COLOR_PREVIEW_KIND_SWATCH,
+                1,
+                0,
+                0,
+                25u,
+                "phase26 accent hex mode");
+
+            IntPtr rawCustomColor = AllocAnsi(allocations, "123abc");
+            ExpectResult(setPendingColorFromText(namespaceId, modId, accentSettingId, rawCustomColor), EMC_OK, "phase26 set pending color text failed");
+            AssertColorState(
+                getPendingColorState,
+                namespaceId,
+                modId,
+                accentSettingId,
+                "#123ABC",
+                "123abc",
+                COLOR_PREVIEW_KIND_SWATCH,
+                1,
+                0,
+                0,
+                25u,
+                "phase26 accent custom pending");
+
+            IntPtr invalidColor = AllocAnsi(allocations, "#12ZZZZ");
+            ExpectResult(setPendingColorFromText(namespaceId, modId, accentSettingId, invalidColor), EMC_OK, "phase26 invalid color text should stay pending");
+            AssertColorState(
+                getPendingColorState,
+                namespaceId,
+                modId,
+                accentSettingId,
+                "#123ABC",
+                "#12ZZZZ",
+                COLOR_PREVIEW_KIND_SWATCH,
+                1,
+                1,
+                0,
+                25u,
+                "phase26 accent invalid text");
+
+            ExpectResult(normalizePendingColorText(namespaceId, modId, accentSettingId), EMC_OK, "phase26 normalize pending color text failed");
+            AssertColorState(
+                getPendingColorState,
+                namespaceId,
+                modId,
+                accentSettingId,
+                "#123ABC",
+                "#123ABC",
+                COLOR_PREVIEW_KIND_SWATCH,
+                1,
+                0,
+                0,
+                25u,
+                "phase26 accent normalized text");
 
             ExpectResult(setColorPaletteExpanded(namespaceId, modId, accentSettingId, 1), EMC_OK, "phase26 expand palette failed");
             AssertColorState(
@@ -478,8 +588,27 @@ public static class HubPhase26ColorHarness
                 namespaceId,
                 modId,
                 accentSettingId,
-                "#DEE85A",
+                "#123ABC",
+                "#123ABC",
                 COLOR_PREVIEW_KIND_SWATCH,
+                1,
+                0,
+                1,
+                25u,
+                "phase26 accent hidden palette in hex mode");
+
+            ExpectResult(setColorHexMode(namespaceId, modId, accentSettingId, 0), EMC_OK, "phase26 disable hex mode failed");
+            ExpectResult(setColorPaletteExpanded(namespaceId, modId, accentSettingId, 1), EMC_OK, "phase26 expand palette failed");
+            AssertColorState(
+                getPendingColorState,
+                namespaceId,
+                modId,
+                accentSettingId,
+                "#123ABC",
+                "#123ABC",
+                COLOR_PREVIEW_KIND_SWATCH,
+                0,
+                0,
                 1,
                 25u,
                 "phase26 accent expanded");
@@ -488,14 +617,17 @@ public static class HubPhase26ColorHarness
             AssertSummary(getSummary, 1u, 1u, 0u, 0u, HUB_COMMIT_SKIP_REASON_NONE, "phase26 save");
             Assert(AccentSetCount == 1, "phase26 accent set count mismatch");
             Assert(RelationSetCount == 0, "phase26 relation set count mismatch");
-            Assert(AccentColorValue == "dee85a", "phase26 stored accent value mismatch");
+            Assert(AccentColorValue == "123abc", "phase26 stored accent value mismatch");
             AssertColorState(
                 getPendingColorState,
                 namespaceId,
                 modId,
                 accentSettingId,
-                "#DEE85A",
+                "#123ABC",
+                "#123ABC",
                 COLOR_PREVIEW_KIND_SWATCH,
+                0,
+                0,
                 1,
                 25u,
                 "phase26 accent post-save");

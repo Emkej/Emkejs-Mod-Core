@@ -2230,6 +2230,46 @@ void NormalizeHubFloatEditText(MyGUI::EditBox* sender)
     }
 }
 
+void NormalizeHubColorEditText(MyGUI::EditBox* sender)
+{
+    if (sender == 0)
+    {
+        return;
+    }
+
+    const std::string namespace_id = sender->getUserString("emc_ns");
+    const std::string mod_id = sender->getUserString("emc_mod");
+    const std::string setting_id = sender->getUserString("emc_setting");
+    if (namespace_id.empty() || mod_id.empty() || setting_id.empty())
+    {
+        return;
+    }
+
+    HubUiRowView before_row;
+    const bool have_before_row = TryFindRowViewById(namespace_id, mod_id, setting_id, &before_row);
+    const std::string previous_text = have_before_row && before_row.pending_color_text != 0
+        ? before_row.pending_color_text
+        : "";
+    const bool previous_error = have_before_row ? before_row.color_text_parse_error : false;
+
+    if (HubUi_NormalizePendingColorText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str()) != EMC_OK)
+    {
+        return;
+    }
+
+    HubUiRowView after_row;
+    if (!TryFindRowViewById(namespace_id, mod_id, setting_id, &after_row))
+    {
+        return;
+    }
+
+    const std::string normalized_text = after_row.pending_color_text != 0 ? after_row.pending_color_text : "";
+    if (previous_error || previous_text != normalized_text)
+    {
+        sender->setOnlyText(normalized_text);
+    }
+}
+
 void OnHubIntTextChanged(MyGUI::EditBox* sender)
 {
     if (sender == 0)
@@ -2393,6 +2433,47 @@ void OnHubTextChanged(MyGUI::EditBox* sender)
     }
 
     HubUi_SetPendingText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), text.c_str());
+}
+
+void OnHubColorTextChanged(MyGUI::EditBox* sender)
+{
+    if (sender == 0)
+    {
+        return;
+    }
+
+    const std::string namespace_id = sender->getUserString("emc_ns");
+    const std::string mod_id = sender->getUserString("emc_mod");
+    const std::string setting_id = sender->getUserString("emc_setting");
+    if (namespace_id.empty() || mod_id.empty() || setting_id.empty())
+    {
+        return;
+    }
+
+    const std::string text = sender->getOnlyText().asUTF8();
+
+    HubUiRowView row;
+    if (TryFindRowViewById(namespace_id, mod_id, setting_id, &row)
+        && row.pending_color_text != 0
+        && text == row.pending_color_text)
+    {
+        return;
+    }
+
+    HubUi_SetPendingColorFromText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), text.c_str());
+}
+
+void OnHubColorEditAccepted(MyGUI::EditBox* sender)
+{
+    NormalizeHubColorEditText(sender);
+    RebuildHubPanelWidgets();
+}
+
+void OnHubColorEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
+{
+    MyGUI::EditBox* edit_box = sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0;
+    NormalizeHubColorEditText(edit_box);
+    RebuildHubPanelWidgets();
 }
 
 void OnHubMouseWheel(MyGUI::Widget*, int rel)
@@ -2624,10 +2705,27 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
         return;
     }
 
-    if (action == "color_palette_toggle")
+    if (action == "color_mode_toggle")
     {
         HubUiRowView row;
         if (TryFindRowViewById(namespace_id, mod_id, setting_id, &row) && row.kind == HUB_UI_ROW_KIND_COLOR)
+        {
+            HubUi_SetColorHexMode(
+                namespace_id.c_str(),
+                mod_id.c_str(),
+                setting_id.c_str(),
+                !row.color_hex_mode);
+        }
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "color_palette_toggle")
+    {
+        HubUiRowView row;
+        if (TryFindRowViewById(namespace_id, mod_id, setting_id, &row)
+            && row.kind == HUB_UI_ROW_KIND_COLOR
+            && !row.color_hex_mode)
         {
             HubUi_SetColorPaletteExpanded(
                 namespace_id.c_str(),
@@ -2645,6 +2743,7 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
         if (!value_hex.empty())
         {
             HubUi_SetPendingColor(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), value_hex.c_str());
+            HubUi_SetColorHexMode(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), false);
             HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
         }
         RebuildHubPanelWidgets();
@@ -2833,9 +2932,22 @@ MyGUI::Colour ResolveRowColor(const HubUiRowView& row)
     return color;
 }
 
+std::string BuildColorModeButtonCaption(const HubUiRowView& row)
+{
+    return row.color_hex_mode ? "Preset" : "Hex";
+}
+
+std::string BuildColorPaletteButtonCaption(const HubUiRowView& row)
+{
+    return row.color_palette_expanded ? "Hide" : "Presets";
+}
+
 int GetColorPaletteHeight(const HubUiRowView& row)
 {
-    if (row.kind != HUB_UI_ROW_KIND_COLOR || !row.color_palette_expanded || row.color_preset_count == 0u)
+    if (row.kind != HUB_UI_ROW_KIND_COLOR
+        || row.color_hex_mode
+        || !row.color_palette_expanded
+        || row.color_preset_count == 0u)
     {
         return 0;
     }
@@ -2886,11 +2998,19 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
     {
         label_width = panel_width - 430;
     }
+    else if (row.kind == HUB_UI_ROW_KIND_COLOR)
+    {
+        label_width = panel_width - 322;
+    }
     if (label_width < 140)
     {
         label_width = 140;
     }
-    const int value_x = panel_width - 240;
+    int value_x = panel_width - 240;
+    if (row.kind == HUB_UI_ROW_KIND_COLOR)
+    {
+        value_x = panel_width - 272;
+    }
     const int row_height = 34;
 
     MyGUI::TextBox* label = CreateTrackedWidget<MyGUI::TextBox>(
@@ -3176,28 +3296,65 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
         const std::string mod_value = row.mod_id != 0 ? row.mod_id : "";
         const std::string setting_value = row.setting_id != 0 ? row.setting_id : "";
         const MyGUI::Colour current_color = ResolveRowColor(row);
+        const int mode_button_width = 56;
+        const int secondary_control_width = 86;
+        const int swatch_width = 30;
+        const int preview_width = 48;
+        const int control_gap = 4;
+        const int mode_button_x = value_x;
+        const int secondary_control_x = mode_button_x + mode_button_width + control_gap;
+        const int swatch_x = secondary_control_x + secondary_control_width + control_gap;
+        const int preview_x = swatch_x + swatch_width + control_gap;
 
-        MyGUI::Button* toggle_button = CreateTrackedWidget<MyGUI::Button>(
+        MyGUI::Button* mode_button = CreateTrackedWidget<MyGUI::Button>(
             parent,
             kValueButtonSkin,
-            MyGUI::IntCoord(value_x, y, 108, 30));
-        if (toggle_button != 0)
+            MyGUI::IntCoord(mode_button_x, y, mode_button_width, 30));
+        if (mode_button != 0)
         {
-            toggle_button->setCaption(row.pending_text != 0 ? row.pending_text : "");
-            toggle_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
-            AttachHubAction(toggle_button, "color_palette_toggle", namespace_value, mod_value, setting_value);
+            mode_button->setCaption(BuildColorModeButtonCaption(row));
+            mode_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(mode_button, "color_mode_toggle", namespace_value, mod_value, setting_value);
+        }
+
+        if (row.color_hex_mode)
+        {
+            MyGUI::EditBox* value_box = CreateTrackedSearchBox(
+                parent,
+                MyGUI::IntCoord(secondary_control_x, y, secondary_control_width, 30));
+            if (value_box != 0)
+            {
+                value_box->setEditMultiLine(false);
+                value_box->setMaxTextLength(7);
+                value_box->setOnlyText(row.pending_color_text != 0 ? row.pending_color_text : "");
+                AttachHubIdentity(value_box, namespace_value, mod_value, setting_value);
+                value_box->eventEditTextChange += MyGUI::newDelegate(&OnHubColorTextChanged);
+                value_box->eventEditSelectAccept += MyGUI::newDelegate(&OnHubColorEditAccepted);
+                value_box->eventKeyLostFocus += MyGUI::newDelegate(&OnHubColorEditLostFocus);
+            }
+        }
+        else
+        {
+            MyGUI::Button* palette_button = CreateTrackedWidget<MyGUI::Button>(
+                parent,
+                kValueButtonSkin,
+                MyGUI::IntCoord(secondary_control_x, y, secondary_control_width, 30));
+            if (palette_button != 0)
+            {
+                palette_button->setCaption(BuildColorPaletteButtonCaption(row));
+                palette_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                AttachHubAction(palette_button, "color_palette_toggle", namespace_value, mod_value, setting_value);
+            }
         }
 
         MyGUI::Button* current_swatch = CreateTrackedWidget<MyGUI::Button>(
             parent,
             kValueButtonSkin,
-            MyGUI::IntCoord(value_x + 114, y, 30, 30));
+            MyGUI::IntCoord(swatch_x, y, swatch_width, 30));
         if (current_swatch != 0)
         {
             current_swatch->setCaption("");
             current_swatch->setColour(current_color);
-            current_swatch->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
-            AttachHubAction(current_swatch, "color_palette_toggle", namespace_value, mod_value, setting_value);
         }
 
         if (row.color_preview_kind == EMC_COLOR_PREVIEW_KIND_TEXT)
@@ -3205,7 +3362,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             MyGUI::TextBox* preview_text = CreateTrackedWidget<MyGUI::TextBox>(
                 parent,
                 kTextSkin,
-                MyGUI::IntCoord(value_x + 150, y + 5, 50, 22));
+                MyGUI::IntCoord(preview_x, y + 5, preview_width, 22));
             if (preview_text != 0)
             {
                 preview_text->setCaption(hub_color::GetPreviewSampleText());
@@ -3219,7 +3376,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             MyGUI::Button* preview_swatch = CreateTrackedWidget<MyGUI::Button>(
                 parent,
                 kValueButtonSkin,
-                MyGUI::IntCoord(value_x + 150, y, 50, 30));
+                MyGUI::IntCoord(preview_x, y, preview_width, 30));
             if (preview_swatch != 0)
             {
                 preview_swatch->setCaption("");
@@ -3242,7 +3399,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
     }
 
     int next_y = y + row_height;
-    if (row.kind == HUB_UI_ROW_KIND_COLOR && row.color_palette_expanded && row.color_presets != 0)
+    if (row.kind == HUB_UI_ROW_KIND_COLOR && !row.color_hex_mode && row.color_palette_expanded && row.color_presets != 0)
     {
         const std::string namespace_value = row.namespace_id != 0 ? row.namespace_id : "";
         const std::string mod_value = row.mod_id != 0 ? row.mod_id : "";

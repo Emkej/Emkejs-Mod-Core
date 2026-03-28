@@ -25,6 +25,7 @@ const char* kUnavailableMessage = "Unavailable";
 const char* kActionFailedMessage = "action_callback_failed";
 const char* kInvalidIntTextMessage = "invalid_int_text";
 const char* kInvalidFloatTextMessage = "invalid_float_text";
+const char* kInvalidColorTextMessage = "invalid_color_text";
 const float kFloatSnapEpsilon = 1e-6f;
 
 struct HubUiModSection;
@@ -99,9 +100,12 @@ struct HubUiSettingRow
     uint32_t text_max_length;
     std::string canonical_text;
     std::string pending_text;
+    std::string pending_color_text;
+    bool color_text_parse_error;
     uint32_t color_preview_kind;
     std::vector<HubUiColorPreset> color_presets;
     std::vector<EMC_ColorPresetV1> color_preset_views;
+    bool color_hex_mode;
     bool color_palette_expanded;
 
     EMC_ActionRowCallback on_action;
@@ -252,6 +256,16 @@ void RecomputeTextDirty(HubUiSettingRow* row)
     row->dirty = row->pending_text != row->canonical_text;
 }
 
+void RecomputeColorDirty(HubUiSettingRow* row)
+{
+    if (row == nullptr)
+    {
+        return;
+    }
+
+    row->dirty = row->color_text_parse_error || row->pending_text != row->canonical_text;
+}
+
 bool TryFindColorPresetValue(const HubUiSettingRow* row, const char* value_hex)
 {
     if (row == nullptr || value_hex == nullptr)
@@ -268,6 +282,11 @@ bool TryFindColorPresetValue(const HubUiSettingRow* row, const char* value_hex)
     }
 
     return false;
+}
+
+bool ShouldStartColorInHexMode(const HubUiSettingRow* row, const char* value_hex)
+{
+    return row != nullptr && !TryFindColorPresetValue(row, value_hex);
 }
 
 int32_t ClampIntValue(int32_t value, int32_t min_value, int32_t max_value)
@@ -1138,6 +1157,7 @@ void RefreshValueRowsForMod(HubUiModSection* mod, bool force_refresh)
                 row->capture_active = false;
                 row->int_text_parse_error = false;
                 row->float_text_parse_error = false;
+                row->color_text_parse_error = false;
             }
         }
     }
@@ -1264,12 +1284,16 @@ void RefreshValueRowsForMod(HubUiModSection* mod, bool force_refresh)
             const char* message = kLogNone;
             if (!TryReadColor(row, &value, &get_result, &message))
             {
+                row->pending_color_text.clear();
+                row->color_text_parse_error = false;
                 LogActionRefreshGetFailure(row, get_result, message);
                 continue;
             }
 
             row->canonical_text = value;
             row->pending_text = value;
+            row->pending_color_text = value;
+            row->color_text_parse_error = false;
             row->dirty = false;
             row->inline_error.clear();
             continue;
@@ -1436,7 +1460,10 @@ void __cdecl BuildSessionRow(
     row->text_max_length = setting_view->text_max_length;
     row->canonical_text.clear();
     row->pending_text.clear();
+    row->pending_color_text.clear();
+    row->color_text_parse_error = false;
     row->color_preview_kind = setting_view->color_preview_kind;
+    row->color_hex_mode = false;
     row->color_palette_expanded = false;
     row->on_action = setting_view->on_action;
     row->action_flags = setting_view->action_flags;
@@ -1652,6 +1679,9 @@ void HubUi_PerformInitialSync()
             {
                 row->dirty = false;
                 row->pending_text.clear();
+                row->pending_color_text.clear();
+                row->color_text_parse_error = false;
+                row->color_hex_mode = false;
                 row->inline_error = kUnavailableMessage;
                 LogUiGetFailure(row, get_result, message);
                 continue;
@@ -1659,6 +1689,9 @@ void HubUi_PerformInitialSync()
 
             row->canonical_text = value;
             row->pending_text = value;
+            row->pending_color_text = value;
+            row->color_text_parse_error = false;
+            row->color_hex_mode = ShouldStartColorInHexMode(row, value.c_str());
             row->dirty = false;
             row->inline_error.clear();
             continue;
@@ -2122,15 +2155,85 @@ EMC_Result HubUi_SetPendingColor(const char* namespace_id, const char* mod_id, c
     }
 
     std::string normalized_value;
-    if (!hub_color::TryNormalizeColorHex(value, &normalized_value)
-        || !TryFindColorPresetValue(row, normalized_value.c_str()))
+    if (!hub_color::TryNormalizeColorHex(value, &normalized_value))
     {
         return EMC_ERR_INVALID_ARGUMENT;
     }
 
     row->pending_text = normalized_value;
+    row->pending_color_text = normalized_value;
+    row->color_text_parse_error = false;
     row->inline_error.clear();
-    RecomputeTextDirty(row);
+    RecomputeColorDirty(row);
+    return EMC_OK;
+}
+
+EMC_Result HubUi_SetPendingColorFromText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    const char* text)
+{
+    if (text == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_COLOR)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    row->pending_color_text = text;
+
+    std::string normalized_value;
+    if (!hub_color::TryNormalizeColorHex(text, &normalized_value))
+    {
+        row->color_text_parse_error = true;
+        row->inline_error = kInvalidColorTextMessage;
+        RecomputeColorDirty(row);
+        return EMC_OK;
+    }
+
+    row->pending_text = normalized_value;
+    row->color_text_parse_error = false;
+    row->inline_error.clear();
+    RecomputeColorDirty(row);
+    return EMC_OK;
+}
+
+EMC_Result HubUi_NormalizePendingColorText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id)
+{
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_COLOR)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    row->pending_color_text = row->pending_text;
+    row->color_text_parse_error = false;
+    row->inline_error.clear();
+    RecomputeColorDirty(row);
+    return EMC_OK;
+}
+
+EMC_Result HubUi_SetColorHexMode(const char* namespace_id, const char* mod_id, const char* setting_id, bool is_hex_mode)
+{
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_COLOR)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    row->color_hex_mode = is_hex_mode;
+    row->pending_color_text = row->pending_text;
+    row->color_text_parse_error = false;
+    row->inline_error.clear();
+    RecomputeColorDirty(row);
     return EMC_OK;
 }
 
@@ -2343,9 +2446,12 @@ bool HubUi_GetRowViewByIndex(uint32_t index, HubUiRowView* out_view)
     out_view->set_text = row->set_text;
     out_view->text_max_length = row->text_max_length;
     out_view->pending_text = row->pending_text.c_str();
+    out_view->pending_color_text = row->pending_color_text.c_str();
+    out_view->color_text_parse_error = row->color_text_parse_error;
     out_view->color_preview_kind = row->color_preview_kind;
     out_view->color_presets = row->color_preset_views.empty() ? nullptr : &row->color_preset_views[0];
     out_view->color_preset_count = static_cast<uint32_t>(row->color_preset_views.size());
+    out_view->color_hex_mode = row->color_hex_mode;
     out_view->color_palette_expanded = row->color_palette_expanded;
     return true;
 }
@@ -2501,6 +2607,8 @@ void HubUi_OnCommitSyncColor(void* token, const char* canonical_value)
 
     row->canonical_text = normalized_value;
     row->pending_text = normalized_value;
+    row->pending_color_text = normalized_value;
+    row->color_text_parse_error = false;
     row->dirty = false;
     row->inline_error.clear();
 }

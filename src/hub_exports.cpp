@@ -1529,6 +1529,32 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetPendingColor
     return HubUi_SetPendingColor(namespace_id, mod_id, setting_id, value);
 }
 
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetPendingColorFromText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    const char* text)
+{
+    return HubUi_SetPendingColorFromText(namespace_id, mod_id, setting_id, text);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_NormalizePendingColorText(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id)
+{
+    return HubUi_NormalizePendingColorText(namespace_id, mod_id, setting_id);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetColorHexMode(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t is_hex_mode)
+{
+    return HubUi_SetColorHexMode(namespace_id, mod_id, setting_id, is_hex_mode != 0);
+}
+
 extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetColorPaletteExpanded(
     const char* namespace_id,
     const char* mod_id,
@@ -1544,7 +1570,11 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetPendingColor
     const char* setting_id,
     char* out_text,
     uint32_t out_text_size,
+    char* out_input_text,
+    uint32_t out_input_text_size,
     int32_t* out_preview_kind,
+    int32_t* out_hex_mode,
+    int32_t* out_parse_error,
     int32_t* out_palette_expanded,
     uint32_t* out_preset_count)
 {
@@ -1556,9 +1586,18 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetPendingColor
     }
 
     CopyStringToBuffer(row_view.pending_text, out_text, out_text_size);
+    CopyStringToBuffer(row_view.pending_color_text, out_input_text, out_input_text_size);
     if (out_preview_kind != 0)
     {
         *out_preview_kind = static_cast<int32_t>(row_view.color_preview_kind);
+    }
+    if (out_hex_mode != 0)
+    {
+        *out_hex_mode = row_view.color_hex_mode ? 1 : 0;
+    }
+    if (out_parse_error != 0)
+    {
+        *out_parse_error = row_view.color_text_parse_error ? 1 : 0;
     }
     if (out_palette_expanded != 0)
     {

@@ -71,10 +71,13 @@ struct HubUiRowView
     EMC_SetTextCallback set_text;
     uint32_t text_max_length;
     const char* pending_text;
+    const char* pending_color_text;
+    bool color_text_parse_error;
 
     uint32_t color_preview_kind;
     const EMC_ColorPresetV1* color_presets;
     uint32_t color_preset_count;
+    bool color_hex_mode;
     bool color_palette_expanded;
 };
 
@@ -113,6 +116,9 @@ EMC_Result HubUi_NormalizePendingFloatText(const char* namespace_id, const char*
 EMC_Result HubUi_SetPendingSelect(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t value);
 EMC_Result HubUi_SetPendingText(const char* namespace_id, const char* mod_id, const char* setting_id, const char* text);
 EMC_Result HubUi_SetPendingColor(const char* namespace_id, const char* mod_id, const char* setting_id, const char* value);
+EMC_Result HubUi_SetPendingColorFromText(const char* namespace_id, const char* mod_id, const char* setting_id, const char* text);
+EMC_Result HubUi_NormalizePendingColorText(const char* namespace_id, const char* mod_id, const char* setting_id);
+EMC_Result HubUi_SetColorHexMode(const char* namespace_id, const char* mod_id, const char* setting_id, bool is_hex_mode);
 EMC_Result HubUi_SetColorPaletteExpanded(
     const char* namespace_id,
     const char* mod_id,

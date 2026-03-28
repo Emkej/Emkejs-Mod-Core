@@ -221,7 +221,8 @@ bool IsCommitSupportedRowKind(int32_t kind)
 bool IsRowCommitBlocked(const HubUiRowView& row)
 {
     return (row.kind == HUB_UI_ROW_KIND_INT && row.int_text_parse_error)
-        || (row.kind == HUB_UI_ROW_KIND_FLOAT && row.float_text_parse_error);
+        || (row.kind == HUB_UI_ROW_KIND_FLOAT && row.float_text_parse_error)
+        || (row.kind == HUB_UI_ROW_KIND_COLOR && row.color_text_parse_error);
 }
 
 void CommitSingleRow(const HubUiRowView& row, HubCommitSummary* summary)
