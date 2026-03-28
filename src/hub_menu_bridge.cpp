@@ -2626,15 +2626,15 @@ std::string BuildNumericRangeHint(const HubUiRowView& row)
     return std::string();
 }
 
-std::string BuildNumericFooterText(const HubUiRowView& row)
+std::string BuildRowFooterText(const HubUiRowView& row)
 {
+    if (row.description != 0 && row.description[0] != '\0')
+    {
+        return row.description;
+    }
+
     if (row.kind == HUB_UI_ROW_KIND_INT || row.kind == HUB_UI_ROW_KIND_FLOAT)
     {
-        if (row.description != 0 && row.description[0] != '\0')
-        {
-            return row.description;
-        }
-
         return BuildNumericRangeHint(row);
     }
 
@@ -2719,15 +2719,15 @@ size_t FindSelectOptionIndex(const HubUiRowView& row, int32_t value)
     return MyGUI::ITEM_NONE;
 }
 
-void CreateNumericRangeHintLabel(MyGUI::Widget* parent, int x, int y, int width, const HubUiRowView& row)
+void CreateRowFooterLabel(MyGUI::Widget* parent, int x, int y, int width, const HubUiRowView& row)
 {
     if (parent == 0)
     {
         return;
     }
 
-    const std::string hint = BuildNumericFooterText(row);
-    if (hint.empty())
+    const std::string footer = BuildRowFooterText(row);
+    if (footer.empty())
     {
         return;
     }
@@ -2741,7 +2741,7 @@ void CreateNumericRangeHintLabel(MyGUI::Widget* parent, int x, int y, int width,
         return;
     }
 
-    hint_text->setCaption(hint);
+    hint_text->setCaption(footer);
     hint_text->setTextAlign((row.description != 0 && row.description[0] != '\0')
         ? MyGUI::Align::Left
         : MyGUI::Align::Right);
@@ -3060,32 +3060,25 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
     }
 
     int next_y = y + row_height;
-    if (row.kind == HUB_UI_ROW_KIND_INT || row.kind == HUB_UI_ROW_KIND_FLOAT)
+    const std::string footer = BuildRowFooterText(row);
+    if (!footer.empty())
     {
         int hint_x = label_x + 12;
         int hint_width = panel_width - 80;
-        if (row.kind == HUB_UI_ROW_KIND_INT)
+        const bool has_description = row.description != 0 && row.description[0] != '\0';
+        if (!has_description && row.kind == HUB_UI_ROW_KIND_INT)
         {
             const int group_width = GetIntControlGroupWidth(row);
-            const bool use_description_footer = row.description != 0 && row.description[0] != '\0';
-            if (use_description_footer)
-            {
-                hint_x = label_x + 12;
-                hint_width = panel_width - 80;
-            }
-            else
-            {
-                hint_x = GetIntControlX(row, panel_width, value_x);
-                hint_width = group_width;
-            }
+            hint_x = GetIntControlX(row, panel_width, value_x);
+            hint_width = group_width;
         }
-        else
+        else if (!has_description && row.kind == HUB_UI_ROW_KIND_FLOAT)
         {
             hint_x = value_x - 78;
             hint_width = 224;
         }
 
-        CreateNumericRangeHintLabel(parent, hint_x, next_y, hint_width, row);
+        CreateRowFooterLabel(parent, hint_x, next_y, hint_width, row);
         next_y += 20;
     }
 
@@ -3158,7 +3151,7 @@ int GetHubVisibleViewportHeight(int fallback_height)
 int MeasureRowBlockHeight(const HubUiRowView& row)
 {
     int height = 34;
-    if (row.kind == HUB_UI_ROW_KIND_INT || row.kind == HUB_UI_ROW_KIND_FLOAT)
+    if (!BuildRowFooterText(row).empty())
     {
         height += 20;
     }
