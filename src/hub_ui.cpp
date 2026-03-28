@@ -1,5 +1,6 @@
 #include "hub_ui.h"
 
+#include "hub_color.h"
 #include "hub_registry.h"
 
 #include <Debug.h>
@@ -31,6 +32,12 @@ struct HubUiModSection;
 struct HubUiSelectOption
 {
     int32_t value;
+    std::string label;
+};
+
+struct HubUiColorPreset
+{
+    std::string value_hex;
     std::string label;
 };
 
@@ -92,6 +99,10 @@ struct HubUiSettingRow
     uint32_t text_max_length;
     std::string canonical_text;
     std::string pending_text;
+    uint32_t color_preview_kind;
+    std::vector<HubUiColorPreset> color_presets;
+    std::vector<EMC_ColorPresetV1> color_preset_views;
+    bool color_palette_expanded;
 
     EMC_ActionRowCallback on_action;
     uint32_t action_flags;
@@ -174,6 +185,26 @@ void RefreshSelectOptionViews(HubUiSettingRow* row)
     }
 }
 
+void RefreshColorPresetViews(HubUiSettingRow* row)
+{
+    if (row == nullptr)
+    {
+        return;
+    }
+
+    row->color_preset_views.clear();
+    row->color_preset_views.reserve(row->color_presets.size());
+    for (size_t preset_index = 0u; preset_index < row->color_presets.size(); ++preset_index)
+    {
+        EMC_ColorPresetV1 preset_view = {};
+        preset_view.value_hex = row->color_presets[preset_index].value_hex.c_str();
+        preset_view.label = row->color_presets[preset_index].label.empty()
+            ? nullptr
+            : row->color_presets[preset_index].label.c_str();
+        row->color_preset_views.push_back(preset_view);
+    }
+}
+
 bool TryFindSelectOptionLabel(const HubUiSettingRow* row, int32_t value, const char** out_label)
 {
     if (out_label != nullptr)
@@ -219,6 +250,24 @@ void RecomputeTextDirty(HubUiSettingRow* row)
     }
 
     row->dirty = row->pending_text != row->canonical_text;
+}
+
+bool TryFindColorPresetValue(const HubUiSettingRow* row, const char* value_hex)
+{
+    if (row == nullptr || value_hex == nullptr)
+    {
+        return false;
+    }
+
+    for (size_t preset_index = 0u; preset_index < row->color_presets.size(); ++preset_index)
+    {
+        if (row->color_presets[preset_index].value_hex == value_hex)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 int32_t ClampIntValue(int32_t value, int32_t min_value, int32_t max_value)
@@ -906,6 +955,36 @@ bool TryReadText(HubUiSettingRow* row, std::string* out_value, EMC_Result* out_r
     return true;
 }
 
+bool TryReadColor(HubUiSettingRow* row, std::string* out_value, EMC_Result* out_result, const char** out_message)
+{
+    std::string value;
+    if (!TryReadText(row, &value, out_result, out_message))
+    {
+        return false;
+    }
+
+    std::string normalized_value;
+    if (!hub_color::TryNormalizeColorHex(value.c_str(), &normalized_value))
+    {
+        if (out_result != nullptr)
+        {
+            *out_result = EMC_ERR_CALLBACK_FAILED;
+        }
+        if (out_message != nullptr)
+        {
+            *out_message = "invalid_color_value";
+        }
+        return false;
+    }
+
+    if (out_value != nullptr)
+    {
+        *out_value = normalized_value;
+    }
+
+    return true;
+}
+
 void ClearTabsAndRows()
 {
     for (size_t tab_index = 0; tab_index < g_tabs_in_order.size(); ++tab_index)
@@ -1052,7 +1131,8 @@ void RefreshValueRowsForMod(HubUiModSection* mod, bool force_refresh)
                 || row->kind == HUB_UI_ROW_KIND_INT
                 || row->kind == HUB_UI_ROW_KIND_FLOAT
                 || row->kind == HUB_UI_ROW_KIND_SELECT
-                || row->kind == HUB_UI_ROW_KIND_TEXT)
+                || row->kind == HUB_UI_ROW_KIND_TEXT
+                || row->kind == HUB_UI_ROW_KIND_COLOR)
             {
                 row->dirty = false;
                 row->capture_active = false;
@@ -1070,7 +1150,8 @@ void RefreshValueRowsForMod(HubUiModSection* mod, bool force_refresh)
             && row->kind != HUB_UI_ROW_KIND_INT
             && row->kind != HUB_UI_ROW_KIND_FLOAT
             && row->kind != HUB_UI_ROW_KIND_SELECT
-            && row->kind != HUB_UI_ROW_KIND_TEXT)
+            && row->kind != HUB_UI_ROW_KIND_TEXT
+            && row->kind != HUB_UI_ROW_KIND_COLOR)
         {
             continue;
         }
@@ -1176,6 +1257,24 @@ void RefreshValueRowsForMod(HubUiModSection* mod, bool force_refresh)
             continue;
         }
 
+        if (row->kind == HUB_UI_ROW_KIND_COLOR)
+        {
+            std::string value;
+            EMC_Result get_result = EMC_OK;
+            const char* message = kLogNone;
+            if (!TryReadColor(row, &value, &get_result, &message))
+            {
+                LogActionRefreshGetFailure(row, get_result, message);
+                continue;
+            }
+
+            row->canonical_text = value;
+            row->pending_text = value;
+            row->dirty = false;
+            row->inline_error.clear();
+            continue;
+        }
+
         std::string value;
         EMC_Result get_result = EMC_OK;
         const char* message = kLogNone;
@@ -1249,6 +1348,7 @@ void __cdecl BuildSessionRow(
         && setting_view->kind != HUB_REGISTRY_SETTING_KIND_FLOAT
         && setting_view->kind != HUB_REGISTRY_SETTING_KIND_SELECT
         && setting_view->kind != HUB_REGISTRY_SETTING_KIND_TEXT
+        && setting_view->kind != HUB_REGISTRY_SETTING_KIND_COLOR
         && setting_view->kind != HUB_REGISTRY_SETTING_KIND_ACTION)
     {
         return;
@@ -1278,6 +1378,10 @@ void __cdecl BuildSessionRow(
     else if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_TEXT)
     {
         row->kind = HUB_UI_ROW_KIND_TEXT;
+    }
+    else if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_COLOR)
+    {
+        row->kind = HUB_UI_ROW_KIND_COLOR;
     }
     else
     {
@@ -1332,6 +1436,8 @@ void __cdecl BuildSessionRow(
     row->text_max_length = setting_view->text_max_length;
     row->canonical_text.clear();
     row->pending_text.clear();
+    row->color_preview_kind = setting_view->color_preview_kind;
+    row->color_palette_expanded = false;
     row->on_action = setting_view->on_action;
     row->action_flags = setting_view->action_flags;
     row->dirty = false;
@@ -1352,6 +1458,23 @@ void __cdecl BuildSessionRow(
             row->select_options.push_back(option);
         }
         RefreshSelectOptionViews(row);
+    }
+
+    if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_COLOR)
+    {
+        row->color_presets.reserve(setting_view->color_preset_count);
+        for (uint32_t preset_index = 0u; preset_index < setting_view->color_preset_count; ++preset_index)
+        {
+            HubUiColorPreset preset = {};
+            preset.value_hex = setting_view->color_presets[preset_index].value_hex != nullptr
+                ? setting_view->color_presets[preset_index].value_hex
+                : "";
+            preset.label = setting_view->color_presets[preset_index].label != nullptr
+                ? setting_view->color_presets[preset_index].label
+                : "";
+            row->color_presets.push_back(preset);
+        }
+        RefreshColorPresetViews(row);
     }
 
     mod->rows.push_back(row);
@@ -1505,6 +1628,27 @@ void HubUi_PerformInitialSync()
             EMC_Result get_result = EMC_OK;
             const char* message = kLogNone;
             if (!TryReadText(row, &value, &get_result, &message))
+            {
+                row->dirty = false;
+                row->pending_text.clear();
+                row->inline_error = kUnavailableMessage;
+                LogUiGetFailure(row, get_result, message);
+                continue;
+            }
+
+            row->canonical_text = value;
+            row->pending_text = value;
+            row->dirty = false;
+            row->inline_error.clear();
+            continue;
+        }
+
+        if (row->kind == HUB_UI_ROW_KIND_COLOR)
+        {
+            std::string value;
+            EMC_Result get_result = EMC_OK;
+            const char* message = kLogNone;
+            if (!TryReadColor(row, &value, &get_result, &message))
             {
                 row->dirty = false;
                 row->pending_text.clear();
@@ -1969,6 +2113,43 @@ EMC_Result HubUi_SetPendingText(const char* namespace_id, const char* mod_id, co
     return EMC_OK;
 }
 
+EMC_Result HubUi_SetPendingColor(const char* namespace_id, const char* mod_id, const char* setting_id, const char* value)
+{
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_COLOR)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    std::string normalized_value;
+    if (!hub_color::TryNormalizeColorHex(value, &normalized_value)
+        || !TryFindColorPresetValue(row, normalized_value.c_str()))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    row->pending_text = normalized_value;
+    row->inline_error.clear();
+    RecomputeTextDirty(row);
+    return EMC_OK;
+}
+
+EMC_Result HubUi_SetColorPaletteExpanded(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    bool is_expanded)
+{
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr || row->kind != HUB_UI_ROW_KIND_COLOR)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    row->color_palette_expanded = is_expanded;
+    return EMC_OK;
+}
+
 EMC_Result HubUi_BeginKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id)
 {
     HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
@@ -2162,6 +2343,10 @@ bool HubUi_GetRowViewByIndex(uint32_t index, HubUiRowView* out_view)
     out_view->set_text = row->set_text;
     out_view->text_max_length = row->text_max_length;
     out_view->pending_text = row->pending_text.c_str();
+    out_view->color_preview_kind = row->color_preview_kind;
+    out_view->color_presets = row->color_preset_views.empty() ? nullptr : &row->color_preset_views[0];
+    out_view->color_preset_count = static_cast<uint32_t>(row->color_preset_views.size());
+    out_view->color_palette_expanded = row->color_palette_expanded;
     return true;
 }
 
@@ -2291,6 +2476,31 @@ void HubUi_OnCommitSyncText(void* token, const char* canonical_value)
 
     row->canonical_text = canonical_value != nullptr ? canonical_value : "";
     row->pending_text = row->canonical_text;
+    row->dirty = false;
+    row->inline_error.clear();
+}
+
+void HubUi_OnCommitSyncColor(void* token, const char* canonical_value)
+{
+    if (token == nullptr)
+    {
+        return;
+    }
+
+    HubUiSettingRow* row = static_cast<HubUiSettingRow*>(token);
+    if (row->kind != HUB_UI_ROW_KIND_COLOR)
+    {
+        return;
+    }
+
+    std::string normalized_value;
+    if (!hub_color::TryNormalizeColorHex(canonical_value, &normalized_value))
+    {
+        return;
+    }
+
+    row->canonical_text = normalized_value;
+    row->pending_text = normalized_value;
     row->dirty = false;
     row->inline_error.clear();
 }

@@ -145,11 +145,13 @@ Supported row kinds:
 - `MOD_HUB_CLIENT_SETTING_KIND_FLOAT`
 - `MOD_HUB_CLIENT_SETTING_KIND_SELECT`
 - `MOD_HUB_CLIENT_SETTING_KIND_TEXT`
+- `MOD_HUB_CLIENT_SETTING_KIND_COLOR`
 - `MOD_HUB_CLIENT_SETTING_KIND_ACTION`
 
 Use your existing get/set callbacks in row definitions; the helper performs deterministic registration and commit ordering.
 Generated callback wrappers delegate to the shared consumer helper header to reduce repetitive state/update boilerplate.
-For enum-like or string settings, add `EMC_SelectSettingDefV1` or `EMC_TextSettingDefV1` rows by hand after scaffold; the current scaffold flags still only generate bool/keybind/int/float/action examples.
+For enum-like, string, or palette-backed color settings, add `EMC_SelectSettingDefV1`, `EMC_TextSettingDefV1`, or `EMC_ColorSettingDefV1` rows by hand after scaffold; the current scaffold flags still only generate bool/keybind/int/float/action examples.
+Color rows use canonical uppercase `#RRGGBB` values, skip named-color parsing, and can choose `EMC_COLOR_PREVIEW_KIND_SWATCH` or `EMC_COLOR_PREVIEW_KIND_TEXT` per row.
 
 If you need fewer integer step buttons or exact deltas, switch that row to `EMC_IntSettingDefV2` + `MOD_HUB_CLIENT_SETTING_KIND_INT_V2`.
 

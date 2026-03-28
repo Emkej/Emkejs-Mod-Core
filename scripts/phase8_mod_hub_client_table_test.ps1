@@ -75,6 +75,7 @@ public static class ModHubClientPhase8TableHarness
         ClientTableGetIntRaw getFloat,
         ClientTableGetIntRaw getSelect,
         ClientTableGetIntRaw getText,
+        ClientTableGetIntRaw getColor,
         ClientTableGetIntRaw getAction,
         int expectedMod,
         int expectedBool,
@@ -83,6 +84,7 @@ public static class ModHubClientPhase8TableHarness
         int expectedFloat,
         int expectedSelect,
         int expectedText,
+        int expectedColor,
         int expectedAction,
         string context)
     {
@@ -93,6 +95,7 @@ public static class ModHubClientPhase8TableHarness
         Assert(getFloat() == expectedFloat, context + " float count mismatch");
         Assert(getSelect() == expectedSelect, context + " select count mismatch");
         Assert(getText() == expectedText, context + " text count mismatch");
+        Assert(getColor() == expectedColor, context + " color count mismatch");
         Assert(getAction() == expectedAction, context + " action count mismatch");
     }
 
@@ -127,6 +130,7 @@ public static class ModHubClientPhase8TableHarness
             ClientTableGetIntRaw getFloatCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterFloatCalls");
             ClientTableGetIntRaw getSelectCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterSelectCalls");
             ClientTableGetIntRaw getTextCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterTextCalls");
+            ClientTableGetIntRaw getColorCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterColorCalls");
             ClientTableGetIntRaw getActionCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterActionCalls");
             ClientTableGetIntRaw getOrderChecks = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetOrderChecksPassed");
             ClientTableGetIntRaw getDescriptorChecks = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetDescriptorChecksPassed");
@@ -137,8 +141,8 @@ public static class ModHubClientPhase8TableHarness
             Assert(onStartup() == ATTACH_SUCCESS, "table_success startup result mismatch");
             Assert(useHubUi() == 1, "table_success use_hub_ui mismatch");
             Assert(lastFailure() == EMC_OK, "table_success last_failure mismatch");
-            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getActionCalls,
-                1, 1, 1, 1, 1, 1, 1, 1, "table_success");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, "table_success");
             Assert(getOrderChecks() == 1, "table_success order check mismatch");
             Assert(getDescriptorChecks() == 1, "table_success descriptor check mismatch");
 
@@ -148,8 +152,8 @@ public static class ModHubClientPhase8TableHarness
             Assert(onStartup() == REGISTRATION_FAILED, "table_fail_int startup result mismatch");
             Assert(useHubUi() == 0, "table_fail_int use_hub_ui mismatch");
             Assert(lastFailure() == EMC_ERR_INTERNAL, "table_fail_int last_failure mismatch");
-            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getActionCalls,
-                1, 1, 1, 1, 0, 0, 0, 0, "table_fail_int");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 1, 0, 0, 0, 0, 0, "table_fail_int");
             Assert(getOrderChecks() == 1, "table_fail_int order check mismatch");
             Assert(getDescriptorChecks() == 1, "table_fail_int descriptor check mismatch");
 
@@ -159,8 +163,8 @@ public static class ModHubClientPhase8TableHarness
             Assert(onStartup() == REGISTRATION_FAILED, "table_fail_action startup result mismatch");
             Assert(useHubUi() == 0, "table_fail_action use_hub_ui mismatch");
             Assert(lastFailure() == EMC_ERR_INTERNAL, "table_fail_action last_failure mismatch");
-            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getActionCalls,
-                1, 1, 1, 1, 1, 1, 1, 1, "table_fail_action");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, "table_fail_action");
             Assert(getOrderChecks() == 1, "table_fail_action order check mismatch");
             Assert(getDescriptorChecks() == 1, "table_fail_action descriptor check mismatch");
 
@@ -170,8 +174,8 @@ public static class ModHubClientPhase8TableHarness
             Assert(onStartup() == REGISTRATION_FAILED, "table_invalid_kind startup result mismatch");
             Assert(useHubUi() == 0, "table_invalid_kind use_hub_ui mismatch");
             Assert(lastFailure() == EMC_ERR_INVALID_ARGUMENT, "table_invalid_kind last_failure mismatch");
-            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getActionCalls,
-                1, 1, 1, 0, 0, 0, 0, 0, "table_invalid_kind");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 0, 0, 0, 0, 0, 0, "table_invalid_kind");
             Assert(getOrderChecks() == 1, "table_invalid_kind order check mismatch");
 
             // Case 5: helper rejects null row descriptor pointer.
@@ -180,8 +184,8 @@ public static class ModHubClientPhase8TableHarness
             Assert(onStartup() == REGISTRATION_FAILED, "table_null_def startup result mismatch");
             Assert(useHubUi() == 0, "table_null_def use_hub_ui mismatch");
             Assert(lastFailure() == EMC_ERR_INVALID_ARGUMENT, "table_null_def last_failure mismatch");
-            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getActionCalls,
-                1, 1, 1, 0, 0, 0, 0, 0, "table_null_def");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 0, 0, 0, 0, 0, 0, "table_null_def");
             Assert(getOrderChecks() == 1, "table_null_def order check mismatch");
 
             // Case 6: V2 int registration uses the new API entry point.
@@ -190,8 +194,8 @@ public static class ModHubClientPhase8TableHarness
             Assert(onStartup() == ATTACH_SUCCESS, "table_int_v2_success startup result mismatch");
             Assert(useHubUi() == 1, "table_int_v2_success use_hub_ui mismatch");
             Assert(lastFailure() == EMC_OK, "table_int_v2_success last_failure mismatch");
-            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getActionCalls,
-                1, 1, 1, 0, 1, 1, 1, 1, "table_int_v2_success");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 0, 1, 1, 1, 1, 1, "table_int_v2_success");
             Assert(getIntV2Calls() == 1, "table_int_v2_success int_v2 count mismatch");
             Assert(getOrderChecks() == 1, "table_int_v2_success order check mismatch");
             Assert(getDescriptorChecks() == 1, "table_int_v2_success descriptor check mismatch");
@@ -202,8 +206,8 @@ public static class ModHubClientPhase8TableHarness
             Assert(onStartup() == REGISTRATION_FAILED, "table_int_v2_legacy startup result mismatch");
             Assert(useHubUi() == 0, "table_int_v2_legacy use_hub_ui mismatch");
             Assert(lastFailure() == 3, "table_int_v2_legacy last_failure mismatch");
-            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getActionCalls,
-                1, 1, 1, 0, 0, 0, 0, 0, "table_int_v2_legacy");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 0, 0, 0, 0, 0, 0, "table_int_v2_legacy");
             Assert(getIntV2Calls() == 0, "table_int_v2_legacy int_v2 should not be called");
             Assert(getOrderChecks() == 1, "table_int_v2_legacy order check mismatch");
 

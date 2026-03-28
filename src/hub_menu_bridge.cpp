@@ -1,6 +1,7 @@
 #include "hub_menu_bridge.h"
 
 #include "hub_commit.h"
+#include "hub_color.h"
 #include "hub_registry.h"
 #include "hub_ui.h"
 
@@ -1235,6 +1236,23 @@ void AttachHubExactIntDelta(
     widget->setUserString("emc_int_delta", value.str());
 }
 
+void AttachHubColorValue(
+    MyGUI::Widget* widget,
+    const char* action,
+    const std::string& namespace_id,
+    const std::string& mod_id,
+    const std::string& setting_id,
+    const char* value_hex)
+{
+    if (widget == 0)
+    {
+        return;
+    }
+
+    AttachHubAction(widget, action, namespace_id, mod_id, setting_id);
+    widget->setUserString("emc_color_value", value_hex != 0 ? value_hex : "");
+}
+
 void FindOrAddRenderNamespace(std::vector<RenderNamespaceGroup>* namespaces, const HubUiRowView& row, RenderNamespaceGroup** out_namespace)
 {
     if (namespaces == 0 || out_namespace == 0)
@@ -2240,14 +2258,37 @@ void OnHubIntTextChanged(MyGUI::EditBox* sender)
     HubUi_SetPendingIntFromText(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), text.c_str());
 }
 
+void TryApplyHubSettingImmediately(MyGUI::Widget* sender)
+{
+    if (sender == 0)
+    {
+        return;
+    }
+
+    const std::string namespace_id = sender->getUserString("emc_ns");
+    const std::string mod_id = sender->getUserString("emc_mod");
+    const std::string setting_id = sender->getUserString("emc_setting");
+    if (namespace_id.empty() || mod_id.empty() || setting_id.empty())
+    {
+        return;
+    }
+
+    HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
+}
+
 void OnHubIntEditAccepted(MyGUI::EditBox* sender)
 {
     NormalizeHubIntEditText(sender);
+    TryApplyHubSettingImmediately(sender);
+    RebuildHubPanelWidgets();
 }
 
 void OnHubIntEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
 {
-    NormalizeHubIntEditText(sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0);
+    MyGUI::EditBox* edit_box = sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0;
+    NormalizeHubIntEditText(edit_box);
+    TryApplyHubSettingImmediately(edit_box);
+    RebuildHubPanelWidgets();
 }
 
 void OnHubFloatTextChanged(MyGUI::EditBox* sender)
@@ -2281,11 +2322,16 @@ void OnHubFloatTextChanged(MyGUI::EditBox* sender)
 void OnHubFloatEditAccepted(MyGUI::EditBox* sender)
 {
     NormalizeHubFloatEditText(sender);
+    TryApplyHubSettingImmediately(sender);
+    RebuildHubPanelWidgets();
 }
 
 void OnHubFloatEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
 {
-    NormalizeHubFloatEditText(sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0);
+    MyGUI::EditBox* edit_box = sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0;
+    NormalizeHubFloatEditText(edit_box);
+    TryApplyHubSettingImmediately(edit_box);
+    RebuildHubPanelWidgets();
 }
 
 void OnHubSelectAccepted(MyGUI::ComboBox* sender, size_t index)
@@ -2484,6 +2530,7 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
         {
             const int32_t next_value = row.pending_bool_value == 0 ? 1 : 0;
             HubUi_SetPendingBool(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), next_value);
+            HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
         }
         RebuildHubPanelWidgets();
         return;
@@ -2506,6 +2553,7 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     if (action == "int_step_dec_10")
     {
         HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), -10);
+        HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
         RebuildHubPanelWidgets();
         return;
     }
@@ -2513,6 +2561,7 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     if (action == "int_step_dec_5")
     {
         HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), -5);
+        HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
         RebuildHubPanelWidgets();
         return;
     }
@@ -2520,6 +2569,7 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     if (action == "int_step_dec")
     {
         HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), -1);
+        HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
         RebuildHubPanelWidgets();
         return;
     }
@@ -2527,6 +2577,7 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     if (action == "int_step_inc")
     {
         HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), 1);
+        HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
         RebuildHubPanelWidgets();
         return;
     }
@@ -2534,6 +2585,7 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     if (action == "int_step_inc_5")
     {
         HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), 5);
+        HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
         RebuildHubPanelWidgets();
         return;
     }
@@ -2541,6 +2593,7 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     if (action == "int_step_inc_10")
     {
         HubUi_AdjustPendingIntStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), 10);
+        HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
         RebuildHubPanelWidgets();
         return;
     }
@@ -2550,6 +2603,7 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
         const std::string delta_text = sender->getUserString("emc_int_delta");
         const int32_t delta = static_cast<int32_t>(std::atoi(delta_text.c_str()));
         HubUi_AdjustPendingIntDelta(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), delta);
+        HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
         RebuildHubPanelWidgets();
         return;
     }
@@ -2557,6 +2611,7 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     if (action == "float_step_dec")
     {
         HubUi_AdjustPendingFloatStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), -1);
+        HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
         RebuildHubPanelWidgets();
         return;
     }
@@ -2564,6 +2619,34 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
     if (action == "float_step_inc")
     {
         HubUi_AdjustPendingFloatStep(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), 1);
+        HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "color_palette_toggle")
+    {
+        HubUiRowView row;
+        if (TryFindRowViewById(namespace_id, mod_id, setting_id, &row) && row.kind == HUB_UI_ROW_KIND_COLOR)
+        {
+            HubUi_SetColorPaletteExpanded(
+                namespace_id.c_str(),
+                mod_id.c_str(),
+                setting_id.c_str(),
+                !row.color_palette_expanded);
+        }
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "color_preset_select")
+    {
+        const std::string value_hex = sender->getUserString("emc_color_value");
+        if (!value_hex.empty())
+        {
+            HubUi_SetPendingColor(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), value_hex.c_str());
+            HubCommit_RunImmediateApply(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str());
+        }
         RebuildHubPanelWidgets();
         return;
     }
@@ -2717,6 +2800,48 @@ size_t FindSelectOptionIndex(const HubUiRowView& row, int32_t value)
     }
 
     return MyGUI::ITEM_NONE;
+}
+
+bool TryBuildMyGuiColor(const char* value_hex, MyGUI::Colour* out_color)
+{
+    if (out_color == 0)
+    {
+        return false;
+    }
+
+    uint8_t r = 0u;
+    uint8_t g = 0u;
+    uint8_t b = 0u;
+    if (!hub_color::TryParseColorRgb(value_hex, &r, &g, &b))
+    {
+        return false;
+    }
+
+    *out_color = MyGUI::Colour(
+        static_cast<float>(r) / 255.0f,
+        static_cast<float>(g) / 255.0f,
+        static_cast<float>(b) / 255.0f,
+        1.0f);
+    return true;
+}
+
+MyGUI::Colour ResolveRowColor(const HubUiRowView& row)
+{
+    MyGUI::Colour color(1.0f, 1.0f, 1.0f, 1.0f);
+    const char* value_hex = row.pending_text != 0 ? row.pending_text : "";
+    (void)TryBuildMyGuiColor(value_hex, &color);
+    return color;
+}
+
+int GetColorPaletteHeight(const HubUiRowView& row)
+{
+    if (row.kind != HUB_UI_ROW_KIND_COLOR || !row.color_palette_expanded || row.color_preset_count == 0u)
+    {
+        return 0;
+    }
+
+    const int row_count = static_cast<int>((row.color_preset_count + 4u) / 5u);
+    return (row_count * 30) + ((row_count - 1) * 6) + 8;
 }
 
 void CreateRowFooterLabel(MyGUI::Widget* parent, int x, int y, int width, const HubUiRowView& row)
@@ -3045,6 +3170,63 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             value_box->eventEditTextChange += MyGUI::newDelegate(&OnHubTextChanged);
         }
     }
+    else if (row.kind == HUB_UI_ROW_KIND_COLOR)
+    {
+        const std::string namespace_value = row.namespace_id != 0 ? row.namespace_id : "";
+        const std::string mod_value = row.mod_id != 0 ? row.mod_id : "";
+        const std::string setting_value = row.setting_id != 0 ? row.setting_id : "";
+        const MyGUI::Colour current_color = ResolveRowColor(row);
+
+        MyGUI::Button* toggle_button = CreateTrackedWidget<MyGUI::Button>(
+            parent,
+            kValueButtonSkin,
+            MyGUI::IntCoord(value_x, y, 108, 30));
+        if (toggle_button != 0)
+        {
+            toggle_button->setCaption(row.pending_text != 0 ? row.pending_text : "");
+            toggle_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(toggle_button, "color_palette_toggle", namespace_value, mod_value, setting_value);
+        }
+
+        MyGUI::Button* current_swatch = CreateTrackedWidget<MyGUI::Button>(
+            parent,
+            kValueButtonSkin,
+            MyGUI::IntCoord(value_x + 114, y, 30, 30));
+        if (current_swatch != 0)
+        {
+            current_swatch->setCaption("");
+            current_swatch->setColour(current_color);
+            current_swatch->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubAction(current_swatch, "color_palette_toggle", namespace_value, mod_value, setting_value);
+        }
+
+        if (row.color_preview_kind == EMC_COLOR_PREVIEW_KIND_TEXT)
+        {
+            MyGUI::TextBox* preview_text = CreateTrackedWidget<MyGUI::TextBox>(
+                parent,
+                kTextSkin,
+                MyGUI::IntCoord(value_x + 150, y + 5, 50, 22));
+            if (preview_text != 0)
+            {
+                preview_text->setCaption(hub_color::GetPreviewSampleText());
+                preview_text->setTextAlign(MyGUI::Align::Center);
+                preview_text->setTextColour(current_color);
+                preview_text->setFontHeight(18);
+            }
+        }
+        else
+        {
+            MyGUI::Button* preview_swatch = CreateTrackedWidget<MyGUI::Button>(
+                parent,
+                kValueButtonSkin,
+                MyGUI::IntCoord(value_x + 150, y, 50, 30));
+            if (preview_swatch != 0)
+            {
+                preview_swatch->setCaption("");
+                preview_swatch->setColour(current_color);
+            }
+        }
+    }
     else if (row.kind == HUB_UI_ROW_KIND_ACTION)
     {
         MyGUI::Button* action_button = CreateTrackedWidget<MyGUI::Button>(
@@ -3060,6 +3242,50 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
     }
 
     int next_y = y + row_height;
+    if (row.kind == HUB_UI_ROW_KIND_COLOR && row.color_palette_expanded && row.color_presets != 0)
+    {
+        const std::string namespace_value = row.namespace_id != 0 ? row.namespace_id : "";
+        const std::string mod_value = row.mod_id != 0 ? row.mod_id : "";
+        const std::string setting_value = row.setting_id != 0 ? row.setting_id : "";
+        const int palette_x = value_x;
+        const int palette_y = next_y + 2;
+        const int swatch_size = 30;
+        const int swatch_gap = 6;
+
+        for (uint32_t preset_index = 0u; preset_index < row.color_preset_count; ++preset_index)
+        {
+            const int column = static_cast<int>(preset_index % 5u);
+            const int preset_row = static_cast<int>(preset_index / 5u);
+            MyGUI::Button* preset_button = CreateTrackedWidget<MyGUI::Button>(
+                parent,
+                kValueButtonSkin,
+                MyGUI::IntCoord(
+                    palette_x + (column * (swatch_size + swatch_gap)),
+                    palette_y + (preset_row * (swatch_size + swatch_gap)),
+                    swatch_size,
+                    swatch_size));
+            if (preset_button == 0)
+            {
+                continue;
+            }
+
+            MyGUI::Colour preset_color(1.0f, 1.0f, 1.0f, 1.0f);
+            (void)TryBuildMyGuiColor(row.color_presets[preset_index].value_hex, &preset_color);
+            preset_button->setCaption("");
+            preset_button->setColour(preset_color);
+            preset_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+            AttachHubColorValue(
+                preset_button,
+                "color_preset_select",
+                namespace_value,
+                mod_value,
+                setting_value,
+                row.color_presets[preset_index].value_hex);
+        }
+
+        next_y += GetColorPaletteHeight(row);
+    }
+
     const std::string footer = BuildRowFooterText(row);
     if (!footer.empty())
     {
@@ -3151,6 +3377,7 @@ int GetHubVisibleViewportHeight(int fallback_height)
 int MeasureRowBlockHeight(const HubUiRowView& row)
 {
     int height = 34;
+    height += GetColorPaletteHeight(row);
     if (!BuildRowFooterText(row).empty())
     {
         height += 20;

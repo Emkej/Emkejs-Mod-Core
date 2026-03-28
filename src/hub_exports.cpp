@@ -500,6 +500,17 @@ EMC_Result __cdecl RegisterTextSettingEntry(EMC_ModHandle mod, const EMC_TextSet
     return HubRegistry_RegisterTextSetting(mod, def);
 }
 
+EMC_Result __cdecl RegisterColorSettingEntry(EMC_ModHandle mod, const EMC_ColorSettingDefV1* def)
+{
+    EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_color_setting");
+    if (gate_result != EMC_OK)
+    {
+        return gate_result;
+    }
+
+    return HubRegistry_RegisterColorSetting(mod, def);
+}
+
 EMC_Result __cdecl RegisterActionRowEntry(EMC_ModHandle mod, const EMC_ActionRowDefV1* def)
 {
     EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_action_row");
@@ -524,7 +535,8 @@ const EMC_HubApiV1 kHubApiV1 = {
     &UnregisterOptionsWindowInitObserverEntry,
     &RegisterIntSettingV2Entry,
     &RegisterSelectSettingEntry,
-    &RegisterTextSettingEntry};
+    &RegisterTextSettingEntry,
+    &RegisterColorSettingEntry};
 
 #if defined(EMC_ENABLE_TEST_EXPORTS)
 const int32_t kModHubClientTestGetApiModeSuccess = 0;
@@ -1508,6 +1520,57 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetPendingTextS
     return EMC_OK;
 }
 
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetPendingColor(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    const char* value)
+{
+    return HubUi_SetPendingColor(namespace_id, mod_id, setting_id, value);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_SetColorPaletteExpanded(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t is_expanded)
+{
+    return HubUi_SetColorPaletteExpanded(namespace_id, mod_id, setting_id, is_expanded != 0);
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetPendingColorState(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    char* out_text,
+    uint32_t out_text_size,
+    int32_t* out_preview_kind,
+    int32_t* out_palette_expanded,
+    uint32_t* out_preset_count)
+{
+    HubUiRowView row_view = {};
+    if (!TryGetRowViewById(namespace_id, mod_id, setting_id, &row_view)
+        || row_view.kind != HUB_UI_ROW_KIND_COLOR)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    CopyStringToBuffer(row_view.pending_text, out_text, out_text_size);
+    if (out_preview_kind != 0)
+    {
+        *out_preview_kind = static_cast<int32_t>(row_view.color_preview_kind);
+    }
+    if (out_palette_expanded != 0)
+    {
+        *out_palette_expanded = row_view.color_palette_expanded ? 1 : 0;
+    }
+    if (out_preset_count != 0)
+    {
+        *out_preset_count = row_view.color_preset_count;
+    }
+    return EMC_OK;
+}
+
 extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_BeginKeybindCapture(
     const char* namespace_id,
     const char* mod_id,
@@ -1856,6 +1919,11 @@ extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegi
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterTextCalls()
 {
     return ModHubDummyConsumer_GetRegisterTextCalls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterColorCalls()
+{
+    return ModHubDummyConsumer_GetRegisterColorCalls();
 }
 
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterActionCalls()

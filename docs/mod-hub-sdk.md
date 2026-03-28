@@ -32,6 +32,7 @@ Handshake constants:
 - `EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE`
 - `EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE`
 - `EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE`
+- `EMC_HUB_API_V1_COLOR_SETTING_MIN_SIZE`
 
 Handshake entrypoint:
 
@@ -74,6 +75,8 @@ Public value/row constants:
 - `EMC_KEY_UNBOUND`
 - `EMC_ACTION_FORCE_REFRESH`
 - `EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT`
+- `EMC_COLOR_PREVIEW_KIND_SWATCH`
+- `EMC_COLOR_PREVIEW_KIND_TEXT`
 
 Core value type:
 
@@ -98,6 +101,7 @@ Supported row kinds:
 - `MOD_HUB_CLIENT_SETTING_KIND_FLOAT`
 - `MOD_HUB_CLIENT_SETTING_KIND_SELECT`
 - `MOD_HUB_CLIENT_SETTING_KIND_TEXT`
+- `MOD_HUB_CLIENT_SETTING_KIND_COLOR`
 - `MOD_HUB_CLIENT_SETTING_KIND_ACTION`
 
 Deterministic helper behavior:
@@ -270,6 +274,64 @@ const EMC_TextSettingDefV1 kTitleSetting = {
 const emc::ModHubClientSettingRowV1 kRows[] = {
     { emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT, &kPaletteSetting },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT, &kTitleSetting }
+};
+```
+
+## Color Rows (Phase 26)
+
+New surfaces:
+
+- `EMC_ColorPresetV1`
+- `EMC_ColorSettingDefV1`
+- `EMC_HubApiV1::register_color_setting`
+- `MOD_HUB_CLIENT_SETTING_KIND_COLOR`
+- `EMC_COLOR_PREVIEW_KIND_SWATCH`
+- `EMC_COLOR_PREVIEW_KIND_TEXT`
+
+Behavior:
+
+1. Color rows store one canonical RGB value: uppercase `#RRGGBB`.
+2. The current UI slice is palette-backed. Consumers can omit `presets` to use the core-owned default palette, or supply an override palette per row.
+3. `preview_kind` chooses whether the row preview renders as a swatch chip or sample text.
+4. Named colors are not part of the contract; the row value is always hex.
+5. Helper registration fails deterministically when a runtime host is older than the required API-size gate.
+
+Validation rules:
+
+1. `preview_kind` must be `EMC_COLOR_PREVIEW_KIND_SWATCH` or `EMC_COLOR_PREVIEW_KIND_TEXT`.
+2. Preset values are normalized to canonical uppercase `#RRGGBB` during registration.
+3. Duplicate presets after normalization are rejected.
+4. Preset labels must be non-empty when provided.
+5. The row callback contract is RGB-only; alpha and named-color parsing are not part of the Mod Hub color row surface.
+
+Fallback behavior:
+
+- `MOD_HUB_CLIENT_SETTING_KIND_COLOR` requires `EMC_HUB_API_V1_COLOR_SETTING_MIN_SIZE`.
+- Older hosts fail with `EMC_ERR_API_SIZE_MISMATCH`; the helper does not silently remap color rows to text or another row kind.
+
+Minimal example:
+
+```cpp
+const EMC_ColorPresetV1 kRelationColorPresets[] = {
+    { "#FF3333", "Enemy" },
+    { "#DEE85A", "Ally" },
+    { "#40FF40", "Squad" }
+};
+
+const EMC_ColorSettingDefV1 kRelationColorSetting = {
+    "enemy_color_hex",
+    "Enemy color",
+    "Relation color used for enemy markers and tint",
+    &g_state,
+    EMC_COLOR_PREVIEW_KIND_TEXT,
+    kRelationColorPresets,
+    3u,
+    &GetEnemyColor,
+    &SetEnemyColor
+};
+
+const emc::ModHubClientSettingRowV1 kRows[] = {
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR, &kRelationColorSetting }
 };
 ```
 
@@ -815,6 +877,16 @@ Phase 25:
 Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
 
 This harness validates select/text registration, pending-state updates, bounded text rejection, and select/text commit resync.
+
+Phase 26:
+
+```powershell
+./scripts/phase26_color_row_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```
+
+Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
+
+This harness validates color-row registration, default/override palettes, duplicate normalized preset rejection, pending-color normalization, palette expansion state, and save-time color commit resync.
 
 Phase 13:
 

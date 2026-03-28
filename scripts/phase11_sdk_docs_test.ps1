@@ -145,10 +145,17 @@ Assert-Condition -Condition ($docsText.Contains("ValidateValueInRange")) -Messag
 Assert-Condition -Condition ($docsText.Contains("ApplyUpdateWithRollback")) -Message "docs/mod-hub-sdk.md should document the shared apply/persist/rollback helper."
 Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the select-row API size gate."
 Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the text-row API size gate."
+Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_COLOR_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the color-row API size gate."
 Assert-Condition -Condition ($docsText.Contains("EMC_SelectSettingDefV1")) -Message "docs/mod-hub-sdk.md should document the select setting definition."
 Assert-Condition -Condition ($docsText.Contains("EMC_TextSettingDefV1")) -Message "docs/mod-hub-sdk.md should document the text setting definition."
+Assert-Condition -Condition ($docsText.Contains("EMC_ColorPresetV1")) -Message "docs/mod-hub-sdk.md should document the color preset definition."
+Assert-Condition -Condition ($docsText.Contains("EMC_ColorSettingDefV1")) -Message "docs/mod-hub-sdk.md should document the color setting definition."
+Assert-Condition -Condition ($docsText.Contains("EMC_COLOR_PREVIEW_KIND_TEXT")) -Message "docs/mod-hub-sdk.md should document text-preview color rows."
+Assert-Condition -Condition ($docsText.Contains("MOD_HUB_CLIENT_SETTING_KIND_COLOR")) -Message "docs/mod-hub-sdk.md should document the color row kind."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase25_select_text_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase25 select/text harness command."
 Assert-Condition -Condition ($docsText.Contains("bounded text rejection")) -Message "docs/mod-hub-sdk.md should describe phase25 select/text coverage."
+Assert-Condition -Condition ($docsText.Contains("./scripts/phase26_color_row_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase26 color-row harness command."
+Assert-Condition -Condition ($docsText.Contains("duplicate normalized preset rejection")) -Message "docs/mod-hub-sdk.md should describe phase26 color-row coverage."
 
 $requiredLogEvents = @(
     "event=hub_commit_failure",
@@ -200,7 +207,10 @@ $requiredQuickstartSymbols = @(
     "pull + validate only",
     "ValidateBoolValue",
     "ValidateValueInRange",
-    "ApplyUpdateWithRollback"
+    "ApplyUpdateWithRollback",
+    "MOD_HUB_CLIENT_SETTING_KIND_COLOR",
+    "EMC_ColorSettingDefV1",
+    "EMC_COLOR_PREVIEW_KIND_TEXT"
 )
 
 foreach ($symbol in $requiredQuickstartSymbols) {

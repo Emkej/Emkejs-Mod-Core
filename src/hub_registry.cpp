@@ -1,4 +1,5 @@
 #include "hub_registry.h"
+#include "hub_color.h"
 #include "logging.h"
 
 #include <Debug.h>
@@ -29,12 +30,19 @@ enum SettingKind
     SETTING_KIND_FLOAT = 3,
     SETTING_KIND_ACTION = 4,
     SETTING_KIND_SELECT = 5,
-    SETTING_KIND_TEXT = 6
+    SETTING_KIND_TEXT = 6,
+    SETTING_KIND_COLOR = 7
 };
 
 struct SelectOptionEntry
 {
     int32_t value;
+    std::string label;
+};
+
+struct ColorPresetEntry
+{
+    std::string value_hex;
     std::string label;
 };
 
@@ -77,6 +85,10 @@ struct SettingEntry
     EMC_SetTextCallback set_text;
     uint32_t text_max_length;
 
+    uint32_t color_preview_kind;
+    std::vector<ColorPresetEntry> color_presets_storage;
+    std::vector<EMC_ColorPresetV1> color_presets_view;
+
     EMC_ActionRowCallback on_action;
     uint32_t action_flags;
 };
@@ -109,6 +121,7 @@ std::map<EMC_ModHandle, ModEntry*> g_mods_by_handle;
 const int32_t kDefaultIntDecButtonDeltas[3] = { 10, 5, 1 };
 const int32_t kDefaultIntIncButtonDeltas[3] = { 1, 5, 10 };
 const uint32_t kMaxTextSettingLength = 256u;
+const uint32_t kColorTextLength = 7u;
 
 const char* SafeLogValue(const char* value)
 {
@@ -348,6 +361,9 @@ void InitializeSettingDefaults(SettingEntry* setting)
     setting->get_text = nullptr;
     setting->set_text = nullptr;
     setting->text_max_length = 0u;
+    setting->color_preview_kind = EMC_COLOR_PREVIEW_KIND_SWATCH;
+    setting->color_presets_storage.clear();
+    setting->color_presets_view.clear();
     setting->on_action = nullptr;
     setting->action_flags = 0;
 }
@@ -482,6 +498,120 @@ bool ValidateSelectOptions(const EMC_SelectOptionV1* options, uint32_t option_co
     return true;
 }
 
+void RefreshColorPresetViews(SettingEntry* setting)
+{
+    if (setting == nullptr)
+    {
+        return;
+    }
+
+    setting->color_presets_view.clear();
+    setting->color_presets_view.reserve(setting->color_presets_storage.size());
+    for (size_t preset_index = 0u; preset_index < setting->color_presets_storage.size(); ++preset_index)
+    {
+        EMC_ColorPresetV1 preset_view = {};
+        preset_view.value_hex = setting->color_presets_storage[preset_index].value_hex.c_str();
+        preset_view.label = setting->color_presets_storage[preset_index].label.empty()
+            ? nullptr
+            : setting->color_presets_storage[preset_index].label.c_str();
+        setting->color_presets_view.push_back(preset_view);
+    }
+}
+
+bool ColorPresetsEqual(const SettingEntry* setting, const EMC_ColorPresetV1* presets, uint32_t preset_count)
+{
+    if (setting == nullptr)
+    {
+        return false;
+    }
+
+    const EMC_ColorPresetV1* source_presets = presets;
+    uint32_t source_preset_count = preset_count;
+    if (source_presets == nullptr && source_preset_count == 0u)
+    {
+        source_presets = hub_color::GetDefaultPalette(&source_preset_count);
+    }
+    else if (source_presets == nullptr || source_preset_count == 0u)
+    {
+        return false;
+    }
+
+    if (setting->color_presets_storage.size() != source_preset_count)
+    {
+        return false;
+    }
+
+    for (uint32_t preset_index = 0u; preset_index < source_preset_count; ++preset_index)
+    {
+        std::string normalized_value;
+        if (!hub_color::TryNormalizeColorHex(source_presets[preset_index].value_hex, &normalized_value))
+        {
+            return false;
+        }
+
+        const ColorPresetEntry& existing = setting->color_presets_storage[preset_index];
+        const char* incoming_label = source_presets[preset_index].label != nullptr ? source_presets[preset_index].label : "";
+        if (existing.value_hex != normalized_value || existing.label != incoming_label)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ValidateAndCopyColorPresets(
+    const EMC_ColorPresetV1* incoming_presets,
+    uint32_t incoming_preset_count,
+    std::vector<ColorPresetEntry>* out_presets)
+{
+    if (out_presets == nullptr)
+    {
+        return false;
+    }
+
+    out_presets->clear();
+
+    const EMC_ColorPresetV1* source_presets = incoming_presets;
+    uint32_t source_preset_count = incoming_preset_count;
+    if (source_presets == nullptr && source_preset_count == 0u)
+    {
+        source_presets = hub_color::GetDefaultPalette(&source_preset_count);
+    }
+    else if (source_presets == nullptr || source_preset_count == 0u)
+    {
+        return false;
+    }
+
+    out_presets->reserve(source_preset_count);
+    for (uint32_t preset_index = 0u; preset_index < source_preset_count; ++preset_index)
+    {
+        std::string normalized_value;
+        if (!hub_color::TryNormalizeColorHex(source_presets[preset_index].value_hex, &normalized_value))
+        {
+            return false;
+        }
+
+        for (uint32_t previous_index = 0u; previous_index < preset_index; ++previous_index)
+        {
+            if ((*out_presets)[previous_index].value_hex == normalized_value)
+            {
+                return false;
+            }
+        }
+
+        ColorPresetEntry preset = {};
+        preset.value_hex = normalized_value;
+        if (source_presets[preset_index].label != nullptr)
+        {
+            preset.label = source_presets[preset_index].label;
+        }
+        out_presets->push_back(preset);
+    }
+
+    return !out_presets->empty();
+}
+
 bool EmitCommonSettingDriftWarnings(
     const ModEntry* mod,
     const SettingEntry* existing,
@@ -558,6 +688,9 @@ void PopulateSettingView(const SettingEntry* setting, HubRegistrySettingView* ou
     out_view->get_text = setting->get_text;
     out_view->set_text = setting->set_text;
     out_view->text_max_length = setting->text_max_length;
+    out_view->color_preview_kind = setting->color_preview_kind;
+    out_view->color_presets = setting->color_presets_view.empty() ? nullptr : &setting->color_presets_view[0];
+    out_view->color_preset_count = static_cast<uint32_t>(setting->color_presets_view.size());
 
     out_view->on_action = setting->on_action;
     out_view->action_flags = setting->action_flags;
@@ -1166,6 +1299,88 @@ EMC_Result __cdecl HubRegistry_RegisterTextSetting(EMC_ModHandle mod, const EMC_
     setting->get_text = def->get_value;
     setting->set_text = def->set_value;
     setting->text_max_length = def->max_length;
+    AppendNewSetting(mod_entry, setting);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl HubRegistry_RegisterColorSetting(EMC_ModHandle mod, const EMC_ColorSettingDefV1* def)
+{
+    ModEntry* mod_entry = nullptr;
+    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_color_setting", &mod_entry);
+    if (validation_result != EMC_OK)
+    {
+        return validation_result;
+    }
+
+    if (!ValidateCommonSettingStrings(def->setting_id, def->label, def->description))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (def->get_value == nullptr
+        || def->set_value == nullptr
+        || !hub_color::IsValidPreviewKind(def->preview_kind))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::vector<ColorPresetEntry> normalized_presets;
+    if (!ValidateAndCopyColorPresets(def->presets, def->preset_count, &normalized_presets))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::map<std::string, SettingEntry*>::const_iterator it = mod_entry->settings_by_id.find(def->setting_id);
+    if (it != mod_entry->settings_by_id.end())
+    {
+        SettingEntry* existing = it->second;
+        if (existing->kind != SETTING_KIND_COLOR)
+        {
+            LogSettingRegistrationConflict(
+                mod_entry->namespace_id.c_str(),
+                mod_entry->mod_id.c_str(),
+                def->setting_id,
+                EMC_ERR_CONFLICT,
+                "setting_id_already_registered_with_different_kind");
+            return EMC_ERR_CONFLICT;
+        }
+
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        if (existing->get_text != def->get_value || existing->set_text != def->set_value)
+        {
+            LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
+            exact_match = false;
+        }
+
+        if (existing->color_preview_kind != def->preview_kind)
+        {
+            LogSettingWarning(mod_entry, def->setting_id, "preview_kind", "preview_kind_drift_ignored_using_canonical");
+            exact_match = false;
+        }
+
+        if (!ColorPresetsEqual(existing, def->presets, def->preset_count))
+        {
+            LogSettingWarning(mod_entry, def->setting_id, "presets", "presets_drift_ignored_using_canonical");
+            exact_match = false;
+        }
+
+        (void)exact_match;
+        return EMC_OK;
+    }
+
+    SettingEntry* setting = new SettingEntry();
+    InitializeSettingDefaults(setting);
+    setting->kind = SETTING_KIND_COLOR;
+    setting->setting_id = def->setting_id;
+    setting->label = def->label;
+    setting->description = def->description;
+    setting->user_data = def->user_data;
+    setting->get_text = def->get_value;
+    setting->set_text = def->set_value;
+    setting->text_max_length = kColorTextLength;
+    setting->color_preview_kind = def->preview_kind;
+    setting->color_presets_storage.swap(normalized_presets);
+    RefreshColorPresetViews(setting);
     AppendNewSetting(mod_entry, setting);
     return EMC_OK;
 }

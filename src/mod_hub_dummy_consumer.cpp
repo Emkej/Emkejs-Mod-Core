@@ -31,8 +31,10 @@ const char* kIntSettingId = "count";
 const char* kFloatSettingId = "radius";
 const char* kSelectSettingId = "palette";
 const char* kTextSettingId = "title";
+const char* kColorSettingId = "status_color";
 const char* kActionSettingId = "refresh_now";
 const uint32_t kTextMaxLength = 32u;
+const uint32_t kColorTextLength = 7u;
 
 int32_t g_mod_user_data = 11;
 int32_t g_bool_value = 1;
@@ -41,12 +43,18 @@ int32_t g_int_value = 10;
 float g_float_value = 2.5f;
 int32_t g_select_value = 1;
 char g_text_value[kTextMaxLength + 1u] = "Example title";
+char g_color_value[kColorTextLength + 1u] = "#FF3333";
 int32_t g_action_count = 0;
 
 const EMC_SelectOptionV1 kSelectOptions[] = {
     { 0, "Default" },
     { 1, "Warm" },
     { 2, "Cool" } };
+
+const EMC_ColorPresetV1 kColorPresets[] = {
+    { "#FF3333", "Enemy" },
+    { "#DEE85A", "Ally" },
+    { "#40FF40", "Squad" } };
 
 EMC_Result __cdecl GetBool(void* user_data, int32_t* out_value)
 {
@@ -297,6 +305,17 @@ const EMC_TextSettingDefV1 kTextSettingDef = {
     &GetText,
     &SetText};
 
+const EMC_ColorSettingDefV1 kColorSettingDef = {
+    kColorSettingId,
+    "Status color",
+    "Example color",
+    g_color_value,
+    EMC_COLOR_PREVIEW_KIND_SWATCH,
+    kColorPresets,
+    (uint32_t)(sizeof(kColorPresets) / sizeof(kColorPresets[0])),
+    &GetText,
+    &SetText};
+
 const EMC_ActionRowDefV1 kActionSettingDef = {
     kActionSettingId,
     "Refresh now",
@@ -330,6 +349,7 @@ struct DummyState
     int32_t register_float_calls;
     int32_t register_select_calls;
     int32_t register_text_calls;
+    int32_t register_color_calls;
     int32_t register_action_calls;
 
     int32_t order_checks_passed;
@@ -340,11 +360,11 @@ struct DummyState
 DummyState g_state;
 bool g_initialized = false;
 
-emc::ModHubClientSettingRowV1 g_rows[7];
+emc::ModHubClientSettingRowV1 g_rows[8];
 emc::ModHubClientTableRegistrationV1 g_table_registration = {
     &kModDescriptor,
     g_rows,
-    7u};
+    8u};
 
 void ResetRows()
 {
@@ -366,8 +386,11 @@ void ResetRows()
     g_rows[5].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT;
     g_rows[5].def = &kTextSettingDef;
 
-    g_rows[6].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
-    g_rows[6].def = &kActionSettingDef;
+    g_rows[6].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR;
+    g_rows[6].def = &kColorSettingDef;
+
+    g_rows[7].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
+    g_rows[7].def = &kActionSettingDef;
 }
 
 void ResetCapture()
@@ -380,6 +403,7 @@ void ResetCapture()
     g_state.register_float_calls = 0;
     g_state.register_select_calls = 0;
     g_state.register_text_calls = 0;
+    g_state.register_color_calls = 0;
     g_state.register_action_calls = 0;
     g_state.order_checks_passed = 1;
     g_state.descriptor_checks_passed = 1;
@@ -405,6 +429,8 @@ int32_t ExpectedKindForIndex(int32_t index)
     case 5:
         return emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT;
     case 6:
+        return emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR;
+    case 7:
         return emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
     default:
         break;
@@ -654,6 +680,31 @@ EMC_Result __cdecl TestRegisterText(EMC_ModHandle mod, const EMC_TextSettingDefV
     return EMC_OK;
 }
 
+EMC_Result __cdecl TestRegisterColor(EMC_ModHandle mod, const EMC_ColorSettingDefV1* def)
+{
+    g_state.register_color_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kColorSettingId)
+        || def->preview_kind != EMC_COLOR_PREVIEW_KIND_SWATCH
+        || def->preset_count != (uint32_t)(sizeof(kColorPresets) / sizeof(kColorPresets[0]))
+        || def->presets == 0
+        || !StringEquals(def->presets[0].value_hex, "#FF3333")
+        || !StringEquals(def->presets[1].value_hex, "#DEE85A")
+        || !StringEquals(def->presets[2].value_hex, "#40FF40")
+        || def->get_value != &GetText
+        || def->set_value != &SetText
+        || def->user_data != g_color_value)
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
 EMC_Result __cdecl TestRegisterAction(EMC_ModHandle mod, const EMC_ActionRowDefV1* def)
 {
     g_state.register_action_calls += 1;
@@ -688,7 +739,8 @@ const EMC_HubApiV1* GetTestApi()
         0,
         &TestRegisterIntV2,
         &TestRegisterSelect,
-        &TestRegisterText};
+        &TestRegisterText,
+        &TestRegisterColor};
     return &kApi;
 }
 
@@ -837,6 +889,12 @@ int32_t ModHubDummyConsumer_GetRegisterTextCalls()
 {
     EnsureInitialized();
     return g_state.register_text_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterColorCalls()
+{
+    EnsureInitialized();
+    return g_state.register_color_calls;
 }
 
 int32_t ModHubDummyConsumer_GetRegisterActionCalls()

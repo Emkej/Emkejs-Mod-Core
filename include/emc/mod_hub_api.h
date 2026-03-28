@@ -39,6 +39,8 @@ typedef int32_t EMC_Result;
 #define EMC_ACTION_FORCE_REFRESH ((uint32_t)(1u << 0))
 
 #define EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT ((uint32_t)3u)
+#define EMC_COLOR_PREVIEW_KIND_SWATCH ((uint32_t)0u)
+#define EMC_COLOR_PREVIEW_KIND_TEXT ((uint32_t)1u)
 
 typedef struct EMC_ModHandle_t* EMC_ModHandle;
 
@@ -169,6 +171,25 @@ typedef struct EMC_TextSettingDefV1
     EMC_SetTextCallback set_value;
 } EMC_TextSettingDefV1;
 
+typedef struct EMC_ColorPresetV1
+{
+    const char* value_hex;
+    const char* label;
+} EMC_ColorPresetV1;
+
+typedef struct EMC_ColorSettingDefV1
+{
+    const char* setting_id;
+    const char* label;
+    const char* description;
+    void* user_data;
+    uint32_t preview_kind;
+    const EMC_ColorPresetV1* presets;
+    uint32_t preset_count;
+    EMC_GetTextCallback get_value;
+    EMC_SetTextCallback set_value;
+} EMC_ColorSettingDefV1;
+
 typedef struct EMC_ActionRowDefV1
 {
     const char* setting_id;
@@ -194,6 +215,7 @@ typedef struct EMC_HubApiV1
     EMC_Result(__cdecl* register_int_setting_v2)(EMC_ModHandle mod, const EMC_IntSettingDefV2* def);
     EMC_Result(__cdecl* register_select_setting)(EMC_ModHandle mod, const EMC_SelectSettingDefV1* def);
     EMC_Result(__cdecl* register_text_setting)(EMC_ModHandle mod, const EMC_TextSettingDefV1* def);
+    EMC_Result(__cdecl* register_color_setting)(EMC_ModHandle mod, const EMC_ColorSettingDefV1* def);
 } EMC_HubApiV1;
 
 #define EMC_HUB_API_V1_MIN_SIZE ((uint32_t)56u)
@@ -205,6 +227,8 @@ typedef struct EMC_HubApiV1
     ((uint32_t)(offsetof(EMC_HubApiV1, register_select_setting) + sizeof(void*)))
 #define EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE \
     ((uint32_t)(offsetof(EMC_HubApiV1, register_text_setting) + sizeof(void*)))
+#define EMC_HUB_API_V1_COLOR_SETTING_MIN_SIZE \
+    ((uint32_t)(offsetof(EMC_HubApiV1, register_color_setting) + sizeof(void*)))
 
 EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_GetApi(
     uint32_t requested_version,
@@ -323,6 +347,21 @@ EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV1, max_length, 32);
 EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV1, get_value, 40);
 EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV1, set_value, 48);
 
+EMC_ABI_ASSERT_SIZE(EMC_ColorPresetV1, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorPresetV1, value_hex, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorPresetV1, label, 8);
+
+EMC_ABI_ASSERT_SIZE(EMC_ColorSettingDefV1, 72);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, setting_id, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, label, 8);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, description, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, user_data, 24);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, preview_kind, 32);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, presets, 40);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, preset_count, 48);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, get_value, 56);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, set_value, 64);
+
 EMC_ABI_ASSERT_SIZE(EMC_ActionRowDefV1, 48);
 EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, setting_id, 0);
 EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, label, 8);
@@ -331,7 +370,7 @@ EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, user_data, 24);
 EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, action_flags, 32);
 EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, on_action, 40);
 
-EMC_ABI_ASSERT_SIZE(EMC_HubApiV1, 96);
+EMC_ABI_ASSERT_SIZE(EMC_HubApiV1, 104);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, api_version, 0);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, api_size, 4);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_mod, 8);
@@ -345,6 +384,7 @@ EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, unregister_options_window_init_observer, 64)
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_int_setting_v2, 72);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_select_setting, 80);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_text_setting, 88);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_color_setting, 96);
 
 #undef EMC_ABI_ASSERT_OFFSET
 #undef EMC_ABI_ASSERT_SIZE

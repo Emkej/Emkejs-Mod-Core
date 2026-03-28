@@ -11,7 +11,8 @@ enum HubRegistrySettingKind
     HUB_REGISTRY_SETTING_KIND_FLOAT = 3,
     HUB_REGISTRY_SETTING_KIND_ACTION = 4,
     HUB_REGISTRY_SETTING_KIND_SELECT = 5,
-    HUB_REGISTRY_SETTING_KIND_TEXT = 6
+    HUB_REGISTRY_SETTING_KIND_TEXT = 6,
+    HUB_REGISTRY_SETTING_KIND_COLOR = 7
 };
 
 struct HubRegistryNamespaceView
@@ -69,6 +70,10 @@ struct HubRegistrySettingView
     EMC_SetTextCallback set_text;
     uint32_t text_max_length;
 
+    uint32_t color_preview_kind;
+    const EMC_ColorPresetV1* color_presets;
+    uint32_t color_preset_count;
+
     EMC_ActionRowCallback on_action;
     uint32_t action_flags;
 };
@@ -87,6 +92,7 @@ EMC_Result __cdecl HubRegistry_RegisterIntSettingV2(EMC_ModHandle mod, const EMC
 EMC_Result __cdecl HubRegistry_RegisterFloatSetting(EMC_ModHandle mod, const EMC_FloatSettingDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterSelectSetting(EMC_ModHandle mod, const EMC_SelectSettingDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterTextSetting(EMC_ModHandle mod, const EMC_TextSettingDefV1* def);
+EMC_Result __cdecl HubRegistry_RegisterColorSetting(EMC_ModHandle mod, const EMC_ColorSettingDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterActionRow(EMC_ModHandle mod, const EMC_ActionRowDefV1* def);
 void HubRegistry_ForEachSettingInOrder(HubRegistryVisitSettingFn visitor, void* user_data);
 

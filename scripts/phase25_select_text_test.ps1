@@ -123,7 +123,7 @@ public static class HubPhase25SelectTextHarness
     private const int EMC_ERR_INVALID_ARGUMENT = 1;
     private const int HUB_COMMIT_SKIP_REASON_NONE = 0;
     private const uint HUB_API_V1 = 1u;
-    private const uint HUB_API_V1_SIZE = 96u;
+    private const uint HUB_API_V1_SIZE = 104u;
     private const int REGISTER_MOD_OFFSET = 8;
     private const int REGISTER_SELECT_OFFSET = 80;
     private const int REGISTER_TEXT_OFFSET = 88;

@@ -19,6 +19,7 @@ struct HubCommitSummary
 };
 
 void HubCommit_RunOptionsSave();
+bool HubCommit_RunImmediateApply(const char* namespace_id, const char* mod_id, const char* setting_id);
 void HubCommit_GetLastSummary(HubCommitSummary* out_summary);
 
 #endif

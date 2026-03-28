@@ -11,7 +11,8 @@ enum HubUiRowKind
     HUB_UI_ROW_KIND_INT = 3,
     HUB_UI_ROW_KIND_FLOAT = 4,
     HUB_UI_ROW_KIND_SELECT = 5,
-    HUB_UI_ROW_KIND_TEXT = 6
+    HUB_UI_ROW_KIND_TEXT = 6,
+    HUB_UI_ROW_KIND_COLOR = 7
 };
 
 struct HubUiRowView
@@ -70,6 +71,11 @@ struct HubUiRowView
     EMC_SetTextCallback set_text;
     uint32_t text_max_length;
     const char* pending_text;
+
+    uint32_t color_preview_kind;
+    const EMC_ColorPresetV1* color_presets;
+    uint32_t color_preset_count;
+    bool color_palette_expanded;
 };
 
 void HubUi_SetOptionsWindowOpen(bool is_open);
@@ -106,6 +112,12 @@ EMC_Result HubUi_SetPendingFloatFromText(const char* namespace_id, const char* m
 EMC_Result HubUi_NormalizePendingFloatText(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_SetPendingSelect(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t value);
 EMC_Result HubUi_SetPendingText(const char* namespace_id, const char* mod_id, const char* setting_id, const char* text);
+EMC_Result HubUi_SetPendingColor(const char* namespace_id, const char* mod_id, const char* setting_id, const char* value);
+EMC_Result HubUi_SetColorPaletteExpanded(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    bool is_expanded);
 EMC_Result HubUi_BeginKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_CancelKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_ApplyCapturedKeycode(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t keycode);
@@ -123,5 +135,6 @@ void HubUi_OnCommitSyncInt(void* token, int32_t canonical_value);
 void HubUi_OnCommitSyncFloat(void* token, float canonical_value);
 void HubUi_OnCommitSyncSelect(void* token, int32_t canonical_value);
 void HubUi_OnCommitSyncText(void* token, const char* canonical_value);
+void HubUi_OnCommitSyncColor(void* token, const char* canonical_value);
 
 #endif
