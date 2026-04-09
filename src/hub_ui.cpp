@@ -29,6 +29,7 @@ const char* kInvalidColorTextMessage = "invalid_color_text";
 const float kFloatSnapEpsilon = 1e-6f;
 
 struct HubUiModSection;
+struct HubUiSettingSection;
 
 struct HubUiSelectOption
 {
@@ -52,6 +53,9 @@ struct HubUiSettingRow
     std::string setting_id;
     std::string label;
     std::string description;
+    std::string hover_hint;
+    std::string section_id;
+    std::string section_display_name;
     void* user_data;
 
     EMC_GetBoolCallback get_bool;
@@ -115,6 +119,16 @@ struct HubUiSettingRow
     bool capture_active;
     std::string inline_error;
     HubUiModSection* parent_mod;
+    HubUiSettingSection* parent_section;
+};
+
+struct HubUiSettingSection
+{
+    std::string section_id;
+    std::string section_display_name;
+    bool collapsed;
+    bool has_header;
+    std::vector<HubUiSettingRow*> rows;
 };
 
 struct HubUiModSection
@@ -124,6 +138,8 @@ struct HubUiModSection
     std::string mod_display_name;
     bool collapsed;
     std::vector<HubUiSettingRow*> rows;
+    bool uses_sections;
+    std::vector<HubUiSettingSection*> sections;
 };
 
 struct HubUiNamespaceTab
@@ -141,6 +157,7 @@ bool g_search_persistence_enabled = true;
 bool g_collapse_persistence_enabled = true;
 std::map<std::string, std::string> g_persisted_search_queries;
 std::map<std::string, bool> g_persisted_mod_collapse_states;
+std::map<std::string, bool> g_persisted_section_collapse_states;
 
 const char* SafeLogValue(const char* value)
 {
@@ -1012,6 +1029,11 @@ void ClearTabsAndRows()
         for (size_t mod_index = 0; mod_index < tab->mods.size(); ++mod_index)
         {
             HubUiModSection* mod = tab->mods[mod_index];
+            for (size_t section_index = 0; section_index < mod->sections.size(); ++section_index)
+            {
+                delete mod->sections[section_index];
+            }
+            mod->sections.clear();
             for (size_t row_index = 0; row_index < mod->rows.size(); ++row_index)
             {
                 delete mod->rows[row_index];
@@ -1048,6 +1070,14 @@ std::string BuildPersistedCollapseStateKey(const std::string& namespace_id, cons
     return namespace_id + ":" + mod_id;
 }
 
+std::string BuildPersistedSectionCollapseStateKey(
+    const std::string& namespace_id,
+    const std::string& mod_id,
+    const std::string& section_id)
+{
+    return namespace_id + ":" + mod_id + ":" + section_id;
+}
+
 bool ResolveInitialModCollapsedState(const std::string& namespace_id, const std::string& mod_id)
 {
     if (!g_collapse_persistence_enabled)
@@ -1058,6 +1088,27 @@ bool ResolveInitialModCollapsedState(const std::string& namespace_id, const std:
     const std::map<std::string, bool>::const_iterator it =
         g_persisted_mod_collapse_states.find(BuildPersistedCollapseStateKey(namespace_id, mod_id));
     if (it == g_persisted_mod_collapse_states.end())
+    {
+        return false;
+    }
+
+    return it->second;
+}
+
+bool ResolveInitialSectionCollapsedState(
+    const std::string& namespace_id,
+    const std::string& mod_id,
+    const std::string& section_id)
+{
+    if (!g_collapse_persistence_enabled)
+    {
+        return false;
+    }
+
+    const std::map<std::string, bool>::const_iterator it =
+        g_persisted_section_collapse_states.find(
+            BuildPersistedSectionCollapseStateKey(namespace_id, mod_id, section_id));
+    if (it == g_persisted_section_collapse_states.end())
     {
         return false;
     }
@@ -1112,6 +1163,95 @@ HubUiModSection* FindModSection(const char* namespace_id, const char* mod_id)
     }
 
     return nullptr;
+}
+
+HubUiSettingSection* FindSection(const char* namespace_id, const char* mod_id, const char* section_id)
+{
+    if (namespace_id == nullptr || mod_id == nullptr || section_id == nullptr)
+    {
+        return nullptr;
+    }
+
+    HubUiModSection* mod = FindModSection(namespace_id, mod_id);
+    if (mod == nullptr)
+    {
+        return nullptr;
+    }
+
+    for (size_t section_index = 0; section_index < mod->sections.size(); ++section_index)
+    {
+        HubUiSettingSection* section = mod->sections[section_index];
+        if (section->section_id == section_id)
+        {
+            return section;
+        }
+    }
+
+    return nullptr;
+}
+
+HubUiSettingSection* FindOrCreateSection(
+    HubUiModSection* mod,
+    const char* section_id,
+    const char* section_display_name,
+    bool has_header)
+{
+    if (mod == nullptr || section_id == nullptr || section_display_name == nullptr)
+    {
+        return nullptr;
+    }
+
+    for (size_t index = 0; index < mod->sections.size(); ++index)
+    {
+        HubUiSettingSection* section = mod->sections[index];
+        if (section->section_id == section_id)
+        {
+            return section;
+        }
+    }
+
+    HubUiSettingSection* section = new HubUiSettingSection();
+    section->section_id = section_id;
+    section->section_display_name = section_display_name;
+    section->collapsed = ResolveInitialSectionCollapsedState(mod->namespace_id, mod->mod_id, section->section_id);
+    section->has_header = has_header;
+    mod->sections.push_back(section);
+    mod->uses_sections = true;
+    return section;
+}
+
+HubUiSettingSection* FindOrCreateDefaultSection(HubUiModSection* mod)
+{
+    if (mod == nullptr)
+    {
+        return nullptr;
+    }
+
+    for (size_t index = 0; index < mod->sections.size(); ++index)
+    {
+        HubUiSettingSection* section = mod->sections[index];
+        if (section->section_id.empty())
+        {
+            return section;
+        }
+    }
+
+    HubUiSettingSection* section = new HubUiSettingSection();
+    section->collapsed = false;
+    section->has_header = false;
+    mod->sections.push_back(section);
+    return section;
+}
+
+void AssignRowToSection(HubUiSettingRow* row, HubUiSettingSection* section)
+{
+    if (row == nullptr || section == nullptr)
+    {
+        return;
+    }
+
+    row->parent_section = section;
+    section->rows.push_back(row);
 }
 
 HubUiNamespaceTab* FindNamespaceTab(const char* namespace_id)
@@ -1418,6 +1558,9 @@ void __cdecl BuildSessionRow(
     row->setting_id = setting_view->setting_id;
     row->label = setting_view->label;
     row->description = setting_view->description;
+    row->hover_hint = setting_view->hover_hint != nullptr ? setting_view->hover_hint : "";
+    row->section_id = setting_view->section_id != nullptr ? setting_view->section_id : "";
+    row->section_display_name = setting_view->section_display_name != nullptr ? setting_view->section_display_name : "";
     row->user_data = setting_view->user_data;
     row->get_bool = setting_view->get_bool;
     row->set_bool = setting_view->set_bool;
@@ -1471,6 +1614,7 @@ void __cdecl BuildSessionRow(
     row->capture_active = false;
     row->inline_error.clear();
     row->parent_mod = mod;
+    row->parent_section = nullptr;
 
     if (setting_view->kind == HUB_REGISTRY_SETTING_KIND_SELECT)
     {
@@ -1502,6 +1646,41 @@ void __cdecl BuildSessionRow(
             row->color_presets.push_back(preset);
         }
         RefreshColorPresetViews(row);
+    }
+
+    if (!row->section_id.empty())
+    {
+        HubUiSettingSection* section = FindOrCreateSection(
+            mod,
+            row->section_id.c_str(),
+            row->section_display_name.empty() ? row->label.c_str() : row->section_display_name.c_str(),
+            true);
+        if (section != nullptr)
+        {
+            if (!mod->uses_sections)
+            {
+                HubUiSettingSection* default_section = FindOrCreateDefaultSection(mod);
+                if (default_section != nullptr && !mod->rows.empty())
+                {
+                    for (size_t existing_index = 0; existing_index < mod->rows.size(); ++existing_index)
+                    {
+                        HubUiSettingRow* existing_row = mod->rows[existing_index];
+                        if (existing_row->parent_section == nullptr)
+                        {
+                            AssignRowToSection(existing_row, default_section);
+                        }
+                    }
+                }
+                mod->uses_sections = true;
+            }
+
+            AssignRowToSection(row, section);
+        }
+    }
+    else if (mod->uses_sections)
+    {
+        HubUiSettingSection* default_section = FindOrCreateDefaultSection(mod);
+        AssignRowToSection(row, default_section);
     }
 
     mod->rows.push_back(row);
@@ -1779,6 +1958,51 @@ bool HubUi_GetModCollapsed(const char* namespace_id, const char* mod_id, bool* o
     return true;
 }
 
+EMC_Result HubUi_SetSectionCollapsed(const char* namespace_id, const char* mod_id, const char* section_id, bool is_collapsed)
+{
+    HubUiSettingSection* section = FindSection(namespace_id, mod_id, section_id);
+    if (section == nullptr)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    if (!section->has_header)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    section->collapsed = is_collapsed;
+    const std::string persisted_key = BuildPersistedSectionCollapseStateKey(namespace_id, mod_id, section_id);
+    if (!g_collapse_persistence_enabled || !section->collapsed)
+    {
+        g_persisted_section_collapse_states.erase(persisted_key);
+    }
+    else
+    {
+        g_persisted_section_collapse_states[persisted_key] = section->collapsed;
+    }
+
+    return EMC_OK;
+}
+
+bool HubUi_GetSectionCollapsed(const char* namespace_id, const char* mod_id, const char* section_id, bool* out_is_collapsed)
+{
+    if (out_is_collapsed == nullptr)
+    {
+        return false;
+    }
+
+    *out_is_collapsed = false;
+    HubUiSettingSection* section = FindSection(namespace_id, mod_id, section_id);
+    if (section == nullptr || !section->has_header)
+    {
+        return false;
+    }
+
+    *out_is_collapsed = section->collapsed;
+    return true;
+}
+
 EMC_Result HubUi_SetNamespaceSearchQuery(const char* namespace_id, const char* search_query)
 {
     HubUiNamespaceTab* tab = FindNamespaceTab(namespace_id);
@@ -1888,6 +2112,7 @@ bool HubUi_DoesSettingMatchNamespaceSearch(
     view.mod_display_name = row->mod_display_name.c_str();
     view.label = row->label.c_str();
     view.description = row->description.c_str();
+    view.hover_hint = row->hover_hint.empty() ? nullptr : row->hover_hint.c_str();
     *out_matches = HubUi_DoesRowMatchNamespaceSearch(&view);
     return true;
 }
@@ -2409,7 +2634,10 @@ bool HubUi_GetRowViewByIndex(uint32_t index, HubUiRowView* out_view)
     out_view->setting_id = row->setting_id.c_str();
     out_view->label = row->label.c_str();
     out_view->description = row->description.c_str();
+    out_view->hover_hint = row->hover_hint.empty() ? nullptr : row->hover_hint.c_str();
     out_view->inline_error = row->inline_error.c_str();
+    out_view->section_id = row->section_id.empty() ? nullptr : row->section_id.c_str();
+    out_view->section_display_name = row->section_display_name.empty() ? nullptr : row->section_display_name.c_str();
     out_view->user_data = row->user_data;
     out_view->get_bool = row->get_bool;
     out_view->set_bool = row->set_bool;

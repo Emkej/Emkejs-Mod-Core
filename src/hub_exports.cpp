@@ -434,6 +434,17 @@ EMC_Result __cdecl RegisterBoolSettingEntry(EMC_ModHandle mod, const EMC_BoolSet
     return HubRegistry_RegisterBoolSetting(mod, def);
 }
 
+EMC_Result __cdecl RegisterBoolSettingV2Entry(EMC_ModHandle mod, const EMC_BoolSettingDefV2* def)
+{
+    EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_bool_setting_v2");
+    if (gate_result != EMC_OK)
+    {
+        return gate_result;
+    }
+
+    return HubRegistry_RegisterBoolSettingV2(mod, def);
+}
+
 EMC_Result __cdecl RegisterKeybindSettingEntry(EMC_ModHandle mod, const EMC_KeybindSettingDefV1* def)
 {
     EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_keybind_setting");
@@ -443,6 +454,17 @@ EMC_Result __cdecl RegisterKeybindSettingEntry(EMC_ModHandle mod, const EMC_Keyb
     }
 
     return HubRegistry_RegisterKeybindSetting(mod, def);
+}
+
+EMC_Result __cdecl RegisterKeybindSettingV2Entry(EMC_ModHandle mod, const EMC_KeybindSettingDefV2* def)
+{
+    EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_keybind_setting_v2");
+    if (gate_result != EMC_OK)
+    {
+        return gate_result;
+    }
+
+    return HubRegistry_RegisterKeybindSettingV2(mod, def);
 }
 
 EMC_Result __cdecl RegisterIntSettingEntry(EMC_ModHandle mod, const EMC_IntSettingDefV1* def)
@@ -489,6 +511,17 @@ EMC_Result __cdecl RegisterSelectSettingEntry(EMC_ModHandle mod, const EMC_Selec
     return HubRegistry_RegisterSelectSetting(mod, def);
 }
 
+EMC_Result __cdecl RegisterSelectSettingV2Entry(EMC_ModHandle mod, const EMC_SelectSettingDefV2* def)
+{
+    EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_select_setting_v2");
+    if (gate_result != EMC_OK)
+    {
+        return gate_result;
+    }
+
+    return HubRegistry_RegisterSelectSettingV2(mod, def);
+}
+
 EMC_Result __cdecl RegisterTextSettingEntry(EMC_ModHandle mod, const EMC_TextSettingDefV1* def)
 {
     EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_text_setting");
@@ -498,6 +531,17 @@ EMC_Result __cdecl RegisterTextSettingEntry(EMC_ModHandle mod, const EMC_TextSet
     }
 
     return HubRegistry_RegisterTextSetting(mod, def);
+}
+
+EMC_Result __cdecl RegisterTextSettingV2Entry(EMC_ModHandle mod, const EMC_TextSettingDefV2* def)
+{
+    EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_text_setting_v2");
+    if (gate_result != EMC_OK)
+    {
+        return gate_result;
+    }
+
+    return HubRegistry_RegisterTextSettingV2(mod, def);
 }
 
 EMC_Result __cdecl RegisterColorSettingEntry(EMC_ModHandle mod, const EMC_ColorSettingDefV1* def)
@@ -511,6 +555,17 @@ EMC_Result __cdecl RegisterColorSettingEntry(EMC_ModHandle mod, const EMC_ColorS
     return HubRegistry_RegisterColorSetting(mod, def);
 }
 
+EMC_Result __cdecl RegisterSettingSectionEntry(EMC_ModHandle mod, const EMC_SettingSectionDefV1* def)
+{
+    EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_setting_section");
+    if (gate_result != EMC_OK)
+    {
+        return gate_result;
+    }
+
+    return HubRegistry_RegisterSettingSection(mod, def);
+}
+
 EMC_Result __cdecl RegisterActionRowEntry(EMC_ModHandle mod, const EMC_ActionRowDefV1* def)
 {
     EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_action_row");
@@ -520,6 +575,17 @@ EMC_Result __cdecl RegisterActionRowEntry(EMC_ModHandle mod, const EMC_ActionRow
     }
 
     return HubRegistry_RegisterActionRow(mod, def);
+}
+
+EMC_Result __cdecl RegisterActionRowV2Entry(EMC_ModHandle mod, const EMC_ActionRowDefV2* def)
+{
+    EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_action_row_v2");
+    if (gate_result != EMC_OK)
+    {
+        return gate_result;
+    }
+
+    return HubRegistry_RegisterActionRowV2(mod, def);
 }
 
 const EMC_HubApiV1 kHubApiV1 = {
@@ -536,7 +602,13 @@ const EMC_HubApiV1 kHubApiV1 = {
     &RegisterIntSettingV2Entry,
     &RegisterSelectSettingEntry,
     &RegisterTextSettingEntry,
-    &RegisterColorSettingEntry};
+    &RegisterColorSettingEntry,
+    &RegisterSettingSectionEntry,
+    &RegisterBoolSettingV2Entry,
+    &RegisterKeybindSettingV2Entry,
+    &RegisterSelectSettingV2Entry,
+    &RegisterTextSettingV2Entry,
+    &RegisterActionRowV2Entry};
 
 #if defined(EMC_ENABLE_TEST_EXPORTS)
 const int32_t kModHubClientTestGetApiModeSuccess = 0;
@@ -1147,6 +1219,13 @@ const EMC_HubApiV1* GetModHubClientTableTestApi()
         &ModHubClientTableTestRegisterAction,
         0,
         0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         0};
     return &kTableApi;
 }
@@ -1517,6 +1596,40 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetPendingTextS
     }
 
     CopyStringToBuffer(row_view.pending_text, out_text, out_text_size);
+    return EMC_OK;
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetHoverHint(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    char* out_text,
+    uint32_t out_text_size)
+{
+    HubUiRowView row_view = {};
+    if (!TryGetRowViewById(namespace_id, mod_id, setting_id, &row_view))
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    CopyStringToBuffer(row_view.hover_hint, out_text, out_text_size);
+    return EMC_OK;
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetDescription(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    char* out_text,
+    uint32_t out_text_size)
+{
+    HubUiRowView row_view = {};
+    if (!TryGetRowViewById(namespace_id, mod_id, setting_id, &row_view))
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    CopyStringToBuffer(row_view.description, out_text, out_text_size);
     return EMC_OK;
 }
 
@@ -1930,9 +2043,19 @@ extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegi
     return ModHubDummyConsumer_GetRegisterBoolCalls();
 }
 
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterBoolV2Calls()
+{
+    return ModHubDummyConsumer_GetRegisterBoolV2Calls();
+}
+
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterKeybindCalls()
 {
     return ModHubDummyConsumer_GetRegisterKeybindCalls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterKeybindV2Calls()
+{
+    return ModHubDummyConsumer_GetRegisterKeybindV2Calls();
 }
 
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterIntCalls()
@@ -1955,9 +2078,19 @@ extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegi
     return ModHubDummyConsumer_GetRegisterSelectCalls();
 }
 
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterSelectV2Calls()
+{
+    return ModHubDummyConsumer_GetRegisterSelectV2Calls();
+}
+
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterTextCalls()
 {
     return ModHubDummyConsumer_GetRegisterTextCalls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterTextV2Calls()
+{
+    return ModHubDummyConsumer_GetRegisterTextV2Calls();
 }
 
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterColorCalls()
@@ -1968,6 +2101,11 @@ extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegi
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterActionCalls()
 {
     return ModHubDummyConsumer_GetRegisterActionCalls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterActionV2Calls()
+{
+    return ModHubDummyConsumer_GetRegisterActionV2Calls();
 }
 
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetOrderChecksPassed()

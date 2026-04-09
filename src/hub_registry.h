@@ -37,6 +37,9 @@ struct HubRegistrySettingView
     const char* setting_id;
     const char* label;
     const char* description;
+    const char* hover_hint;
+    const char* section_id;
+    const char* section_display_name;
     void* user_data;
 
     EMC_GetBoolCallback get_bool;
@@ -86,14 +89,20 @@ typedef void(__cdecl* HubRegistryVisitSettingFn)(
 
 EMC_Result __cdecl HubRegistry_RegisterMod(const EMC_ModDescriptorV1* desc, EMC_ModHandle* out_handle);
 EMC_Result __cdecl HubRegistry_RegisterBoolSetting(EMC_ModHandle mod, const EMC_BoolSettingDefV1* def);
+EMC_Result __cdecl HubRegistry_RegisterBoolSettingV2(EMC_ModHandle mod, const EMC_BoolSettingDefV2* def);
 EMC_Result __cdecl HubRegistry_RegisterKeybindSetting(EMC_ModHandle mod, const EMC_KeybindSettingDefV1* def);
+EMC_Result __cdecl HubRegistry_RegisterKeybindSettingV2(EMC_ModHandle mod, const EMC_KeybindSettingDefV2* def);
 EMC_Result __cdecl HubRegistry_RegisterIntSetting(EMC_ModHandle mod, const EMC_IntSettingDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterIntSettingV2(EMC_ModHandle mod, const EMC_IntSettingDefV2* def);
 EMC_Result __cdecl HubRegistry_RegisterFloatSetting(EMC_ModHandle mod, const EMC_FloatSettingDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterSelectSetting(EMC_ModHandle mod, const EMC_SelectSettingDefV1* def);
+EMC_Result __cdecl HubRegistry_RegisterSelectSettingV2(EMC_ModHandle mod, const EMC_SelectSettingDefV2* def);
 EMC_Result __cdecl HubRegistry_RegisterTextSetting(EMC_ModHandle mod, const EMC_TextSettingDefV1* def);
+EMC_Result __cdecl HubRegistry_RegisterTextSettingV2(EMC_ModHandle mod, const EMC_TextSettingDefV2* def);
 EMC_Result __cdecl HubRegistry_RegisterColorSetting(EMC_ModHandle mod, const EMC_ColorSettingDefV1* def);
+EMC_Result __cdecl HubRegistry_RegisterSettingSection(EMC_ModHandle mod, const EMC_SettingSectionDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterActionRow(EMC_ModHandle mod, const EMC_ActionRowDefV1* def);
+EMC_Result __cdecl HubRegistry_RegisterActionRowV2(EMC_ModHandle mod, const EMC_ActionRowDefV2* def);
 void HubRegistry_ForEachSettingInOrder(HubRegistryVisitSettingFn visitor, void* user_data);
 
 void HubRegistry_SetRegistrationLocked(bool is_locked);

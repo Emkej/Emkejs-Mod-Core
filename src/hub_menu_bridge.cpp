@@ -2,6 +2,7 @@
 
 #include "hub_commit.h"
 #include "hub_color.h"
+#include "hub_hover_hint.h"
 #include "hub_registry.h"
 #include "hub_ui.h"
 
@@ -953,6 +954,16 @@ struct RenderModGroup
     std::string mod_display_name;
     bool collapsed;
     std::vector<HubUiRowView> rows;
+    bool uses_sections;
+    struct RenderSectionGroup
+    {
+        std::string section_id;
+        std::string section_display_name;
+        bool collapsed;
+        bool has_header;
+        std::vector<HubUiRowView> rows;
+    };
+    std::vector<RenderSectionGroup> sections;
 };
 
 struct RenderNamespaceGroup
@@ -1298,9 +1309,56 @@ void FindOrAddRenderMod(RenderNamespaceGroup* namespace_group, const HubUiRowVie
     new_mod.mod_id = row.mod_id != 0 ? row.mod_id : "";
     new_mod.mod_display_name = row.mod_display_name != 0 ? row.mod_display_name : new_mod.mod_id;
     new_mod.collapsed = false;
+    new_mod.uses_sections = false;
     HubUi_GetModCollapsed(row.namespace_id, row.mod_id, &new_mod.collapsed);
     namespace_group->mods.push_back(new_mod);
     *out_mod = &namespace_group->mods.back();
+}
+
+RenderModGroup::RenderSectionGroup* FindOrAddRenderSection(RenderModGroup* mod_group, const HubUiRowView& row)
+{
+    if (mod_group == 0)
+    {
+        return 0;
+    }
+
+    if (row.section_id == 0 || row.section_id[0] == '\0')
+    {
+        for (size_t index = 0; index < mod_group->sections.size(); ++index)
+        {
+            if (mod_group->sections[index].section_id.empty())
+            {
+                return &mod_group->sections[index];
+            }
+        }
+
+        RenderModGroup::RenderSectionGroup section;
+        section.collapsed = false;
+        section.has_header = false;
+        mod_group->sections.push_back(section);
+        return &mod_group->sections.back();
+    }
+
+    for (size_t index = 0; index < mod_group->sections.size(); ++index)
+    {
+        RenderModGroup::RenderSectionGroup* existing = &mod_group->sections[index];
+        if (existing->section_id == row.section_id)
+        {
+            return existing;
+        }
+    }
+
+    RenderModGroup::RenderSectionGroup section;
+    section.section_id = row.section_id;
+    section.section_display_name = row.section_display_name != 0 && row.section_display_name[0] != '\0'
+        ? row.section_display_name
+        : row.label;
+    section.has_header = true;
+    section.collapsed = false;
+    HubUi_GetSectionCollapsed(row.namespace_id, row.mod_id, row.section_id, &section.collapsed);
+    mod_group->sections.push_back(section);
+    mod_group->uses_sections = true;
+    return &mod_group->sections.back();
 }
 
 void BuildRenderNamespaces(std::vector<RenderNamespaceGroup>* out_namespaces)
@@ -1334,6 +1392,11 @@ void BuildRenderNamespaces(std::vector<RenderNamespaceGroup>* out_namespaces)
             continue;
         }
 
+        RenderModGroup::RenderSectionGroup* section_group = FindOrAddRenderSection(mod_group, row);
+        if (section_group != 0)
+        {
+            section_group->rows.push_back(row);
+        }
         mod_group->rows.push_back(row);
     }
 }
@@ -2320,7 +2383,6 @@ void OnHubIntEditAccepted(MyGUI::EditBox* sender)
 {
     NormalizeHubIntEditText(sender);
     TryApplyHubSettingImmediately(sender);
-    RebuildHubPanelWidgets();
 }
 
 void OnHubIntEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
@@ -2328,7 +2390,6 @@ void OnHubIntEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
     MyGUI::EditBox* edit_box = sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0;
     NormalizeHubIntEditText(edit_box);
     TryApplyHubSettingImmediately(edit_box);
-    RebuildHubPanelWidgets();
 }
 
 void OnHubFloatTextChanged(MyGUI::EditBox* sender)
@@ -2363,7 +2424,6 @@ void OnHubFloatEditAccepted(MyGUI::EditBox* sender)
 {
     NormalizeHubFloatEditText(sender);
     TryApplyHubSettingImmediately(sender);
-    RebuildHubPanelWidgets();
 }
 
 void OnHubFloatEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
@@ -2371,7 +2431,6 @@ void OnHubFloatEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
     MyGUI::EditBox* edit_box = sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0;
     NormalizeHubFloatEditText(edit_box);
     TryApplyHubSettingImmediately(edit_box);
-    RebuildHubPanelWidgets();
 }
 
 void OnHubSelectAccepted(MyGUI::ComboBox* sender, size_t index)
@@ -2466,14 +2525,14 @@ void OnHubColorTextChanged(MyGUI::EditBox* sender)
 void OnHubColorEditAccepted(MyGUI::EditBox* sender)
 {
     NormalizeHubColorEditText(sender);
-    RebuildHubPanelWidgets();
+    TryApplyHubSettingImmediately(sender);
 }
 
 void OnHubColorEditLostFocus(MyGUI::Widget* sender, MyGUI::Widget*)
 {
     MyGUI::EditBox* edit_box = sender != 0 ? sender->castType<MyGUI::EditBox>(false) : 0;
     NormalizeHubColorEditText(edit_box);
-    RebuildHubPanelWidgets();
+    TryApplyHubSettingImmediately(edit_box);
 }
 
 void OnHubMouseWheel(MyGUI::Widget*, int rel)
@@ -2567,6 +2626,17 @@ void OnHubButtonClicked(MyGUI::Widget* sender)
         if (HubUi_GetModCollapsed(namespace_id.c_str(), mod_id.c_str(), &collapsed))
         {
             HubUi_SetModCollapsed(namespace_id.c_str(), mod_id.c_str(), !collapsed);
+        }
+        RebuildHubPanelWidgets();
+        return;
+    }
+
+    if (action == "section_toggle")
+    {
+        bool collapsed = false;
+        if (HubUi_GetSectionCollapsed(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), &collapsed))
+        {
+            HubUi_SetSectionCollapsed(namespace_id.c_str(), mod_id.c_str(), setting_id.c_str(), !collapsed);
         }
         RebuildHubPanelWidgets();
         return;
@@ -2942,6 +3012,59 @@ std::string BuildColorPaletteButtonCaption(const HubUiRowView& row)
     return row.color_palette_expanded ? "Hide" : "Presets";
 }
 
+std::string BuildIntDeltaHoverHint(int32_t delta)
+{
+    const int32_t absolute_delta = delta < 0 ? -delta : delta;
+    std::ostringstream hint;
+    hint << (delta < 0 ? "Decrease" : "Increase") << " by " << absolute_delta;
+    return hint.str();
+}
+
+std::string BuildFloatStepHoverHint(bool is_increase, const HubUiRowView& row)
+{
+    std::ostringstream hint;
+    hint << (is_increase ? "Increase" : "Decrease")
+         << " by "
+         << FormatHubRangeFloatValue(row.float_step, row.float_display_decimals);
+    return hint.str();
+}
+
+std::string BuildColorPresetHoverHint(const char* value_hex)
+{
+    std::ostringstream hint;
+    hint << "Apply preset " << (value_hex != 0 ? value_hex : "");
+    return hint.str();
+}
+
+const char* ResolveConsumerHoverHint(const HubUiRowView& row)
+{
+    return (row.hover_hint != 0 && row.hover_hint[0] != '\0') ? row.hover_hint : 0;
+}
+
+void AttachPrimaryControlHoverHint(MyGUI::Widget* widget, const HubUiRowView& row, const char* fallback_hint)
+{
+    const char* consumer_hint = ResolveConsumerHoverHint(row);
+    if (consumer_hint != 0)
+    {
+        HubHoverHint_Attach(widget, consumer_hint);
+        return;
+    }
+
+    HubHoverHint_Attach(widget, fallback_hint);
+}
+
+void AttachPrimaryControlHoverHint(MyGUI::Widget* widget, const HubUiRowView& row, const std::string& fallback_hint)
+{
+    const char* consumer_hint = ResolveConsumerHoverHint(row);
+    if (consumer_hint != 0)
+    {
+        HubHoverHint_Attach(widget, consumer_hint);
+        return;
+    }
+
+    HubHoverHint_Attach(widget, fallback_hint);
+}
+
 int GetColorPaletteHeight(const HubUiRowView& row)
 {
     if (row.kind != HUB_UI_ROW_KIND_COLOR
@@ -3034,6 +3157,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             button->setCaption(FormatBoolButtonCaption(row));
             button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(button, "bool_toggle", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            AttachPrimaryControlHoverHint(button, row, static_cast<const char*>(0));
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_KEYBIND)
@@ -3047,6 +3171,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             bind_button->setCaption(FormatKeybindButtonCaption(row));
             bind_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(bind_button, "keybind_bind", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            AttachPrimaryControlHoverHint(bind_button, row, "Capture a new primary key.");
         }
 
         MyGUI::Button* clear_button = CreateTrackedWidget<MyGUI::Button>(
@@ -3058,6 +3183,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             clear_button->setCaption("Clear");
             clear_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(clear_button, "keybind_clear", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            HubHoverHint_Attach(clear_button, "Set this keybind to Unbound.");
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_INT)
@@ -3092,6 +3218,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                         row.namespace_id != 0 ? row.namespace_id : "",
                         row.mod_id != 0 ? row.mod_id : "",
                         row.setting_id != 0 ? row.setting_id : "");
+                    HubHoverHint_Attach(button, BuildIntDeltaHoverHint(-delta));
                 }
                 control_x += button_width + button_gap;
             }
@@ -3107,6 +3234,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 minus_ten_button->setCaption("-10");
                 minus_ten_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
                 AttachHubAction(minus_ten_button, "int_step_dec_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+                HubHoverHint_Attach(minus_ten_button, "Decrease by 10.");
             }
             control_x += button_width + button_gap;
 
@@ -3119,6 +3247,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 minus_five_button->setCaption("-5");
                 minus_five_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
                 AttachHubAction(minus_five_button, "int_step_dec_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+                HubHoverHint_Attach(minus_five_button, "Decrease by 5.");
             }
             control_x += button_width + button_gap;
 
@@ -3131,6 +3260,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 minus_button->setCaption("-");
                 minus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
                 AttachHubAction(minus_button, "int_step_dec", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+                HubHoverHint_Attach(minus_button, "Decrease by 1.");
             }
             control_x += button_width + button_gap;
         }
@@ -3173,6 +3303,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                         row.namespace_id != 0 ? row.namespace_id : "",
                         row.mod_id != 0 ? row.mod_id : "",
                         row.setting_id != 0 ? row.setting_id : "");
+                    HubHoverHint_Attach(button, BuildIntDeltaHoverHint(delta));
                 }
                 control_x += button_width + button_gap;
             }
@@ -3188,6 +3319,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 plus_button->setCaption("+");
                 plus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
                 AttachHubAction(plus_button, "int_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+                HubHoverHint_Attach(plus_button, "Increase by 1.");
             }
             control_x += button_width + button_gap;
 
@@ -3200,6 +3332,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 plus_five_button->setCaption("+5");
                 plus_five_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
                 AttachHubAction(plus_five_button, "int_step_inc_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+                HubHoverHint_Attach(plus_five_button, "Increase by 5.");
             }
             control_x += button_width + button_gap;
 
@@ -3212,6 +3345,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 plus_ten_button->setCaption("+10");
                 plus_ten_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
                 AttachHubAction(plus_ten_button, "int_step_inc_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+                HubHoverHint_Attach(plus_ten_button, "Increase by 10.");
             }
         }
     }
@@ -3226,6 +3360,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             minus_button->setCaption("-");
             minus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(minus_button, "float_step_dec", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            HubHoverHint_Attach(minus_button, BuildFloatStepHoverHint(false, row));
         }
 
         MyGUI::EditBox* value_box = CreateTrackedSearchBox(
@@ -3250,6 +3385,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             plus_button->setCaption("+");
             plus_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(plus_button, "float_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            HubHoverHint_Attach(plus_button, BuildFloatStepHoverHint(true, row));
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_SELECT)
@@ -3274,6 +3410,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 combo_box->setIndexSelected(selected_index);
             }
             combo_box->eventComboAccept += MyGUI::newDelegate(&OnHubSelectAccepted);
+            AttachPrimaryControlHoverHint(combo_box, row, static_cast<const char*>(0));
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_TEXT)
@@ -3288,6 +3425,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             value_box->setOnlyText(row.pending_text != 0 ? row.pending_text : "");
             AttachHubIdentity(value_box, row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             value_box->eventEditTextChange += MyGUI::newDelegate(&OnHubTextChanged);
+            AttachPrimaryControlHoverHint(value_box, row, static_cast<const char*>(0));
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_COLOR)
@@ -3315,6 +3453,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             mode_button->setCaption(BuildColorModeButtonCaption(row));
             mode_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(mode_button, "color_mode_toggle", namespace_value, mod_value, setting_value);
+            HubHoverHint_Attach(mode_button, "Toggle between preset palette and hex input.");
         }
 
         if (row.color_hex_mode)
@@ -3344,6 +3483,9 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 palette_button->setCaption(BuildColorPaletteButtonCaption(row));
                 palette_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
                 AttachHubAction(palette_button, "color_palette_toggle", namespace_value, mod_value, setting_value);
+                HubHoverHint_Attach(
+                    palette_button,
+                    row.color_palette_expanded ? "Hide preset colors." : "Show preset colors.");
             }
         }
 
@@ -3355,6 +3497,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
         {
             current_swatch->setCaption("");
             current_swatch->setColour(current_color);
+            HubHoverHint_Attach(current_swatch, "Current color preview.");
         }
 
         if (row.color_preview_kind == EMC_COLOR_PREVIEW_KIND_TEXT)
@@ -3395,6 +3538,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             action_button->setCaption("Run");
             action_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
             AttachHubAction(action_button, "action_invoke", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
+            AttachPrimaryControlHoverHint(action_button, row, "Run this action now.");
         }
     }
 
@@ -3438,6 +3582,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 mod_value,
                 setting_value,
                 row.color_presets[preset_index].value_hex);
+            HubHoverHint_Attach(preset_button, BuildColorPresetHoverHint(row.color_presets[preset_index].value_hex));
         }
 
         next_y += GetColorPaletteHeight(row);
@@ -3487,6 +3632,7 @@ void BuildFilteredModsForNamespace(const RenderNamespaceGroup& namespace_group, 
         const RenderModGroup& mod_group = namespace_group.mods[mod_index];
         RenderModGroup filtered_mod = mod_group;
         filtered_mod.rows.clear();
+        filtered_mod.sections.clear();
 
         for (size_t row_index = 0; row_index < mod_group.rows.size(); ++row_index)
         {
@@ -3494,6 +3640,55 @@ void BuildFilteredModsForNamespace(const RenderNamespaceGroup& namespace_group, 
             if (HubUi_DoesRowMatchNamespaceSearch(&row))
             {
                 filtered_mod.rows.push_back(row);
+                RenderModGroup::RenderSectionGroup* section_group = 0;
+                if (row.section_id != 0 && row.section_id[0] != '\0')
+                {
+                    for (size_t section_index = 0; section_index < filtered_mod.sections.size(); ++section_index)
+                    {
+                        if (filtered_mod.sections[section_index].section_id == row.section_id)
+                        {
+                            section_group = &filtered_mod.sections[section_index];
+                            break;
+                        }
+                    }
+                    if (section_group == 0)
+                    {
+                        RenderModGroup::RenderSectionGroup section;
+                        section.section_id = row.section_id;
+                        section.section_display_name = row.section_display_name != 0 && row.section_display_name[0] != '\0'
+                            ? row.section_display_name
+                            : row.label;
+                        section.has_header = true;
+                        HubUi_GetSectionCollapsed(row.namespace_id, row.mod_id, row.section_id, &section.collapsed);
+                        filtered_mod.sections.push_back(section);
+                        filtered_mod.uses_sections = true;
+                        section_group = &filtered_mod.sections.back();
+                    }
+                }
+                else if (mod_group.uses_sections)
+                {
+                    for (size_t section_index = 0; section_index < filtered_mod.sections.size(); ++section_index)
+                    {
+                        if (filtered_mod.sections[section_index].section_id.empty())
+                        {
+                            section_group = &filtered_mod.sections[section_index];
+                            break;
+                        }
+                    }
+                    if (section_group == 0)
+                    {
+                        RenderModGroup::RenderSectionGroup section;
+                        section.has_header = false;
+                        section.collapsed = false;
+                        filtered_mod.sections.push_back(section);
+                        section_group = &filtered_mod.sections.back();
+                    }
+                }
+
+                if (section_group != 0)
+                {
+                    section_group->rows.push_back(row);
+                }
             }
         }
 
@@ -3560,9 +3755,32 @@ int MeasureFilteredModsContentHeight(const std::vector<RenderModGroup>& filtered
             continue;
         }
 
-        for (size_t row_index = 0; row_index < mod_group.rows.size(); ++row_index)
+        if (!mod_group.uses_sections)
         {
-            total_height += MeasureRowBlockHeight(mod_group.rows[row_index]);
+            for (size_t row_index = 0; row_index < mod_group.rows.size(); ++row_index)
+            {
+                total_height += MeasureRowBlockHeight(mod_group.rows[row_index]);
+            }
+            total_height += 8;
+            continue;
+        }
+
+        for (size_t section_index = 0; section_index < mod_group.sections.size(); ++section_index)
+        {
+            const RenderModGroup::RenderSectionGroup& section = mod_group.sections[section_index];
+            if (section.has_header)
+            {
+                total_height += 28;
+                if (section.collapsed)
+                {
+                    continue;
+                }
+            }
+
+            for (size_t row_index = 0; row_index < section.rows.size(); ++row_index)
+            {
+                total_height += MeasureRowBlockHeight(section.rows[row_index]);
+            }
         }
 
         total_height += 8;
@@ -4059,6 +4277,7 @@ void RebuildHubPanelWidgets()
                 line_up_button->setEnabled(g_hub_scroll_offset > 0);
                 line_up_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
                 AttachHubAction(line_up_button, "scroll_line_up", "", "", "");
+                HubHoverHint_Attach(line_up_button, "Scroll up one line.");
             }
 
             MyGUI::Button* line_down_button = CreateTrackedWidget<MyGUI::Button>(
@@ -4072,6 +4291,7 @@ void RebuildHubPanelWidgets()
                 line_down_button->setEnabled(g_hub_scroll_offset < g_hub_scroll_max_offset);
                 line_down_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
                 AttachHubAction(line_down_button, "scroll_line_down", "", "", "");
+                HubHoverHint_Attach(line_down_button, "Scroll down one line.");
             }
 
             const int top_page_y = content_top + 34;
@@ -4088,6 +4308,7 @@ void RebuildHubPanelWidgets()
                 page_up_button->setEnabled(g_hub_scroll_offset > 0);
                 page_up_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
                 AttachHubAction(page_up_button, "scroll_page_up", "", "", "");
+                HubHoverHint_Attach(page_up_button, "Scroll up one page.");
             }
 
             MyGUI::Button* page_down_button = CreateTrackedWidget<MyGUI::Button>(
@@ -4101,6 +4322,7 @@ void RebuildHubPanelWidgets()
                 page_down_button->setEnabled(g_hub_scroll_offset < g_hub_scroll_max_offset);
                 page_down_button->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
                 AttachHubAction(page_down_button, "scroll_page_down", "", "", "");
+                HubHoverHint_Attach(page_down_button, "Scroll down one page.");
             }
         }
     }
@@ -4137,27 +4359,86 @@ void RebuildHubPanelWidgets()
             continue;
         }
 
-        for (size_t row_index = 0; row_index < mod_group.rows.size(); ++row_index)
+        if (!mod_group.uses_sections)
         {
-            const HubUiRowView& row = mod_group.rows[row_index];
-            const int row_height = MeasureRowBlockHeight(row);
-            const int row_y = has_persistent_scroll
-                ? logical_y
-                : content_top + logical_y - g_hub_scroll_offset;
-            if (has_persistent_scroll || IsBlockFullyVisible(row_y, row_height, content_top, content_bottom))
+            for (size_t row_index = 0; row_index < mod_group.rows.size(); ++row_index)
             {
-                int next_y = row_y;
-                CreateRowWidgets(content_parent, content_panel_width, row_y, row, &next_y);
-                if (has_persistent_scroll)
+                const HubUiRowView& row = mod_group.rows[row_index];
+                const int row_height = MeasureRowBlockHeight(row);
+                const int row_y = has_persistent_scroll
+                    ? logical_y
+                    : content_top + logical_y - g_hub_scroll_offset;
+                if (has_persistent_scroll || IsBlockFullyVisible(row_y, row_height, content_top, content_bottom))
                 {
-                    logical_y = next_y;
-                    continue;
+                    int next_y = row_y;
+                    CreateRowWidgets(content_parent, content_panel_width, row_y, row, &next_y);
+                    if (has_persistent_scroll)
+                    {
+                        logical_y = next_y;
+                        continue;
+                    }
+                }
+                logical_y += row_height;
+            }
+        }
+        else
+        {
+            for (size_t section_index = 0; section_index < mod_group.sections.size(); ++section_index)
+            {
+                const RenderModGroup::RenderSectionGroup& section = mod_group.sections[section_index];
+                const int section_header_height = section.has_header ? 26 : 0;
+                const int section_header_y = has_persistent_scroll
+                    ? logical_y
+                    : content_top + logical_y - g_hub_scroll_offset;
+
+                if (section.has_header
+                    && (has_persistent_scroll || IsBlockFullyVisible(section_header_y, section_header_height, content_top, content_bottom)))
+                {
+                    MyGUI::Button* section_header = CreateTrackedWidget<MyGUI::Button>(
+                        content_parent,
+                        kValueButtonSkin,
+                        MyGUI::IntCoord(34, section_header_y, content_panel_width - 54, section_header_height));
+                    if (section_header != 0)
+                    {
+                        const std::string prefix = section.collapsed ? "[+] " : "[-] ";
+                        section_header->setCaption(prefix + section.section_display_name);
+                        section_header->eventMouseButtonClick += MyGUI::newDelegate(&OnHubButtonClicked);
+                        AttachHubAction(section_header, "section_toggle", selected_namespace->namespace_id, mod_group.mod_id, section.section_id);
+                    }
+                }
+
+                if (section.has_header)
+                {
+                    logical_y += section_header_height + 2;
+                    if (section.collapsed)
+                    {
+                        continue;
+                    }
+                }
+
+                for (size_t row_index = 0; row_index < section.rows.size(); ++row_index)
+                {
+                    const HubUiRowView& row = section.rows[row_index];
+                    const int row_height = MeasureRowBlockHeight(row);
+                    const int row_y = has_persistent_scroll
+                        ? logical_y
+                        : content_top + logical_y - g_hub_scroll_offset;
+                    if (has_persistent_scroll || IsBlockFullyVisible(row_y, row_height, content_top, content_bottom))
+                    {
+                        int next_y = row_y;
+                        CreateRowWidgets(content_parent, content_panel_width, row_y, row, &next_y);
+                        if (has_persistent_scroll)
+                        {
+                            logical_y = next_y;
+                            continue;
+                        }
+                    }
+                    logical_y += row_height;
                 }
             }
-            logical_y += row_height;
-        }
 
-        logical_y += 8;
+            logical_y += 8;
+        }
     }
 
     logical_y += 12;

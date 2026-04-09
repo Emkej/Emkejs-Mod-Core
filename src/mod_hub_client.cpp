@@ -204,6 +204,54 @@ bool HasColorSettingSupport(const EMC_HubApiV1* api, uint32_t api_size)
         && api->register_color_setting != 0;
 }
 
+bool HasSettingSectionSupport(const EMC_HubApiV1* api, uint32_t api_size)
+{
+    return api != 0
+        && api_size >= EMC_HUB_API_V1_SETTING_SECTION_MIN_SIZE
+        && api->api_size >= EMC_HUB_API_V1_SETTING_SECTION_MIN_SIZE
+        && api->register_setting_section != 0;
+}
+
+bool HasBoolSettingV2Support(const EMC_HubApiV1* api, uint32_t api_size)
+{
+    return api != 0
+        && api_size >= EMC_HUB_API_V1_BOOL_SETTING_V2_MIN_SIZE
+        && api->api_size >= EMC_HUB_API_V1_BOOL_SETTING_V2_MIN_SIZE
+        && api->register_bool_setting_v2 != 0;
+}
+
+bool HasKeybindSettingV2Support(const EMC_HubApiV1* api, uint32_t api_size)
+{
+    return api != 0
+        && api_size >= EMC_HUB_API_V1_KEYBIND_SETTING_V2_MIN_SIZE
+        && api->api_size >= EMC_HUB_API_V1_KEYBIND_SETTING_V2_MIN_SIZE
+        && api->register_keybind_setting_v2 != 0;
+}
+
+bool HasSelectSettingV2Support(const EMC_HubApiV1* api, uint32_t api_size)
+{
+    return api != 0
+        && api_size >= EMC_HUB_API_V1_SELECT_SETTING_V2_MIN_SIZE
+        && api->api_size >= EMC_HUB_API_V1_SELECT_SETTING_V2_MIN_SIZE
+        && api->register_select_setting_v2 != 0;
+}
+
+bool HasTextSettingV2Support(const EMC_HubApiV1* api, uint32_t api_size)
+{
+    return api != 0
+        && api_size >= EMC_HUB_API_V1_TEXT_SETTING_V2_MIN_SIZE
+        && api->api_size >= EMC_HUB_API_V1_TEXT_SETTING_V2_MIN_SIZE
+        && api->register_text_setting_v2 != 0;
+}
+
+bool HasActionRowV2Support(const EMC_HubApiV1* api, uint32_t api_size)
+{
+    return api != 0
+        && api_size >= EMC_HUB_API_V1_ACTION_ROW_V2_MIN_SIZE
+        && api->api_size >= EMC_HUB_API_V1_ACTION_ROW_V2_MIN_SIZE
+        && api->register_action_row_v2 != 0;
+}
+
 uint32_t ResolveExpectedSdkApiVersion(const emc::ModHubClient::Config& config)
 {
     return config.expected_sdk_api_version != 0u
@@ -319,6 +367,7 @@ EMC_Result RegisterSettingsRow(
         return EMC_ERR_INVALID_ARGUMENT;
     }
 
+    EMC_Result result = EMC_ERR_INVALID_ARGUMENT;
     switch (row->kind)
     {
     case emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL:
@@ -326,67 +375,148 @@ EMC_Result RegisterSettingsRow(
         {
             return EMC_ERR_INTERNAL;
         }
-        return api->register_bool_setting(mod_handle, static_cast<const EMC_BoolSettingDefV1*>(row->def));
+        result = api->register_bool_setting(mod_handle, static_cast<const EMC_BoolSettingDefV1*>(row->def));
+        break;
+
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2:
+        if (!HasBoolSettingV2Support(api, api_size))
+        {
+            return EMC_ERR_API_SIZE_MISMATCH;
+        }
+        result = api->register_bool_setting_v2(mod_handle, static_cast<const EMC_BoolSettingDefV2*>(row->def));
+        break;
 
     case emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND:
         if (api->register_keybind_setting == 0)
         {
             return EMC_ERR_INTERNAL;
         }
-        return api->register_keybind_setting(mod_handle, static_cast<const EMC_KeybindSettingDefV1*>(row->def));
+        result = api->register_keybind_setting(mod_handle, static_cast<const EMC_KeybindSettingDefV1*>(row->def));
+        break;
+
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND_V2:
+        if (!HasKeybindSettingV2Support(api, api_size))
+        {
+            return EMC_ERR_API_SIZE_MISMATCH;
+        }
+        result = api->register_keybind_setting_v2(mod_handle, static_cast<const EMC_KeybindSettingDefV2*>(row->def));
+        break;
 
     case emc::MOD_HUB_CLIENT_SETTING_KIND_INT:
         if (api->register_int_setting == 0)
         {
             return EMC_ERR_INTERNAL;
         }
-        return api->register_int_setting(mod_handle, static_cast<const EMC_IntSettingDefV1*>(row->def));
+        result = api->register_int_setting(mod_handle, static_cast<const EMC_IntSettingDefV1*>(row->def));
+        break;
 
     case emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2:
         if (!HasIntSettingV2Support(api, api_size))
         {
             return EMC_ERR_API_SIZE_MISMATCH;
         }
-        return api->register_int_setting_v2(mod_handle, static_cast<const EMC_IntSettingDefV2*>(row->def));
+        result = api->register_int_setting_v2(mod_handle, static_cast<const EMC_IntSettingDefV2*>(row->def));
+        break;
 
     case emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT:
         if (api->register_float_setting == 0)
         {
             return EMC_ERR_INTERNAL;
         }
-        return api->register_float_setting(mod_handle, static_cast<const EMC_FloatSettingDefV1*>(row->def));
+        result = api->register_float_setting(mod_handle, static_cast<const EMC_FloatSettingDefV1*>(row->def));
+        break;
 
     case emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION:
         if (api->register_action_row == 0)
         {
             return EMC_ERR_INTERNAL;
         }
-        return api->register_action_row(mod_handle, static_cast<const EMC_ActionRowDefV1*>(row->def));
+        result = api->register_action_row(mod_handle, static_cast<const EMC_ActionRowDefV1*>(row->def));
+        break;
+
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2:
+        if (!HasActionRowV2Support(api, api_size))
+        {
+            return EMC_ERR_API_SIZE_MISMATCH;
+        }
+        result = api->register_action_row_v2(mod_handle, static_cast<const EMC_ActionRowDefV2*>(row->def));
+        break;
 
     case emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT:
         if (!HasSelectSettingSupport(api, api_size))
         {
             return EMC_ERR_API_SIZE_MISMATCH;
         }
-        return api->register_select_setting(mod_handle, static_cast<const EMC_SelectSettingDefV1*>(row->def));
+        result = api->register_select_setting(mod_handle, static_cast<const EMC_SelectSettingDefV1*>(row->def));
+        break;
+
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT_V2:
+        if (!HasSelectSettingV2Support(api, api_size))
+        {
+            return EMC_ERR_API_SIZE_MISMATCH;
+        }
+        result = api->register_select_setting_v2(mod_handle, static_cast<const EMC_SelectSettingDefV2*>(row->def));
+        break;
 
     case emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT:
         if (!HasTextSettingSupport(api, api_size))
         {
             return EMC_ERR_API_SIZE_MISMATCH;
         }
-        return api->register_text_setting(mod_handle, static_cast<const EMC_TextSettingDefV1*>(row->def));
+        result = api->register_text_setting(mod_handle, static_cast<const EMC_TextSettingDefV1*>(row->def));
+        break;
+
+    case emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2:
+        if (!HasTextSettingV2Support(api, api_size))
+        {
+            return EMC_ERR_API_SIZE_MISMATCH;
+        }
+        result = api->register_text_setting_v2(mod_handle, static_cast<const EMC_TextSettingDefV2*>(row->def));
+        break;
 
     case emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR:
         if (!HasColorSettingSupport(api, api_size))
         {
             return EMC_ERR_API_SIZE_MISMATCH;
         }
-        return api->register_color_setting(mod_handle, static_cast<const EMC_ColorSettingDefV1*>(row->def));
+        result = api->register_color_setting(mod_handle, static_cast<const EMC_ColorSettingDefV1*>(row->def));
+        break;
 
     default:
         return EMC_ERR_INVALID_ARGUMENT;
     }
+
+    if (result != EMC_OK)
+    {
+        return result;
+    }
+
+    if (row->section_id != nullptr && row->section_id[0] != '\0')
+    {
+        if (row->setting_id == nullptr || row->setting_id[0] == '\0')
+        {
+            return EMC_ERR_INVALID_ARGUMENT;
+        }
+
+        if (row->section_display_name == nullptr || row->section_display_name[0] == '\0')
+        {
+            return EMC_ERR_INVALID_ARGUMENT;
+        }
+
+        if (!HasSettingSectionSupport(api, api_size))
+        {
+            return EMC_OK;
+        }
+
+        const EMC_SettingSectionDefV1 section_def = {
+            row->setting_id,
+            row->section_id,
+            row->section_display_name
+        };
+        result = api->register_setting_section(mod_handle, &section_def);
+    }
+
+    return result;
 }
 }
 

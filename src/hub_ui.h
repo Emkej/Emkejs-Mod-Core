@@ -29,7 +29,10 @@ struct HubUiRowView
     const char* setting_id;
     const char* label;
     const char* description;
+    const char* hover_hint;
     const char* inline_error;
+    const char* section_id;
+    const char* section_display_name;
 
     void* user_data;
     EMC_GetBoolCallback get_bool;
@@ -96,6 +99,8 @@ bool HubUi_IsAnyKeybindCaptureActive();
 
 EMC_Result HubUi_SetModCollapsed(const char* namespace_id, const char* mod_id, bool is_collapsed);
 bool HubUi_GetModCollapsed(const char* namespace_id, const char* mod_id, bool* out_is_collapsed);
+EMC_Result HubUi_SetSectionCollapsed(const char* namespace_id, const char* mod_id, const char* section_id, bool is_collapsed);
+bool HubUi_GetSectionCollapsed(const char* namespace_id, const char* mod_id, const char* section_id, bool* out_is_collapsed);
 EMC_Result HubUi_SetNamespaceSearchQuery(const char* namespace_id, const char* search_query);
 bool HubUi_GetNamespaceSearchQuery(const char* namespace_id, const char** out_search_query);
 bool HubUi_DoesRowMatchNamespaceSearch(const HubUiRowView* row);

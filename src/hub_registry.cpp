@@ -52,6 +52,9 @@ struct SettingEntry
     std::string setting_id;
     std::string label;
     std::string description;
+    std::string hover_hint;
+    std::string section_id;
+    std::string section_display_name;
     void* user_data;
 
     EMC_GetBoolCallback get_bool;
@@ -232,6 +235,22 @@ bool StringEquals(const std::string& stored_value, const char* incoming_value)
     return stored_value == incoming_value;
 }
 
+const char* NormalizeOptionalHoverHint(const char* hover_hint)
+{
+    return (hover_hint != nullptr && hover_hint[0] != '\0') ? hover_hint : nullptr;
+}
+
+bool HoverHintEquals(const std::string& stored_value, const char* incoming_value)
+{
+    const char* normalized_incoming = NormalizeOptionalHoverHint(incoming_value);
+    if (normalized_incoming == nullptr)
+    {
+        return stored_value.empty();
+    }
+
+    return stored_value == normalized_incoming;
+}
+
 bool FloatBitsEqual(float lhs, float rhs)
 {
     uint32_t lhs_bits = 0;
@@ -335,6 +354,7 @@ EMC_Result ValidateSettingRegistrationCall(
 
 void InitializeSettingDefaults(SettingEntry* setting)
 {
+    setting->hover_hint.clear();
     setting->user_data = nullptr;
     setting->get_bool = nullptr;
     setting->set_bool = nullptr;
@@ -617,6 +637,7 @@ bool EmitCommonSettingDriftWarnings(
     const SettingEntry* existing,
     const char* label,
     const char* description,
+    const char* hover_hint,
     void* user_data)
 {
     bool exact_match = true;
@@ -630,6 +651,12 @@ bool EmitCommonSettingDriftWarnings(
     if (!StringEquals(existing->description, description))
     {
         LogSettingWarning(mod, existing->setting_id.c_str(), "description", "description_drift_ignored_using_canonical");
+        exact_match = false;
+    }
+
+    if (!HoverHintEquals(existing->hover_hint, hover_hint))
+    {
+        LogSettingWarning(mod, existing->setting_id.c_str(), "hover_hint", "hover_hint_drift_ignored_using_canonical");
         exact_match = false;
     }
 
@@ -656,6 +683,9 @@ void PopulateSettingView(const SettingEntry* setting, HubRegistrySettingView* ou
     out_view->setting_id = setting->setting_id.c_str();
     out_view->label = setting->label.c_str();
     out_view->description = setting->description.c_str();
+    out_view->hover_hint = setting->hover_hint.empty() ? nullptr : setting->hover_hint.c_str();
+    out_view->section_id = setting->section_id.empty() ? nullptr : setting->section_id.c_str();
+    out_view->section_display_name = setting->section_display_name.empty() ? nullptr : setting->section_display_name.c_str();
     out_view->user_data = setting->user_data;
 
     out_view->get_bool = setting->get_bool;
@@ -803,8 +833,26 @@ EMC_Result __cdecl HubRegistry_RegisterMod(const EMC_ModDescriptorV1* desc, EMC_
 
 EMC_Result __cdecl HubRegistry_RegisterBoolSetting(EMC_ModHandle mod, const EMC_BoolSettingDefV1* def)
 {
+    if (def == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    const EMC_BoolSettingDefV2 def_v2 = {
+        def->setting_id,
+        def->label,
+        def->description,
+        def->user_data,
+        def->get_value,
+        def->set_value,
+        nullptr };
+    return HubRegistry_RegisterBoolSettingV2(mod, &def_v2);
+}
+
+EMC_Result __cdecl HubRegistry_RegisterBoolSettingV2(EMC_ModHandle mod, const EMC_BoolSettingDefV2* def)
+{
     ModEntry* mod_entry = nullptr;
-    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_bool_setting", &mod_entry);
+    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_bool_setting_v2", &mod_entry);
     if (validation_result != EMC_OK)
     {
         return validation_result;
@@ -835,7 +883,7 @@ EMC_Result __cdecl HubRegistry_RegisterBoolSetting(EMC_ModHandle mod, const EMC_
             return EMC_ERR_CONFLICT;
         }
 
-        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->hover_hint, def->user_data);
         if (existing->get_bool != def->get_value || existing->set_bool != def->set_value)
         {
             LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
@@ -852,6 +900,11 @@ EMC_Result __cdecl HubRegistry_RegisterBoolSetting(EMC_ModHandle mod, const EMC_
     setting->setting_id = def->setting_id;
     setting->label = def->label;
     setting->description = def->description;
+    const char* normalized_hover_hint = NormalizeOptionalHoverHint(def->hover_hint);
+    if (normalized_hover_hint != nullptr)
+    {
+        setting->hover_hint = normalized_hover_hint;
+    }
     setting->user_data = def->user_data;
     setting->get_bool = def->get_value;
     setting->set_bool = def->set_value;
@@ -861,8 +914,26 @@ EMC_Result __cdecl HubRegistry_RegisterBoolSetting(EMC_ModHandle mod, const EMC_
 
 EMC_Result __cdecl HubRegistry_RegisterKeybindSetting(EMC_ModHandle mod, const EMC_KeybindSettingDefV1* def)
 {
+    if (def == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    const EMC_KeybindSettingDefV2 def_v2 = {
+        def->setting_id,
+        def->label,
+        def->description,
+        def->user_data,
+        def->get_value,
+        def->set_value,
+        nullptr };
+    return HubRegistry_RegisterKeybindSettingV2(mod, &def_v2);
+}
+
+EMC_Result __cdecl HubRegistry_RegisterKeybindSettingV2(EMC_ModHandle mod, const EMC_KeybindSettingDefV2* def)
+{
     ModEntry* mod_entry = nullptr;
-    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_keybind_setting", &mod_entry);
+    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_keybind_setting_v2", &mod_entry);
     if (validation_result != EMC_OK)
     {
         return validation_result;
@@ -893,7 +964,7 @@ EMC_Result __cdecl HubRegistry_RegisterKeybindSetting(EMC_ModHandle mod, const E
             return EMC_ERR_CONFLICT;
         }
 
-        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->hover_hint, def->user_data);
         if (existing->get_keybind != def->get_value || existing->set_keybind != def->set_value)
         {
             LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
@@ -910,6 +981,11 @@ EMC_Result __cdecl HubRegistry_RegisterKeybindSetting(EMC_ModHandle mod, const E
     setting->setting_id = def->setting_id;
     setting->label = def->label;
     setting->description = def->description;
+    const char* normalized_hover_hint = NormalizeOptionalHoverHint(def->hover_hint);
+    if (normalized_hover_hint != nullptr)
+    {
+        setting->hover_hint = normalized_hover_hint;
+    }
     setting->user_data = def->user_data;
     setting->get_keybind = def->get_value;
     setting->set_keybind = def->set_value;
@@ -956,7 +1032,7 @@ EMC_Result __cdecl HubRegistry_RegisterIntSetting(EMC_ModHandle mod, const EMC_I
             return EMC_ERR_CONFLICT;
         }
 
-        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, nullptr, def->user_data);
         if (existing->get_int != def->get_value || existing->set_int != def->set_value)
         {
             LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
@@ -1040,7 +1116,7 @@ EMC_Result __cdecl HubRegistry_RegisterIntSettingV2(EMC_ModHandle mod, const EMC
             return EMC_ERR_CONFLICT;
         }
 
-        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, nullptr, def->user_data);
         if (existing->get_int != def->get_value || existing->set_int != def->set_value)
         {
             LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
@@ -1124,7 +1200,7 @@ EMC_Result __cdecl HubRegistry_RegisterFloatSetting(EMC_ModHandle mod, const EMC
             return EMC_ERR_CONFLICT;
         }
 
-        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, nullptr, def->user_data);
         if (existing->get_float != def->get_value || existing->set_float != def->set_value)
         {
             LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
@@ -1167,8 +1243,28 @@ EMC_Result __cdecl HubRegistry_RegisterFloatSetting(EMC_ModHandle mod, const EMC
 
 EMC_Result __cdecl HubRegistry_RegisterSelectSetting(EMC_ModHandle mod, const EMC_SelectSettingDefV1* def)
 {
+    if (def == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    const EMC_SelectSettingDefV2 def_v2 = {
+        def->setting_id,
+        def->label,
+        def->description,
+        def->user_data,
+        def->options,
+        def->option_count,
+        def->get_value,
+        def->set_value,
+        nullptr };
+    return HubRegistry_RegisterSelectSettingV2(mod, &def_v2);
+}
+
+EMC_Result __cdecl HubRegistry_RegisterSelectSettingV2(EMC_ModHandle mod, const EMC_SelectSettingDefV2* def)
+{
     ModEntry* mod_entry = nullptr;
-    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_select_setting", &mod_entry);
+    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_select_setting_v2", &mod_entry);
     if (validation_result != EMC_OK)
     {
         return validation_result;
@@ -1199,7 +1295,7 @@ EMC_Result __cdecl HubRegistry_RegisterSelectSetting(EMC_ModHandle mod, const EM
             return EMC_ERR_CONFLICT;
         }
 
-        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->hover_hint, def->user_data);
         if (existing->get_select != def->get_value || existing->set_select != def->set_value)
         {
             LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
@@ -1222,6 +1318,11 @@ EMC_Result __cdecl HubRegistry_RegisterSelectSetting(EMC_ModHandle mod, const EM
     setting->setting_id = def->setting_id;
     setting->label = def->label;
     setting->description = def->description;
+    const char* normalized_hover_hint = NormalizeOptionalHoverHint(def->hover_hint);
+    if (normalized_hover_hint != nullptr)
+    {
+        setting->hover_hint = normalized_hover_hint;
+    }
     setting->user_data = def->user_data;
     setting->get_select = def->get_value;
     setting->set_select = def->set_value;
@@ -1240,8 +1341,27 @@ EMC_Result __cdecl HubRegistry_RegisterSelectSetting(EMC_ModHandle mod, const EM
 
 EMC_Result __cdecl HubRegistry_RegisterTextSetting(EMC_ModHandle mod, const EMC_TextSettingDefV1* def)
 {
+    if (def == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    const EMC_TextSettingDefV2 def_v2 = {
+        def->setting_id,
+        def->label,
+        def->description,
+        def->user_data,
+        def->max_length,
+        def->get_value,
+        def->set_value,
+        nullptr };
+    return HubRegistry_RegisterTextSettingV2(mod, &def_v2);
+}
+
+EMC_Result __cdecl HubRegistry_RegisterTextSettingV2(EMC_ModHandle mod, const EMC_TextSettingDefV2* def)
+{
     ModEntry* mod_entry = nullptr;
-    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_text_setting", &mod_entry);
+    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_text_setting_v2", &mod_entry);
     if (validation_result != EMC_OK)
     {
         return validation_result;
@@ -1272,7 +1392,7 @@ EMC_Result __cdecl HubRegistry_RegisterTextSetting(EMC_ModHandle mod, const EMC_
             return EMC_ERR_CONFLICT;
         }
 
-        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->hover_hint, def->user_data);
         if (existing->get_text != def->get_value || existing->set_text != def->set_value)
         {
             LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
@@ -1295,6 +1415,11 @@ EMC_Result __cdecl HubRegistry_RegisterTextSetting(EMC_ModHandle mod, const EMC_
     setting->setting_id = def->setting_id;
     setting->label = def->label;
     setting->description = def->description;
+    const char* normalized_hover_hint = NormalizeOptionalHoverHint(def->hover_hint);
+    if (normalized_hover_hint != nullptr)
+    {
+        setting->hover_hint = normalized_hover_hint;
+    }
     setting->user_data = def->user_data;
     setting->get_text = def->get_value;
     setting->set_text = def->set_value;
@@ -1345,7 +1470,7 @@ EMC_Result __cdecl HubRegistry_RegisterColorSetting(EMC_ModHandle mod, const EMC
             return EMC_ERR_CONFLICT;
         }
 
-        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, nullptr, def->user_data);
         if (existing->get_text != def->get_value || existing->set_text != def->set_value)
         {
             LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
@@ -1385,10 +1510,67 @@ EMC_Result __cdecl HubRegistry_RegisterColorSetting(EMC_ModHandle mod, const EMC
     return EMC_OK;
 }
 
-EMC_Result __cdecl HubRegistry_RegisterActionRow(EMC_ModHandle mod, const EMC_ActionRowDefV1* def)
+EMC_Result __cdecl HubRegistry_RegisterSettingSection(EMC_ModHandle mod, const EMC_SettingSectionDefV1* def)
 {
     ModEntry* mod_entry = nullptr;
-    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_action_row", &mod_entry);
+    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_setting_section", &mod_entry);
+    if (validation_result != EMC_OK)
+    {
+        return validation_result;
+    }
+
+    if (!ValidateCommonSettingStrings(def->setting_id, def->section_id, def->section_display_name))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::map<std::string, SettingEntry*>::const_iterator it = mod_entry->settings_by_id.find(def->setting_id);
+    if (it == mod_entry->settings_by_id.end())
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    SettingEntry* setting = it->second;
+    if (!setting->section_id.empty()
+        && (setting->section_id != def->section_id
+            || setting->section_display_name != def->section_display_name))
+    {
+        LogSettingRegistrationConflict(
+            mod_entry->namespace_id.c_str(),
+            mod_entry->mod_id.c_str(),
+            def->setting_id,
+            EMC_ERR_CONFLICT,
+            "setting_section_drift_ignored_using_canonical");
+        return EMC_ERR_CONFLICT;
+    }
+
+    setting->section_id = def->section_id;
+    setting->section_display_name = def->section_display_name;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl HubRegistry_RegisterActionRow(EMC_ModHandle mod, const EMC_ActionRowDefV1* def)
+{
+    if (def == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    const EMC_ActionRowDefV2 def_v2 = {
+        def->setting_id,
+        def->label,
+        def->description,
+        def->user_data,
+        def->action_flags,
+        def->on_action,
+        nullptr };
+    return HubRegistry_RegisterActionRowV2(mod, &def_v2);
+}
+
+EMC_Result __cdecl HubRegistry_RegisterActionRowV2(EMC_ModHandle mod, const EMC_ActionRowDefV2* def)
+{
+    ModEntry* mod_entry = nullptr;
+    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_action_row_v2", &mod_entry);
     if (validation_result != EMC_OK)
     {
         return validation_result;
@@ -1419,7 +1601,7 @@ EMC_Result __cdecl HubRegistry_RegisterActionRow(EMC_ModHandle mod, const EMC_Ac
             return EMC_ERR_CONFLICT;
         }
 
-        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->user_data);
+        bool exact_match = EmitCommonSettingDriftWarnings(mod_entry, existing, def->label, def->description, def->hover_hint, def->user_data);
         if (existing->on_action != def->on_action)
         {
             LogSettingWarning(mod_entry, def->setting_id, "callback", "callback_drift_ignored_using_canonical");
@@ -1446,6 +1628,11 @@ EMC_Result __cdecl HubRegistry_RegisterActionRow(EMC_ModHandle mod, const EMC_Ac
     setting->setting_id = def->setting_id;
     setting->label = def->label;
     setting->description = def->description;
+    const char* normalized_hover_hint = NormalizeOptionalHoverHint(def->hover_hint);
+    if (normalized_hover_hint != nullptr)
+    {
+        setting->hover_hint = normalized_hover_hint;
+    }
     setting->user_data = def->user_data;
     setting->on_action = def->on_action;
     setting->action_flags = def->action_flags;
