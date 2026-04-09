@@ -102,14 +102,28 @@ foreach ($symbol in $requiredSymbols) {
 }
 
 Assert-Condition -Condition ($docsText.Contains("mod-hub-sdk-quickstart.md")) -Message "docs/mod-hub-sdk.md should reference the quick-start guide."
+Assert-Condition -Condition ($docsText.Contains("Recommended path:")) -Message "docs/mod-hub-sdk.md should summarize the recommended adapter-first path."
 Assert-Condition -Condition ($docsText.Contains("legacy compatibility fallback")) -Message "docs/mod-hub-sdk.md should describe the legacy options-init fallback."
 Assert-Condition -Condition ($docsText.Contains("Callbacks run on the main thread")) -Message "docs/mod-hub-sdk.md should document the observer callback thread contract."
 Assert-Condition -Condition ($docsText.Contains("samples/single-tu/mod_hub_consumer_single_tu.cpp")) -Message "docs/mod-hub-sdk.md should reference the packaged single-TU sample asset."
-Assert-Condition -Condition ($docsText.Contains('--hub-bool-setting show_overlay --hub-bool-setting auto_save')) -Message "docs/mod-hub-sdk.md should document shell bool-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('--hub-bool-setting show_overlay')) -Message "docs/mod-hub-sdk.md should document shell bool-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('--hub-bool-setting auto_save')) -Message "docs/mod-hub-sdk.md should document shell bool-setting scaffold generation."
 Assert-Condition -Condition ($docsText.Contains('-HubBoolSetting "show_overlay", "auto_save"')) -Message "docs/mod-hub-sdk.md should document PowerShell bool-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('--hub-keybind-setting toggle_overlay')) -Message "docs/mod-hub-sdk.md should document shell keybind-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('-HubKeybindSetting "toggle_overlay"')) -Message "docs/mod-hub-sdk.md should document PowerShell keybind-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('--hub-int-setting max_markers')) -Message "docs/mod-hub-sdk.md should document shell int-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('-HubIntSetting "max_markers"')) -Message "docs/mod-hub-sdk.md should document PowerShell int-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('--hub-float-setting search_radius')) -Message "docs/mod-hub-sdk.md should document shell float-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('-HubFloatSetting "search_radius"')) -Message "docs/mod-hub-sdk.md should document PowerShell float-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('--hub-action-row refresh_cache')) -Message "docs/mod-hub-sdk.md should document shell action-row scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('-HubActionRow "refresh_cache"')) -Message "docs/mod-hub-sdk.md should document PowerShell action-row scaffold generation."
 Assert-Condition -Condition ($docsText.Contains('--hub-settings-manifest ./hub-settings.json')) -Message "docs/mod-hub-sdk.md should document shell manifest-based scaffold generation."
 Assert-Condition -Condition ($docsText.Contains('-HubSettingsManifest .\hub-settings.json')) -Message "docs/mod-hub-sdk.md should document PowerShell manifest-based scaffold generation."
 Assert-Condition -Condition ($docsText.Contains('"bool_settings": ["show_overlay", "auto_save"]')) -Message "docs/mod-hub-sdk.md should document the manifest bool_settings format."
+Assert-Condition -Condition ($docsText.Contains('"keybind_settings": ["toggle_overlay"]')) -Message "docs/mod-hub-sdk.md should document the manifest keybind_settings format."
+Assert-Condition -Condition ($docsText.Contains('"int_settings": ["max_markers"]')) -Message "docs/mod-hub-sdk.md should document the manifest int_settings format."
+Assert-Condition -Condition ($docsText.Contains('"float_settings": ["search_radius"]')) -Message "docs/mod-hub-sdk.md should document the manifest float_settings format."
+Assert-Condition -Condition ($docsText.Contains('"action_rows": ["refresh_cache"]')) -Message "docs/mod-hub-sdk.md should document the manifest action_rows format."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase15_scaffold_single_tu_test.ps1")) -Message "docs/mod-hub-sdk.md should reference the phase15 scaffold validation harness."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase5_numeric_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase5 numeric harness command."
 Assert-Condition -Condition ($docsText.Contains("pending-text normalization semantics")) -Message "docs/mod-hub-sdk.md should describe phase5 pending-text normalization coverage."
@@ -126,6 +140,22 @@ Assert-Condition -Condition ($docsText.Contains("Existing scaffold output remain
 Assert-Condition -Condition ($docsText.Contains("./scripts/sync-mod-hub-sdk.ps1")) -Message "docs/mod-hub-sdk.md should document the SDK sync command."
 Assert-Condition -Condition ($docsText.Contains("./scripts/sync-mod-hub-sdk.sh")) -Message "docs/mod-hub-sdk.md should document the shell SDK sync wrapper."
 Assert-Condition -Condition ($docsText.Contains("does not edit changelog")) -Message "docs/mod-hub-sdk.md should clarify changelog edits are manual for sync."
+Assert-Condition -Condition ($docsText.Contains("ValidateBoolValue")) -Message "docs/mod-hub-sdk.md should document shared bool validation."
+Assert-Condition -Condition ($docsText.Contains("ValidateValueInRange")) -Message "docs/mod-hub-sdk.md should document shared range validation."
+Assert-Condition -Condition ($docsText.Contains("ApplyUpdateWithRollback")) -Message "docs/mod-hub-sdk.md should document the shared apply/persist/rollback helper."
+Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the select-row API size gate."
+Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the text-row API size gate."
+Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_COLOR_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the color-row API size gate."
+Assert-Condition -Condition ($docsText.Contains("EMC_SelectSettingDefV1")) -Message "docs/mod-hub-sdk.md should document the select setting definition."
+Assert-Condition -Condition ($docsText.Contains("EMC_TextSettingDefV1")) -Message "docs/mod-hub-sdk.md should document the text setting definition."
+Assert-Condition -Condition ($docsText.Contains("EMC_ColorPresetV1")) -Message "docs/mod-hub-sdk.md should document the color preset definition."
+Assert-Condition -Condition ($docsText.Contains("EMC_ColorSettingDefV1")) -Message "docs/mod-hub-sdk.md should document the color setting definition."
+Assert-Condition -Condition ($docsText.Contains("EMC_COLOR_PREVIEW_KIND_TEXT")) -Message "docs/mod-hub-sdk.md should document text-preview color rows."
+Assert-Condition -Condition ($docsText.Contains("MOD_HUB_CLIENT_SETTING_KIND_COLOR")) -Message "docs/mod-hub-sdk.md should document the color row kind."
+Assert-Condition -Condition ($docsText.Contains("./scripts/phase25_select_text_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase25 select/text harness command."
+Assert-Condition -Condition ($docsText.Contains("bounded text rejection")) -Message "docs/mod-hub-sdk.md should describe phase25 select/text coverage."
+Assert-Condition -Condition ($docsText.Contains("./scripts/phase26_color_row_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase26 color-row harness command."
+Assert-Condition -Condition ($docsText.Contains("duplicate normalized preset rejection")) -Message "docs/mod-hub-sdk.md should describe phase26 color-row coverage."
 
 $requiredLogEvents = @(
     "event=hub_commit_failure",
@@ -149,11 +179,20 @@ $requiredQuickstartSymbols = @(
     "init-mod-template.sh --with-hub",
     "-WithHubSingleTuSample",
     "--with-hub-single-tu-sample",
-    "--hub-bool-setting show_overlay --hub-bool-setting auto_save",
+    "--hub-bool-setting show_overlay",
+    "--hub-bool-setting auto_save",
+    "--hub-keybind-setting toggle_overlay",
+    "--hub-int-setting max_markers",
+    "--hub-float-setting search_radius",
+    "--hub-action-row refresh_cache",
     "--hub-settings-manifest ./hub-settings.json",
     "HubNamespaceId",
     "HubModId",
     "HubBoolSetting",
+    "HubKeybindSetting",
+    "HubIntSetting",
+    "HubFloatSetting",
+    "HubActionRow",
     "HubSettingsManifest",
     "ModHubConsumerAdapter_OnStartup()",
     "ModHubConsumerAdapter_OnOptionsWindowInit()",
@@ -165,12 +204,21 @@ $requiredQuickstartSymbols = @(
     "samples/mod_hub_consumer_single_tu.cpp",
     "./scripts/sync-mod-hub-sdk.ps1",
     "./scripts/sync-mod-hub-sdk.sh",
-    "pull + validate only"
+    "pull + validate only",
+    "ValidateBoolValue",
+    "ValidateValueInRange",
+    "ApplyUpdateWithRollback",
+    "MOD_HUB_CLIENT_SETTING_KIND_COLOR",
+    "EMC_ColorSettingDefV1",
+    "EMC_COLOR_PREVIEW_KIND_TEXT"
 )
 
 foreach ($symbol in $requiredQuickstartSymbols) {
     Assert-Condition -Condition ($quickstartDocsText.Contains($symbol)) -Message "docs/mod-hub-sdk-quickstart.md missing symbol: $symbol"
 }
+
+Assert-Condition -Condition ($quickstartDocsText.Contains("Preferred path for new consumers:")) -Message "docs/mod-hub-sdk-quickstart.md should make the preferred adapter-first path explicit."
+Assert-Condition -Condition ($quickstartDocsText.Contains("Most mods only need to replace the example row IDs")) -Message "docs/mod-hub-sdk-quickstart.md should explain the minimal customization point."
 
 $headerCode = Extract-CodeBlockBetweenMarkers `
     -Text $docsText `
@@ -191,6 +239,9 @@ Assert-Condition -Condition ($headerCode.Contains("ModHubConsumerAdapter_HasAtta
 Assert-Condition -Condition ($headerCode.Contains("ModHubConsumerAdapter_LastAttachFailureResult")) -Message "Phase11 sample header missing last-failure accessor."
 Assert-Condition -Condition ($headerCode.Contains("older hub builds that do not expose observer registration")) -Message "Phase11 sample header should describe legacy observer fallback wiring."
 Assert-Condition -Condition ($sourceCode.Contains("return !ModHubConsumerAdapter_UseHubUi();")) -Message "Phase11 sample should derive local-tab suppression from UseHubUi."
+Assert-Condition -Condition ($sourceCode.Contains('#include "emc/mod_hub_consumer_helpers.h"')) -Message "Phase11 sample should include the shared consumer helper header."
+Assert-Condition -Condition ($sourceCode.Contains("PersistExampleModState")) -Message "Phase11 sample should expose the local persistence seam helper."
+Assert-Condition -Condition ($sourceCode.Contains("ApplyUpdateWithRollback")) -Message "Phase11 sample should delegate rollback through the shared helper."
 
 if (-not $TempRoot) {
     $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "emc_phase11_sdk_docs"

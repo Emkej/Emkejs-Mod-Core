@@ -19,6 +19,16 @@ const int32_t kModeInvalidRowKind = 6;
 const int32_t kModeNullRowDef = 7;
 const int32_t kModeUseIntV2 = 8;
 const int32_t kModeUseIntV2LegacyApi = 9;
+const int32_t kModeUseBoolV2 = 10;
+const int32_t kModeUseBoolV2LegacyApi = 11;
+const int32_t kModeUseKeybindV2 = 12;
+const int32_t kModeUseKeybindV2LegacyApi = 13;
+const int32_t kModeUseSelectV2 = 14;
+const int32_t kModeUseSelectV2LegacyApi = 15;
+const int32_t kModeUseTextV2 = 16;
+const int32_t kModeUseTextV2LegacyApi = 17;
+const int32_t kModeUseActionV2 = 18;
+const int32_t kModeUseActionV2LegacyApi = 19;
 
 const char* kNamespaceId = "phase8.dummy_consumer";
 const char* kNamespaceDisplayName = "Phase8 Dummy Consumer";
@@ -29,14 +39,39 @@ const char* kBoolSettingId = "enabled";
 const char* kKeybindSettingId = "hotkey";
 const char* kIntSettingId = "count";
 const char* kFloatSettingId = "radius";
+const char* kSelectSettingId = "palette";
+const char* kTextSettingId = "title";
+const char* kColorSettingId = "status_color";
 const char* kActionSettingId = "refresh_now";
+const char* kSectionId = "general";
+const char* kSectionDisplayName = "General";
+const uint32_t kTextMaxLength = 32u;
+const uint32_t kColorTextLength = 7u;
+const char* kBoolHoverHint = "Toggle the dummy feature.";
+const char* kKeybindHoverHint = "Capture the dummy hotkey.";
+const char* kSelectHoverHint = "Choose the dummy palette.";
+const char* kTextHoverHint = "Edit the dummy title.";
+const char* kActionHoverHint = "Refresh the dummy state now.";
 
 int32_t g_mod_user_data = 11;
 int32_t g_bool_value = 1;
 EMC_KeybindValueV1 g_keybind_value = { 42, 0u };
 int32_t g_int_value = 10;
 float g_float_value = 2.5f;
+int32_t g_select_value = 1;
+char g_text_value[kTextMaxLength + 1u] = "Example title";
+char g_color_value[kColorTextLength + 1u] = "#FF3333";
 int32_t g_action_count = 0;
+
+const EMC_SelectOptionV1 kSelectOptions[] = {
+    { 0, "Default" },
+    { 1, "Warm" },
+    { 2, "Cool" } };
+
+const EMC_ColorPresetV1 kColorPresets[] = {
+    { "#FF3333", "Enemy" },
+    { "#DEE85A", "Ally" },
+    { "#40FF40", "Squad" } };
 
 EMC_Result __cdecl GetBool(void* user_data, int32_t* out_value)
 {
@@ -134,6 +169,67 @@ EMC_Result __cdecl SetFloat(void* user_data, float value, char* err_buf, uint32_
     return EMC_OK;
 }
 
+EMC_Result __cdecl GetSelect(void* user_data, int32_t* out_value)
+{
+    if (user_data == 0 || out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_value = *static_cast<int32_t*>(user_data);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetSelect(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    (void)err_buf;
+    (void)err_buf_size;
+    if (user_data == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *static_cast<int32_t*>(user_data) = value;
+    return EMC_OK;
+}
+
+EMC_Result __cdecl GetText(void* user_data, char* out_value, uint32_t out_value_size)
+{
+    if (user_data == 0 || out_value == 0 || out_value_size == 0u)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    const char* value = static_cast<const char*>(user_data);
+    const size_t length = std::strlen(value);
+    if (length + 1u > out_value_size)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::memcpy(out_value, value, length + 1u);
+    return EMC_OK;
+}
+
+EMC_Result __cdecl SetText(void* user_data, const char* value, char* err_buf, uint32_t err_buf_size)
+{
+    (void)err_buf;
+    (void)err_buf_size;
+    if (user_data == 0 || value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    const size_t length = std::strlen(value);
+    if (length > kTextMaxLength)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::memcpy(static_cast<char*>(user_data), value, length + 1u);
+    return EMC_OK;
+}
+
 EMC_Result __cdecl InvokeAction(void* user_data, char* err_buf, uint32_t err_buf_size)
 {
     (void)err_buf;
@@ -163,6 +259,15 @@ const EMC_BoolSettingDefV1 kBoolSettingDef = {
     &GetBool,
     &SetBool};
 
+const EMC_BoolSettingDefV2 kBoolSettingDefV2 = {
+    kBoolSettingId,
+    "Enabled",
+    "Enable or disable feature",
+    &g_bool_value,
+    &GetBool,
+    &SetBool,
+    kBoolHoverHint};
+
 const EMC_KeybindSettingDefV1 kKeybindSettingDef = {
     kKeybindSettingId,
     "Hotkey",
@@ -170,6 +275,15 @@ const EMC_KeybindSettingDefV1 kKeybindSettingDef = {
     &g_keybind_value,
     &GetKeybind,
     &SetKeybind};
+
+const EMC_KeybindSettingDefV2 kKeybindSettingDefV2 = {
+    kKeybindSettingId,
+    "Hotkey",
+    "Example hotkey",
+    &g_keybind_value,
+    &GetKeybind,
+    &SetKeybind,
+    kKeybindHoverHint};
 
 const EMC_IntSettingDefV1 kIntSettingDef = {
     kIntSettingId,
@@ -207,6 +321,57 @@ const EMC_FloatSettingDefV1 kFloatSettingDef = {
     &GetFloat,
     &SetFloat};
 
+const EMC_SelectSettingDefV1 kSelectSettingDef = {
+    kSelectSettingId,
+    "Palette",
+    "Example select",
+    &g_select_value,
+    kSelectOptions,
+    (uint32_t)(sizeof(kSelectOptions) / sizeof(kSelectOptions[0])),
+    &GetSelect,
+    &SetSelect};
+
+const EMC_SelectSettingDefV2 kSelectSettingDefV2 = {
+    kSelectSettingId,
+    "Palette",
+    "Example select",
+    &g_select_value,
+    kSelectOptions,
+    (uint32_t)(sizeof(kSelectOptions) / sizeof(kSelectOptions[0])),
+    &GetSelect,
+    &SetSelect,
+    kSelectHoverHint};
+
+const EMC_TextSettingDefV1 kTextSettingDef = {
+    kTextSettingId,
+    "Title",
+    "Example text",
+    g_text_value,
+    kTextMaxLength,
+    &GetText,
+    &SetText};
+
+const EMC_TextSettingDefV2 kTextSettingDefV2 = {
+    kTextSettingId,
+    "Title",
+    "Example text",
+    g_text_value,
+    kTextMaxLength,
+    &GetText,
+    &SetText,
+    kTextHoverHint};
+
+const EMC_ColorSettingDefV1 kColorSettingDef = {
+    kColorSettingId,
+    "Status color",
+    "Example color",
+    g_color_value,
+    EMC_COLOR_PREVIEW_KIND_SWATCH,
+    kColorPresets,
+    (uint32_t)(sizeof(kColorPresets) / sizeof(kColorPresets[0])),
+    &GetText,
+    &SetText};
+
 const EMC_ActionRowDefV1 kActionSettingDef = {
     kActionSettingId,
     "Refresh now",
@@ -214,6 +379,15 @@ const EMC_ActionRowDefV1 kActionSettingDef = {
     &g_action_count,
     EMC_ACTION_FORCE_REFRESH,
     &InvokeAction};
+
+const EMC_ActionRowDefV2 kActionSettingDefV2 = {
+    kActionSettingId,
+    "Refresh now",
+    "Example action",
+    &g_action_count,
+    EMC_ACTION_FORCE_REFRESH,
+    &InvokeAction,
+    kActionHoverHint};
 
 struct HandleToken
 {
@@ -234,11 +408,20 @@ struct DummyState
 
     int32_t register_mod_calls;
     int32_t register_bool_calls;
+    int32_t register_bool_v2_calls;
     int32_t register_keybind_calls;
+    int32_t register_keybind_v2_calls;
     int32_t register_int_calls;
     int32_t register_int_v2_calls;
     int32_t register_float_calls;
+    int32_t register_select_calls;
+    int32_t register_select_v2_calls;
+    int32_t register_text_calls;
+    int32_t register_text_v2_calls;
+    int32_t register_color_calls;
+    int32_t register_section_calls;
     int32_t register_action_calls;
+    int32_t register_action_v2_calls;
 
     int32_t order_checks_passed;
     int32_t descriptor_checks_passed;
@@ -248,11 +431,11 @@ struct DummyState
 DummyState g_state;
 bool g_initialized = false;
 
-emc::ModHubClientSettingRowV1 g_rows[5];
+emc::ModHubClientSettingRowV1 g_rows[8];
 emc::ModHubClientTableRegistrationV1 g_table_registration = {
     &kModDescriptor,
     g_rows,
-    5u};
+    8u};
 
 void ResetRows()
 {
@@ -268,19 +451,37 @@ void ResetRows()
     g_rows[3].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT;
     g_rows[3].def = &kFloatSettingDef;
 
-    g_rows[4].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
-    g_rows[4].def = &kActionSettingDef;
+    g_rows[4].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT;
+    g_rows[4].def = &kSelectSettingDef;
+
+    g_rows[5].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT;
+    g_rows[5].def = &kTextSettingDef;
+
+    g_rows[6].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR;
+    g_rows[6].def = &kColorSettingDef;
+
+    g_rows[7].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
+    g_rows[7].def = &kActionSettingDef;
 }
 
 void ResetCapture()
 {
     g_state.register_mod_calls = 0;
     g_state.register_bool_calls = 0;
+    g_state.register_bool_v2_calls = 0;
     g_state.register_keybind_calls = 0;
+    g_state.register_keybind_v2_calls = 0;
     g_state.register_int_calls = 0;
     g_state.register_int_v2_calls = 0;
     g_state.register_float_calls = 0;
+    g_state.register_select_calls = 0;
+    g_state.register_select_v2_calls = 0;
+    g_state.register_text_calls = 0;
+    g_state.register_text_v2_calls = 0;
+    g_state.register_color_calls = 0;
+    g_state.register_section_calls = 0;
     g_state.register_action_calls = 0;
+    g_state.register_action_v2_calls = 0;
     g_state.order_checks_passed = 1;
     g_state.descriptor_checks_passed = 1;
     g_state.next_expected_kind_index = 0;
@@ -291,9 +492,13 @@ int32_t ExpectedKindForIndex(int32_t index)
     switch (index)
     {
     case 0:
-        return emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL;
+        return (g_state.mode == kModeUseBoolV2 || g_state.mode == kModeUseBoolV2LegacyApi)
+            ? emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2
+            : emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL;
     case 1:
-        return emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND;
+        return (g_state.mode == kModeUseKeybindV2 || g_state.mode == kModeUseKeybindV2LegacyApi)
+            ? emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND_V2
+            : emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND;
     case 2:
         return (g_state.mode == kModeUseIntV2 || g_state.mode == kModeUseIntV2LegacyApi)
             ? emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2
@@ -301,7 +506,19 @@ int32_t ExpectedKindForIndex(int32_t index)
     case 3:
         return emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT;
     case 4:
-        return emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
+        return (g_state.mode == kModeUseSelectV2 || g_state.mode == kModeUseSelectV2LegacyApi)
+            ? emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT_V2
+            : emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT;
+    case 5:
+        return (g_state.mode == kModeUseTextV2 || g_state.mode == kModeUseTextV2LegacyApi)
+            ? emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2
+            : emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT;
+    case 6:
+        return emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR;
+    case 7:
+        return (g_state.mode == kModeUseActionV2 || g_state.mode == kModeUseActionV2LegacyApi)
+            ? emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2
+            : emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION;
     default:
         break;
     }
@@ -323,6 +540,26 @@ void RecordKind(int32_t kind)
 bool StringEquals(const char* a, const char* b)
 {
     return a != 0 && b != 0 && std::strcmp(a, b) == 0;
+}
+
+bool IsLegacyApiMode()
+{
+    return g_state.mode == kModeUseIntV2LegacyApi
+        || g_state.mode == kModeUseBoolV2LegacyApi
+        || g_state.mode == kModeUseKeybindV2LegacyApi
+        || g_state.mode == kModeUseSelectV2LegacyApi
+        || g_state.mode == kModeUseTextV2LegacyApi
+        || g_state.mode == kModeUseActionV2LegacyApi;
+}
+
+uint32_t ResolveLegacyApiSize()
+{
+    if (g_state.mode == kModeUseIntV2LegacyApi)
+    {
+        return EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE;
+    }
+
+    return EMC_HUB_API_V1_COLOR_SETTING_MIN_SIZE;
 }
 
 bool ShouldFailKind(int32_t kind)
@@ -365,6 +602,36 @@ void ApplyMode()
     {
         g_rows[2].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2;
         g_rows[2].def = &kIntSettingDefV2;
+    }
+
+    if (g_state.mode == kModeUseBoolV2 || g_state.mode == kModeUseBoolV2LegacyApi)
+    {
+        g_rows[0].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2;
+        g_rows[0].def = &kBoolSettingDefV2;
+    }
+
+    if (g_state.mode == kModeUseKeybindV2 || g_state.mode == kModeUseKeybindV2LegacyApi)
+    {
+        g_rows[1].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND_V2;
+        g_rows[1].def = &kKeybindSettingDefV2;
+    }
+
+    if (g_state.mode == kModeUseSelectV2 || g_state.mode == kModeUseSelectV2LegacyApi)
+    {
+        g_rows[4].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT_V2;
+        g_rows[4].def = &kSelectSettingDefV2;
+    }
+
+    if (g_state.mode == kModeUseTextV2 || g_state.mode == kModeUseTextV2LegacyApi)
+    {
+        g_rows[5].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2;
+        g_rows[5].def = &kTextSettingDefV2;
+    }
+
+    if (g_state.mode == kModeUseActionV2 || g_state.mode == kModeUseActionV2LegacyApi)
+    {
+        g_rows[7].kind = emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2;
+        g_rows[7].def = &kActionSettingDefV2;
     }
 }
 
@@ -411,6 +678,26 @@ EMC_Result __cdecl TestRegisterBool(EMC_ModHandle mod, const EMC_BoolSettingDefV
     return ShouldFailKind(emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL) ? EMC_ERR_INTERNAL : EMC_OK;
 }
 
+EMC_Result __cdecl TestRegisterBoolV2(EMC_ModHandle mod, const EMC_BoolSettingDefV2* def)
+{
+    g_state.register_bool_v2_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kBoolSettingId)
+        || def->get_value != &GetBool
+        || def->set_value != &SetBool
+        || def->user_data != &g_bool_value
+        || !StringEquals(def->hover_hint, kBoolHoverHint))
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
 EMC_Result __cdecl TestRegisterKeybind(EMC_ModHandle mod, const EMC_KeybindSettingDefV1* def)
 {
     g_state.register_keybind_calls += 1;
@@ -428,6 +715,26 @@ EMC_Result __cdecl TestRegisterKeybind(EMC_ModHandle mod, const EMC_KeybindSetti
     }
 
     return ShouldFailKind(emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND) ? EMC_ERR_INTERNAL : EMC_OK;
+}
+
+EMC_Result __cdecl TestRegisterKeybindV2(EMC_ModHandle mod, const EMC_KeybindSettingDefV2* def)
+{
+    g_state.register_keybind_v2_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND_V2);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kKeybindSettingId)
+        || def->get_value != &GetKeybind
+        || def->set_value != &SetKeybind
+        || def->user_data != &g_keybind_value
+        || !StringEquals(def->hover_hint, kKeybindHoverHint))
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
 }
 
 EMC_Result __cdecl TestRegisterInt(EMC_ModHandle mod, const EMC_IntSettingDefV1* def)
@@ -503,6 +810,144 @@ EMC_Result __cdecl TestRegisterFloat(EMC_ModHandle mod, const EMC_FloatSettingDe
     return ShouldFailKind(emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT) ? EMC_ERR_INTERNAL : EMC_OK;
 }
 
+EMC_Result __cdecl TestRegisterSelect(EMC_ModHandle mod, const EMC_SelectSettingDefV1* def)
+{
+    g_state.register_select_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kSelectSettingId)
+        || def->option_count != (uint32_t)(sizeof(kSelectOptions) / sizeof(kSelectOptions[0]))
+        || def->options == 0
+        || def->options[0].value != 0
+        || !StringEquals(def->options[0].label, "Default")
+        || def->options[1].value != 1
+        || !StringEquals(def->options[1].label, "Warm")
+        || def->options[2].value != 2
+        || !StringEquals(def->options[2].label, "Cool")
+        || def->get_value != &GetSelect
+        || def->set_value != &SetSelect
+        || def->user_data != &g_select_value)
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
+EMC_Result __cdecl TestRegisterSelectV2(EMC_ModHandle mod, const EMC_SelectSettingDefV2* def)
+{
+    g_state.register_select_v2_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT_V2);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kSelectSettingId)
+        || def->option_count != (uint32_t)(sizeof(kSelectOptions) / sizeof(kSelectOptions[0]))
+        || def->options == 0
+        || def->options[0].value != 0
+        || !StringEquals(def->options[0].label, "Default")
+        || def->options[1].value != 1
+        || !StringEquals(def->options[1].label, "Warm")
+        || def->options[2].value != 2
+        || !StringEquals(def->options[2].label, "Cool")
+        || def->get_value != &GetSelect
+        || def->set_value != &SetSelect
+        || def->user_data != &g_select_value
+        || !StringEquals(def->hover_hint, kSelectHoverHint))
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
+EMC_Result __cdecl TestRegisterText(EMC_ModHandle mod, const EMC_TextSettingDefV1* def)
+{
+    g_state.register_text_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kTextSettingId)
+        || def->max_length != kTextMaxLength
+        || def->get_value != &GetText
+        || def->set_value != &SetText
+        || def->user_data != g_text_value)
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
+EMC_Result __cdecl TestRegisterTextV2(EMC_ModHandle mod, const EMC_TextSettingDefV2* def)
+{
+    g_state.register_text_v2_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kTextSettingId)
+        || def->max_length != kTextMaxLength
+        || def->get_value != &GetText
+        || def->set_value != &SetText
+        || def->user_data != g_text_value
+        || !StringEquals(def->hover_hint, kTextHoverHint))
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
+EMC_Result __cdecl TestRegisterColor(EMC_ModHandle mod, const EMC_ColorSettingDefV1* def)
+{
+    g_state.register_color_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kColorSettingId)
+        || def->preview_kind != EMC_COLOR_PREVIEW_KIND_SWATCH
+        || def->preset_count != (uint32_t)(sizeof(kColorPresets) / sizeof(kColorPresets[0]))
+        || def->presets == 0
+        || !StringEquals(def->presets[0].value_hex, "#FF3333")
+        || !StringEquals(def->presets[1].value_hex, "#DEE85A")
+        || !StringEquals(def->presets[2].value_hex, "#40FF40")
+        || def->get_value != &GetText
+        || def->set_value != &SetText
+        || def->user_data != g_color_value)
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
+EMC_Result __cdecl TestRegisterSection(EMC_ModHandle mod, const EMC_SettingSectionDefV1* def)
+{
+    g_state.register_section_calls += 1;
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kBoolSettingId)
+        || !StringEquals(def->section_id, kSectionId)
+        || !StringEquals(def->section_display_name, kSectionDisplayName))
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
 EMC_Result __cdecl TestRegisterAction(EMC_ModHandle mod, const EMC_ActionRowDefV1* def)
 {
     g_state.register_action_calls += 1;
@@ -522,6 +967,26 @@ EMC_Result __cdecl TestRegisterAction(EMC_ModHandle mod, const EMC_ActionRowDefV
     return ShouldFailKind(emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION) ? EMC_ERR_INTERNAL : EMC_OK;
 }
 
+EMC_Result __cdecl TestRegisterActionV2(EMC_ModHandle mod, const EMC_ActionRowDefV2* def)
+{
+    g_state.register_action_v2_calls += 1;
+    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2);
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->setting_id, kActionSettingId)
+        || def->action_flags != EMC_ACTION_FORCE_REFRESH
+        || def->on_action != &InvokeAction
+        || def->user_data != &g_action_count
+        || !StringEquals(def->hover_hint, kActionHoverHint))
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
 const EMC_HubApiV1* GetTestApi()
 {
     static const EMC_HubApiV1 kApi = {
@@ -535,7 +1000,16 @@ const EMC_HubApiV1* GetTestApi()
         &TestRegisterAction,
         0,
         0,
-        &TestRegisterIntV2};
+        &TestRegisterIntV2,
+        &TestRegisterSelect,
+        &TestRegisterText,
+        &TestRegisterColor,
+        &TestRegisterSection,
+        &TestRegisterBoolV2,
+        &TestRegisterKeybindV2,
+        &TestRegisterSelectV2,
+        &TestRegisterTextV2,
+        &TestRegisterActionV2};
     return &kApi;
 }
 
@@ -564,8 +1038,8 @@ EMC_Result __cdecl TestGetApi(
     }
 
     *out_api = GetTestApi();
-    *out_api_size = (g_state.mode == kModeUseIntV2LegacyApi)
-        ? EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE
+    *out_api_size = IsLegacyApiMode()
+        ? ResolveLegacyApiSize()
         : (uint32_t)sizeof(EMC_HubApiV1);
     return EMC_OK;
 }
@@ -650,10 +1124,22 @@ int32_t ModHubDummyConsumer_GetRegisterBoolCalls()
     return g_state.register_bool_calls;
 }
 
+int32_t ModHubDummyConsumer_GetRegisterBoolV2Calls()
+{
+    EnsureInitialized();
+    return g_state.register_bool_v2_calls;
+}
+
 int32_t ModHubDummyConsumer_GetRegisterKeybindCalls()
 {
     EnsureInitialized();
     return g_state.register_keybind_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterKeybindV2Calls()
+{
+    EnsureInitialized();
+    return g_state.register_keybind_v2_calls;
 }
 
 int32_t ModHubDummyConsumer_GetRegisterIntCalls()
@@ -674,10 +1160,52 @@ int32_t ModHubDummyConsumer_GetRegisterFloatCalls()
     return g_state.register_float_calls;
 }
 
+int32_t ModHubDummyConsumer_GetRegisterSelectCalls()
+{
+    EnsureInitialized();
+    return g_state.register_select_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterSelectV2Calls()
+{
+    EnsureInitialized();
+    return g_state.register_select_v2_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterTextCalls()
+{
+    EnsureInitialized();
+    return g_state.register_text_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterTextV2Calls()
+{
+    EnsureInitialized();
+    return g_state.register_text_v2_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterColorCalls()
+{
+    EnsureInitialized();
+    return g_state.register_color_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterSectionCalls()
+{
+    EnsureInitialized();
+    return g_state.register_section_calls;
+}
+
 int32_t ModHubDummyConsumer_GetRegisterActionCalls()
 {
     EnsureInitialized();
     return g_state.register_action_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterActionV2Calls()
+{
+    EnsureInitialized();
+    return g_state.register_action_v2_calls;
 }
 
 int32_t ModHubDummyConsumer_GetOrderChecksPassed()

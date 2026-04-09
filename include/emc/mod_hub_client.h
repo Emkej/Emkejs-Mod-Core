@@ -25,13 +25,24 @@ enum ModHubClientSettingKind
     MOD_HUB_CLIENT_SETTING_KIND_INT = 2,
     MOD_HUB_CLIENT_SETTING_KIND_FLOAT = 3,
     MOD_HUB_CLIENT_SETTING_KIND_ACTION = 4,
-    MOD_HUB_CLIENT_SETTING_KIND_INT_V2 = 5
+    MOD_HUB_CLIENT_SETTING_KIND_INT_V2 = 5,
+    MOD_HUB_CLIENT_SETTING_KIND_SELECT = 6,
+    MOD_HUB_CLIENT_SETTING_KIND_TEXT = 7,
+    MOD_HUB_CLIENT_SETTING_KIND_COLOR = 8,
+    MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2 = 9,
+    MOD_HUB_CLIENT_SETTING_KIND_KEYBIND_V2 = 10,
+    MOD_HUB_CLIENT_SETTING_KIND_SELECT_V2 = 11,
+    MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2 = 12,
+    MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2 = 13
 };
 
 struct ModHubClientSettingRowV1
 {
     int32_t kind;
+    const char* setting_id;
     const void* def;
+    const char* section_id;
+    const char* section_display_name;
 };
 
 struct ModHubClientTableRegistrationV1

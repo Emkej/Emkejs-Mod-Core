@@ -39,6 +39,8 @@ typedef int32_t EMC_Result;
 #define EMC_ACTION_FORCE_REFRESH ((uint32_t)(1u << 0))
 
 #define EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT ((uint32_t)3u)
+#define EMC_COLOR_PREVIEW_KIND_SWATCH ((uint32_t)0u)
+#define EMC_COLOR_PREVIEW_KIND_TEXT ((uint32_t)1u)
 
 typedef struct EMC_ModHandle_t* EMC_ModHandle;
 
@@ -59,6 +61,12 @@ typedef EMC_Result(__cdecl* EMC_SetIntCallback)(void* user_data, int32_t value, 
 
 typedef EMC_Result(__cdecl* EMC_GetFloatCallback)(void* user_data, float* out_value);
 typedef EMC_Result(__cdecl* EMC_SetFloatCallback)(void* user_data, float value, char* err_buf, uint32_t err_buf_size);
+
+typedef EMC_Result(__cdecl* EMC_GetSelectCallback)(void* user_data, int32_t* out_value);
+typedef EMC_Result(__cdecl* EMC_SetSelectCallback)(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size);
+
+typedef EMC_Result(__cdecl* EMC_GetTextCallback)(void* user_data, char* out_value, uint32_t out_value_size);
+typedef EMC_Result(__cdecl* EMC_SetTextCallback)(void* user_data, const char* value, char* err_buf, uint32_t err_buf_size);
 
 typedef EMC_Result(__cdecl* EMC_ActionRowCallback)(void* user_data, char* err_buf, uint32_t err_buf_size);
 typedef void(__cdecl* EMC_OptionsWindowInitObserverFn)(void* user_data);
@@ -82,6 +90,17 @@ typedef struct EMC_BoolSettingDefV1
     EMC_SetBoolCallback set_value;
 } EMC_BoolSettingDefV1;
 
+typedef struct EMC_BoolSettingDefV2
+{
+    const char* setting_id;
+    const char* label;
+    const char* description;
+    void* user_data;
+    EMC_GetBoolCallback get_value;
+    EMC_SetBoolCallback set_value;
+    const char* hover_hint;
+} EMC_BoolSettingDefV2;
+
 typedef struct EMC_KeybindSettingDefV1
 {
     const char* setting_id;
@@ -91,6 +110,17 @@ typedef struct EMC_KeybindSettingDefV1
     EMC_GetKeybindCallback get_value;
     EMC_SetKeybindCallback set_value;
 } EMC_KeybindSettingDefV1;
+
+typedef struct EMC_KeybindSettingDefV2
+{
+    const char* setting_id;
+    const char* label;
+    const char* description;
+    void* user_data;
+    EMC_GetKeybindCallback get_value;
+    EMC_SetKeybindCallback set_value;
+    const char* hover_hint;
+} EMC_KeybindSettingDefV2;
 
 typedef struct EMC_IntSettingDefV1
 {
@@ -134,6 +164,79 @@ typedef struct EMC_FloatSettingDefV1
     EMC_SetFloatCallback set_value;
 } EMC_FloatSettingDefV1;
 
+typedef struct EMC_SelectOptionV1
+{
+    int32_t value;
+    const char* label;
+} EMC_SelectOptionV1;
+
+typedef struct EMC_SelectSettingDefV1
+{
+    const char* setting_id;
+    const char* label;
+    const char* description;
+    void* user_data;
+    const EMC_SelectOptionV1* options;
+    uint32_t option_count;
+    EMC_GetSelectCallback get_value;
+    EMC_SetSelectCallback set_value;
+} EMC_SelectSettingDefV1;
+
+typedef struct EMC_SelectSettingDefV2
+{
+    const char* setting_id;
+    const char* label;
+    const char* description;
+    void* user_data;
+    const EMC_SelectOptionV1* options;
+    uint32_t option_count;
+    EMC_GetSelectCallback get_value;
+    EMC_SetSelectCallback set_value;
+    const char* hover_hint;
+} EMC_SelectSettingDefV2;
+
+typedef struct EMC_TextSettingDefV1
+{
+    const char* setting_id;
+    const char* label;
+    const char* description;
+    void* user_data;
+    uint32_t max_length;
+    EMC_GetTextCallback get_value;
+    EMC_SetTextCallback set_value;
+} EMC_TextSettingDefV1;
+
+typedef struct EMC_TextSettingDefV2
+{
+    const char* setting_id;
+    const char* label;
+    const char* description;
+    void* user_data;
+    uint32_t max_length;
+    EMC_GetTextCallback get_value;
+    EMC_SetTextCallback set_value;
+    const char* hover_hint;
+} EMC_TextSettingDefV2;
+
+typedef struct EMC_ColorPresetV1
+{
+    const char* value_hex;
+    const char* label;
+} EMC_ColorPresetV1;
+
+typedef struct EMC_ColorSettingDefV1
+{
+    const char* setting_id;
+    const char* label;
+    const char* description;
+    void* user_data;
+    uint32_t preview_kind;
+    const EMC_ColorPresetV1* presets;
+    uint32_t preset_count;
+    EMC_GetTextCallback get_value;
+    EMC_SetTextCallback set_value;
+} EMC_ColorSettingDefV1;
+
 typedef struct EMC_ActionRowDefV1
 {
     const char* setting_id;
@@ -143,6 +246,24 @@ typedef struct EMC_ActionRowDefV1
     uint32_t action_flags;
     EMC_ActionRowCallback on_action;
 } EMC_ActionRowDefV1;
+
+typedef struct EMC_ActionRowDefV2
+{
+    const char* setting_id;
+    const char* label;
+    const char* description;
+    void* user_data;
+    uint32_t action_flags;
+    EMC_ActionRowCallback on_action;
+    const char* hover_hint;
+} EMC_ActionRowDefV2;
+
+typedef struct EMC_SettingSectionDefV1
+{
+    const char* setting_id;
+    const char* section_id;
+    const char* section_display_name;
+} EMC_SettingSectionDefV1;
 
 typedef struct EMC_HubApiV1
 {
@@ -157,6 +278,15 @@ typedef struct EMC_HubApiV1
     EMC_Result(__cdecl* register_options_window_init_observer)(EMC_OptionsWindowInitObserverFn observer_fn, void* user_data);
     EMC_Result(__cdecl* unregister_options_window_init_observer)(EMC_OptionsWindowInitObserverFn observer_fn, void* user_data);
     EMC_Result(__cdecl* register_int_setting_v2)(EMC_ModHandle mod, const EMC_IntSettingDefV2* def);
+    EMC_Result(__cdecl* register_select_setting)(EMC_ModHandle mod, const EMC_SelectSettingDefV1* def);
+    EMC_Result(__cdecl* register_text_setting)(EMC_ModHandle mod, const EMC_TextSettingDefV1* def);
+    EMC_Result(__cdecl* register_color_setting)(EMC_ModHandle mod, const EMC_ColorSettingDefV1* def);
+    EMC_Result(__cdecl* register_setting_section)(EMC_ModHandle mod, const EMC_SettingSectionDefV1* def);
+    EMC_Result(__cdecl* register_bool_setting_v2)(EMC_ModHandle mod, const EMC_BoolSettingDefV2* def);
+    EMC_Result(__cdecl* register_keybind_setting_v2)(EMC_ModHandle mod, const EMC_KeybindSettingDefV2* def);
+    EMC_Result(__cdecl* register_select_setting_v2)(EMC_ModHandle mod, const EMC_SelectSettingDefV2* def);
+    EMC_Result(__cdecl* register_text_setting_v2)(EMC_ModHandle mod, const EMC_TextSettingDefV2* def);
+    EMC_Result(__cdecl* register_action_row_v2)(EMC_ModHandle mod, const EMC_ActionRowDefV2* def);
 } EMC_HubApiV1;
 
 #define EMC_HUB_API_V1_MIN_SIZE ((uint32_t)56u)
@@ -164,6 +294,24 @@ typedef struct EMC_HubApiV1
     ((uint32_t)(offsetof(EMC_HubApiV1, unregister_options_window_init_observer) + sizeof(void*)))
 #define EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE \
     ((uint32_t)(offsetof(EMC_HubApiV1, register_int_setting_v2) + sizeof(void*)))
+#define EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE \
+    ((uint32_t)(offsetof(EMC_HubApiV1, register_select_setting) + sizeof(void*)))
+#define EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE \
+    ((uint32_t)(offsetof(EMC_HubApiV1, register_text_setting) + sizeof(void*)))
+#define EMC_HUB_API_V1_COLOR_SETTING_MIN_SIZE \
+    ((uint32_t)(offsetof(EMC_HubApiV1, register_color_setting) + sizeof(void*)))
+#define EMC_HUB_API_V1_SETTING_SECTION_MIN_SIZE \
+    ((uint32_t)(offsetof(EMC_HubApiV1, register_setting_section) + sizeof(void*)))
+#define EMC_HUB_API_V1_BOOL_SETTING_V2_MIN_SIZE \
+    ((uint32_t)(offsetof(EMC_HubApiV1, register_bool_setting_v2) + sizeof(void*)))
+#define EMC_HUB_API_V1_KEYBIND_SETTING_V2_MIN_SIZE \
+    ((uint32_t)(offsetof(EMC_HubApiV1, register_keybind_setting_v2) + sizeof(void*)))
+#define EMC_HUB_API_V1_SELECT_SETTING_V2_MIN_SIZE \
+    ((uint32_t)(offsetof(EMC_HubApiV1, register_select_setting_v2) + sizeof(void*)))
+#define EMC_HUB_API_V1_TEXT_SETTING_V2_MIN_SIZE \
+    ((uint32_t)(offsetof(EMC_HubApiV1, register_text_setting_v2) + sizeof(void*)))
+#define EMC_HUB_API_V1_ACTION_ROW_V2_MIN_SIZE \
+    ((uint32_t)(offsetof(EMC_HubApiV1, register_action_row_v2) + sizeof(void*)))
 
 EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_GetApi(
     uint32_t requested_version,
@@ -215,6 +363,15 @@ EMC_ABI_ASSERT_OFFSET(EMC_BoolSettingDefV1, user_data, 24);
 EMC_ABI_ASSERT_OFFSET(EMC_BoolSettingDefV1, get_value, 32);
 EMC_ABI_ASSERT_OFFSET(EMC_BoolSettingDefV1, set_value, 40);
 
+EMC_ABI_ASSERT_SIZE(EMC_BoolSettingDefV2, 56);
+EMC_ABI_ASSERT_OFFSET(EMC_BoolSettingDefV2, setting_id, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_BoolSettingDefV2, label, 8);
+EMC_ABI_ASSERT_OFFSET(EMC_BoolSettingDefV2, description, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_BoolSettingDefV2, user_data, 24);
+EMC_ABI_ASSERT_OFFSET(EMC_BoolSettingDefV2, get_value, 32);
+EMC_ABI_ASSERT_OFFSET(EMC_BoolSettingDefV2, set_value, 40);
+EMC_ABI_ASSERT_OFFSET(EMC_BoolSettingDefV2, hover_hint, 48);
+
 EMC_ABI_ASSERT_SIZE(EMC_KeybindSettingDefV1, 48);
 EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV1, setting_id, 0);
 EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV1, label, 8);
@@ -222,6 +379,15 @@ EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV1, description, 16);
 EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV1, user_data, 24);
 EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV1, get_value, 32);
 EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV1, set_value, 40);
+
+EMC_ABI_ASSERT_SIZE(EMC_KeybindSettingDefV2, 56);
+EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV2, setting_id, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV2, label, 8);
+EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV2, description, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV2, user_data, 24);
+EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV2, get_value, 32);
+EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV2, set_value, 40);
+EMC_ABI_ASSERT_OFFSET(EMC_KeybindSettingDefV2, hover_hint, 48);
 
 EMC_ABI_ASSERT_SIZE(EMC_IntSettingDefV1, 64);
 EMC_ABI_ASSERT_OFFSET(EMC_IntSettingDefV1, setting_id, 0);
@@ -259,6 +425,65 @@ EMC_ABI_ASSERT_OFFSET(EMC_FloatSettingDefV1, display_decimals, 44);
 EMC_ABI_ASSERT_OFFSET(EMC_FloatSettingDefV1, get_value, 48);
 EMC_ABI_ASSERT_OFFSET(EMC_FloatSettingDefV1, set_value, 56);
 
+EMC_ABI_ASSERT_SIZE(EMC_SelectOptionV1, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectOptionV1, value, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectOptionV1, label, 8);
+
+EMC_ABI_ASSERT_SIZE(EMC_SelectSettingDefV1, 64);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV1, setting_id, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV1, label, 8);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV1, description, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV1, user_data, 24);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV1, options, 32);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV1, option_count, 40);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV1, get_value, 48);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV1, set_value, 56);
+
+EMC_ABI_ASSERT_SIZE(EMC_SelectSettingDefV2, 72);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV2, setting_id, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV2, label, 8);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV2, description, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV2, user_data, 24);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV2, options, 32);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV2, option_count, 40);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV2, get_value, 48);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV2, set_value, 56);
+EMC_ABI_ASSERT_OFFSET(EMC_SelectSettingDefV2, hover_hint, 64);
+
+EMC_ABI_ASSERT_SIZE(EMC_TextSettingDefV1, 56);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV1, setting_id, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV1, label, 8);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV1, description, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV1, user_data, 24);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV1, max_length, 32);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV1, get_value, 40);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV1, set_value, 48);
+
+EMC_ABI_ASSERT_SIZE(EMC_TextSettingDefV2, 64);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV2, setting_id, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV2, label, 8);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV2, description, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV2, user_data, 24);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV2, max_length, 32);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV2, get_value, 40);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV2, set_value, 48);
+EMC_ABI_ASSERT_OFFSET(EMC_TextSettingDefV2, hover_hint, 56);
+
+EMC_ABI_ASSERT_SIZE(EMC_ColorPresetV1, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorPresetV1, value_hex, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorPresetV1, label, 8);
+
+EMC_ABI_ASSERT_SIZE(EMC_ColorSettingDefV1, 72);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, setting_id, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, label, 8);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, description, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, user_data, 24);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, preview_kind, 32);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, presets, 40);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, preset_count, 48);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, get_value, 56);
+EMC_ABI_ASSERT_OFFSET(EMC_ColorSettingDefV1, set_value, 64);
+
 EMC_ABI_ASSERT_SIZE(EMC_ActionRowDefV1, 48);
 EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, setting_id, 0);
 EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, label, 8);
@@ -267,7 +492,16 @@ EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, user_data, 24);
 EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, action_flags, 32);
 EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV1, on_action, 40);
 
-EMC_ABI_ASSERT_SIZE(EMC_HubApiV1, 80);
+EMC_ABI_ASSERT_SIZE(EMC_ActionRowDefV2, 56);
+EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV2, setting_id, 0);
+EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV2, label, 8);
+EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV2, description, 16);
+EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV2, user_data, 24);
+EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV2, action_flags, 32);
+EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV2, on_action, 40);
+EMC_ABI_ASSERT_OFFSET(EMC_ActionRowDefV2, hover_hint, 48);
+
+EMC_ABI_ASSERT_SIZE(EMC_HubApiV1, 152);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, api_version, 0);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, api_size, 4);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_mod, 8);
@@ -279,6 +513,15 @@ EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_action_row, 48);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_options_window_init_observer, 56);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, unregister_options_window_init_observer, 64);
 EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_int_setting_v2, 72);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_select_setting, 80);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_text_setting, 88);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_color_setting, 96);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_setting_section, 104);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_bool_setting_v2, 112);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_keybind_setting_v2, 120);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_select_setting_v2, 128);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_text_setting_v2, 136);
+EMC_ABI_ASSERT_OFFSET(EMC_HubApiV1, register_action_row_v2, 144);
 
 #undef EMC_ABI_ASSERT_OFFSET
 #undef EMC_ABI_ASSERT_SIZE

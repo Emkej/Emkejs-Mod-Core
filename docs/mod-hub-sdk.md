@@ -4,6 +4,13 @@ Consumer-facing SDK reference for integrating with `Emkejs-Mod-Core` Mod Hub.
 
 Need the shortest integration path first? Start with [Mod Hub SDK Quick Start](mod-hub-sdk-quickstart.md).
 
+Recommended path:
+
+1. Start from `src/mod_hub_consumer_adapter.*`.
+2. Keep `samples/mod_hub_consumer_single_tu.cpp` as a reference-only sample.
+3. Replace only the example rows you actually need.
+4. Keep persistence in one local `PersistExampleModState(...)` seam while shared helpers handle validation and rollback.
+
 ## SDK SSOT
 
 Canonical SDK surfaces:
@@ -23,6 +30,9 @@ Handshake constants:
 - `EMC_HUB_API_V1_MIN_SIZE`
 - `EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE`
 - `EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE`
+- `EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE`
+- `EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE`
+- `EMC_HUB_API_V1_COLOR_SETTING_MIN_SIZE`
 
 Handshake entrypoint:
 
@@ -65,6 +75,8 @@ Public value/row constants:
 - `EMC_KEY_UNBOUND`
 - `EMC_ACTION_FORCE_REFRESH`
 - `EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT`
+- `EMC_COLOR_PREVIEW_KIND_SWATCH`
+- `EMC_COLOR_PREVIEW_KIND_TEXT`
 
 Core value type:
 
@@ -87,6 +99,9 @@ Supported row kinds:
 - `MOD_HUB_CLIENT_SETTING_KIND_INT`
 - `MOD_HUB_CLIENT_SETTING_KIND_INT_V2`
 - `MOD_HUB_CLIENT_SETTING_KIND_FLOAT`
+- `MOD_HUB_CLIENT_SETTING_KIND_SELECT`
+- `MOD_HUB_CLIENT_SETTING_KIND_TEXT`
+- `MOD_HUB_CLIENT_SETTING_KIND_COLOR`
 - `MOD_HUB_CLIENT_SETTING_KIND_ACTION`
 
 Deterministic helper behavior:
@@ -194,6 +209,132 @@ Migration note:
 - `EMC_IntSettingDefV1` remains valid and unchanged for legacy rows.
 - Use V2 only when you need exact deltas or a reduced button set.
 
+## Select and Text Rows (Phase 25)
+
+New surfaces:
+
+- `EMC_SelectOptionV1`
+- `EMC_SelectSettingDefV1`
+- `EMC_TextSettingDefV1`
+- `EMC_HubApiV1::register_select_setting`
+- `EMC_HubApiV1::register_text_setting`
+- `MOD_HUB_CLIENT_SETTING_KIND_SELECT`
+- `MOD_HUB_CLIENT_SETTING_KIND_TEXT`
+
+Behavior:
+
+1. Select rows model fixed enum-style choices with stable integer values and labels.
+2. Text rows model bounded single-line strings with an explicit `max_length`.
+3. Helper registration fails deterministically when a runtime host is older than the required API-size gate.
+
+Validation rules:
+
+1. Select rows require at least one option.
+2. Select option values must be unique.
+3. Select option labels must be non-empty.
+4. Text rows require `max_length > 0`.
+5. Text rows reject `max_length` above the current host cap (`256`).
+
+Fallback behavior:
+
+- `MOD_HUB_CLIENT_SETTING_KIND_SELECT` requires `EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE`.
+- `MOD_HUB_CLIENT_SETTING_KIND_TEXT` requires `EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE`.
+- Older hosts fail with `EMC_ERR_API_SIZE_MISMATCH`; the helper does not silently remap these rows to another kind.
+
+Minimal example:
+
+```cpp
+const EMC_SelectOptionV1 kPaletteOptions[] = {
+    { 0, "Default" },
+    { 1, "Warm" },
+    { 2, "Cool" }
+};
+
+const EMC_SelectSettingDefV1 kPaletteSetting = {
+    "palette",
+    "Palette",
+    "Choose a preset palette",
+    &g_state,
+    kPaletteOptions,
+    3u,
+    &GetPalette,
+    &SetPalette
+};
+
+const EMC_TextSettingDefV1 kTitleSetting = {
+    "title",
+    "Title",
+    "Single-line title",
+    &g_state,
+    64u,
+    &GetTitle,
+    &SetTitle
+};
+
+const emc::ModHubClientSettingRowV1 kRows[] = {
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT, &kPaletteSetting },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT, &kTitleSetting }
+};
+```
+
+## Color Rows (Phase 26)
+
+New surfaces:
+
+- `EMC_ColorPresetV1`
+- `EMC_ColorSettingDefV1`
+- `EMC_HubApiV1::register_color_setting`
+- `MOD_HUB_CLIENT_SETTING_KIND_COLOR`
+- `EMC_COLOR_PREVIEW_KIND_SWATCH`
+- `EMC_COLOR_PREVIEW_KIND_TEXT`
+
+Behavior:
+
+1. Color rows store one canonical RGB value: uppercase `#RRGGBB`.
+2. The current UI slice is palette-backed. Consumers can omit `presets` to use the core-owned default palette, or supply an override palette per row.
+3. `preview_kind` chooses whether the row preview renders as a swatch chip or sample text.
+4. Named colors are not part of the contract; the row value is always hex.
+5. Helper registration fails deterministically when a runtime host is older than the required API-size gate.
+
+Validation rules:
+
+1. `preview_kind` must be `EMC_COLOR_PREVIEW_KIND_SWATCH` or `EMC_COLOR_PREVIEW_KIND_TEXT`.
+2. Preset values are normalized to canonical uppercase `#RRGGBB` during registration.
+3. Duplicate presets after normalization are rejected.
+4. Preset labels must be non-empty when provided.
+5. The row callback contract is RGB-only; alpha and named-color parsing are not part of the Mod Hub color row surface.
+
+Fallback behavior:
+
+- `MOD_HUB_CLIENT_SETTING_KIND_COLOR` requires `EMC_HUB_API_V1_COLOR_SETTING_MIN_SIZE`.
+- Older hosts fail with `EMC_ERR_API_SIZE_MISMATCH`; the helper does not silently remap color rows to text or another row kind.
+
+Minimal example:
+
+```cpp
+const EMC_ColorPresetV1 kRelationColorPresets[] = {
+    { "#FF3333", "Enemy" },
+    { "#DEE85A", "Ally" },
+    { "#40FF40", "Squad" }
+};
+
+const EMC_ColorSettingDefV1 kRelationColorSetting = {
+    "enemy_color_hex",
+    "Enemy color",
+    "Relation color used for enemy markers and tint",
+    &g_state,
+    EMC_COLOR_PREVIEW_KIND_TEXT,
+    kRelationColorPresets,
+    3u,
+    &GetEnemyColor,
+    &SetEnemyColor
+};
+
+const emc::ModHubClientSettingRowV1 kRows[] = {
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR, &kRelationColorSetting }
+};
+```
+
 ## Runtime Log Semantics (Hub Events)
 
 Consumers should expect these event formats in RE_Kenshi logs when the corresponding code path is active. The alias deprecation event is debug-only and appears only when debug logging is enabled:
@@ -242,21 +383,39 @@ Additional generated file:
 
 - `samples/mod_hub_consumer_single_tu.cpp`
 
-Optional bool-setting skeleton generation:
+Optional typed row skeleton generation:
 
 ```bash
-./scripts/init-mod-template.sh --with-hub --hub-bool-setting show_overlay --hub-bool-setting auto_save
+./scripts/init-mod-template.sh --with-hub \
+  --hub-bool-setting show_overlay \
+  --hub-bool-setting auto_save \
+  --hub-keybind-setting toggle_overlay \
+  --hub-int-setting max_markers \
+  --hub-float-setting search_radius \
+  --hub-action-row refresh_cache
 ```
 
 ```powershell
-./scripts/init-mod-template.ps1 -WithHub -HubBoolSetting "show_overlay", "auto_save"
+./scripts/init-mod-template.ps1 -WithHub `
+  -HubBoolSetting "show_overlay", "auto_save" `
+  -HubKeybindSetting "toggle_overlay" `
+  -HubIntSetting "max_markers" `
+  -HubFloatSetting "search_radius" `
+  -HubActionRow "refresh_cache"
 ```
+
+Bool-only generation remains valid. The extra flags simply replace the default
+keybind/int/float/action examples with named scaffold rows when you want them.
 
 For larger lists, use a small manifest instead of repeating flags:
 
 ```json
 {
-  "bool_settings": ["show_overlay", "auto_save"]
+  "bool_settings": ["show_overlay", "auto_save"],
+  "keybind_settings": ["toggle_overlay"],
+  "int_settings": ["max_markers"],
+  "float_settings": ["search_radius"],
+  "action_rows": ["refresh_cache"]
 }
 ```
 
@@ -268,10 +427,12 @@ For larger lists, use a small manifest instead of repeating flags:
 ./scripts/init-mod-template.ps1 -WithHub -HubSettingsManifest .\hub-settings.json
 ```
 
-This replaces the default single bool example with generated bool state fields,
-get/set callbacks, setting definitions, and row entries. Generated setters also
-include a small persistence/rollback TODO scaffold so the repetitive save-fail
-pattern is harder to miss, now centralized in `emc/mod_hub_consumer_helpers.h`.
+This replaces the per-kind example rows you requested with generated state
+fields, callbacks, setting definitions, and row entries. Generated setters now
+use `ValidateBoolValue`, `ValidateValueInRange`, and
+`ApplyUpdateWithRollback(...)` from `emc/mod_hub_consumer_helpers.h`, while a
+local `PersistExampleModState(...)` stub keeps the persistence boundary visible
+and consumer-owned.
 
 Migration note:
 
@@ -353,10 +514,11 @@ Source snippet:
 <!-- PHASE11_SAMPLE_SOURCE_BEGIN -->
 ```cpp
 #include "mod_hub_consumer_adapter.h"
+#include "emc/mod_hub_consumer_helpers.h"
 
 namespace
 {
-struct ExampleState
+struct ExampleModState
 {
     int32_t enabled;
     EMC_KeybindValueV1 hotkey;
@@ -364,120 +526,145 @@ struct ExampleState
     float radius;
 };
 
-ExampleState g_state = { 1, { 42, 0u }, 10, 2.5f };
+ExampleModState g_state = {
+    1,
+    { 42, 0u },
+    10,
+    2.5f};
 emc::ModHubClient g_client;
 bool g_client_configured = false;
 
-EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
+bool PersistExampleModState(const ExampleModState& next_state)
 {
-    if (user_data == 0 || out_value == 0)
+    (void)next_state;
+    // TODO: Persist next_state to your config store and return false on failure.
+    return true;
+}
+
+template <typename UpdateFn>
+EMC_Result ApplyExampleModStateUpdate(
+    void* user_data,
+    char* err_buf,
+    uint32_t err_buf_size,
+    UpdateFn update)
+{
+    if (user_data == 0)
     {
+        emc::consumer::WriteErrorMessage(err_buf, err_buf_size, "invalid_state");
         return EMC_ERR_INVALID_ARGUMENT;
     }
 
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    *out_value = state->enabled;
-    return EMC_OK;
+    ExampleModState* state = static_cast<ExampleModState*>(user_data);
+    const ExampleModState previous = *state;
+    ExampleModState updated = previous;
+    update(updated);
+
+    return emc::consumer::ApplyUpdateWithRollback(
+        previous,
+        updated,
+        err_buf,
+        err_buf_size,
+        [state](const ExampleModState& snapshot) {
+            *state = snapshot;
+        },
+        &PersistExampleModState);
+}
+
+EMC_Result __cdecl GetEnabled(void* user_data, int32_t* out_value)
+{
+    return emc::consumer::GetBoolFieldValue(user_data, out_value, &ExampleModState::enabled);
 }
 
 EMC_Result __cdecl SetEnabled(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
 {
-    (void)err_buf;
-    (void)err_buf_size;
-    if (user_data == 0)
+    const EMC_Result boolValidation = emc::consumer::ValidateBoolValue(value, err_buf, err_buf_size);
+    if (boolValidation != EMC_OK)
     {
-        return EMC_ERR_INVALID_ARGUMENT;
+        return boolValidation;
     }
 
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    state->enabled = value != 0 ? 1 : 0;
-    return EMC_OK;
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.enabled = value != 0 ? 1 : 0;
+        });
 }
 
 EMC_Result __cdecl GetHotkey(void* user_data, EMC_KeybindValueV1* out_value)
 {
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    *out_value = state->hotkey;
-    return EMC_OK;
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::hotkey);
 }
 
 EMC_Result __cdecl SetHotkey(void* user_data, EMC_KeybindValueV1 value, char* err_buf, uint32_t err_buf_size)
 {
-    (void)err_buf;
-    (void)err_buf_size;
-    if (user_data == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    state->hotkey = value;
-    return EMC_OK;
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.hotkey = value;
+        });
 }
 
 EMC_Result __cdecl GetCount(void* user_data, int32_t* out_value)
 {
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    *out_value = state->count;
-    return EMC_OK;
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::count);
 }
 
 EMC_Result __cdecl SetCount(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
 {
-    (void)err_buf;
-    (void)err_buf_size;
-    if (user_data == 0)
+    const EMC_Result rangeValidation = emc::consumer::ValidateValueInRange<int32_t>(
+        value,
+        0,
+        100,
+        err_buf,
+        err_buf_size);
+    if (rangeValidation != EMC_OK)
     {
-        return EMC_ERR_INVALID_ARGUMENT;
+        return rangeValidation;
     }
 
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    state->count = value;
-    return EMC_OK;
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.count = value;
+        });
 }
 
 EMC_Result __cdecl GetRadius(void* user_data, float* out_value)
 {
-    if (user_data == 0 || out_value == 0)
-    {
-        return EMC_ERR_INVALID_ARGUMENT;
-    }
-
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    *out_value = state->radius;
-    return EMC_OK;
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::radius);
 }
 
 EMC_Result __cdecl SetRadius(void* user_data, float value, char* err_buf, uint32_t err_buf_size)
 {
-    (void)err_buf;
-    (void)err_buf_size;
-    if (user_data == 0)
+    const EMC_Result rangeValidation = emc::consumer::ValidateValueInRange<float>(
+        value,
+        0.0f,
+        10.0f,
+        err_buf,
+        err_buf_size);
+    if (rangeValidation != EMC_OK)
     {
-        return EMC_ERR_INVALID_ARGUMENT;
+        return rangeValidation;
     }
 
-    ExampleState* state = static_cast<ExampleState*>(user_data);
-    state->radius = value;
-    return EMC_OK;
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.radius = value;
+        });
 }
 
 EMC_Result __cdecl RefreshNow(void* user_data, char* err_buf, uint32_t err_buf_size)
 {
-    (void)user_data;
-    (void)err_buf;
-    (void)err_buf_size;
-    return EMC_OK;
+    return emc::consumer::ActionNoopSuccess(user_data, err_buf, err_buf_size);
 }
 
 const EMC_ModDescriptorV1 kModDescriptor = {
@@ -485,17 +672,15 @@ const EMC_ModDescriptorV1 kModDescriptor = {
     "Example Mod Hub",
     "example_consumer",
     "Example Consumer",
-    &g_state
-};
+    &g_state };
 
-const EMC_BoolSettingDefV1 kBoolSetting = {
+const EMC_BoolSettingDefV1 kBoolSettingEnabled = {
     "enabled",
     "Enabled",
-    "Enable the feature",
+    "Generated bool setting for Enabled.",
     &g_state,
     &GetEnabled,
-    &SetEnabled
-};
+    &SetEnabled };
 
 const EMC_KeybindSettingDefV1 kKeybindSetting = {
     "hotkey",
@@ -503,8 +688,7 @@ const EMC_KeybindSettingDefV1 kKeybindSetting = {
     "Primary feature hotkey",
     &g_state,
     &GetHotkey,
-    &SetHotkey
-};
+    &SetHotkey };
 
 const EMC_IntSettingDefV1 kIntSetting = {
     "count",
@@ -515,8 +699,7 @@ const EMC_IntSettingDefV1 kIntSetting = {
     100,
     5,
     &GetCount,
-    &SetCount
-};
+    &SetCount };
 
 const EMC_FloatSettingDefV1 kFloatSetting = {
     "radius",
@@ -528,8 +711,7 @@ const EMC_FloatSettingDefV1 kFloatSetting = {
     0.5f,
     EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT,
     &GetRadius,
-    &SetRadius
-};
+    &SetRadius };
 
 const EMC_ActionRowDefV1 kActionRow = {
     "refresh_now",
@@ -537,11 +719,10 @@ const EMC_ActionRowDefV1 kActionRow = {
     "Re-sync values from runtime state",
     &g_state,
     EMC_ACTION_FORCE_REFRESH,
-    &RefreshNow
-};
+    &RefreshNow };
 
 const emc::ModHubClientSettingRowV1 kRows[] = {
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kBoolSetting },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kBoolSettingEnabled },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, &kKeybindSetting },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, &kIntSetting },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, &kFloatSetting },
@@ -551,8 +732,7 @@ const emc::ModHubClientSettingRowV1 kRows[] = {
 const emc::ModHubClientTableRegistrationV1 kRegistration = {
     &kModDescriptor,
     kRows,
-    (uint32_t)(sizeof(kRows) / sizeof(kRows[0]))
-};
+    (uint32_t)(sizeof(kRows) / sizeof(kRows[0])) };
 
 void EnsureClientConfigured()
 {
@@ -687,6 +867,26 @@ Phase 20:
 Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
 
 This harness validates V2 int-row registration, sparse/custom button layouts, exact-delta behavior, and deterministic rejection of invalid layouts.
+
+Phase 25:
+
+```powershell
+./scripts/phase25_select_text_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```
+
+Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
+
+This harness validates select/text registration, pending-state updates, bounded text rejection, and select/text commit resync.
+
+Phase 26:
+
+```powershell
+./scripts/phase26_color_row_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```
+
+Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
+
+This harness validates color-row registration, default/override palettes, duplicate normalized preset rejection, pending-color normalization, palette expansion state, and save-time color commit resync.
 
 Phase 13:
 
