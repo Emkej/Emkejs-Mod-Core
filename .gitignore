@@ -16,6 +16,7 @@ build/
 .packaging/
 dist/
 .tmp
+Linkednpm-cache
 
 # Files
 *.obj
