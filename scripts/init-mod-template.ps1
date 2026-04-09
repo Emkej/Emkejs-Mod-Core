@@ -17,7 +17,10 @@ param(
     [string[]]$HubKeybindSetting = @(),
     [string[]]$HubIntSetting = @(),
     [string[]]$HubFloatSetting = @(),
-    [string[]]$HubActionRow = @()
+    [string[]]$HubActionRow = @(),
+    [string[]]$HubSelectSetting = @(),
+    [string[]]$HubTextSetting = @(),
+    [string[]]$HubColorSetting = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -308,7 +311,7 @@ const EMC_BoolSettingDefV1 $($_.ConstantName) = {
     }) -join ([Environment]::NewLine + [Environment]::NewLine)
 
     $boolRowEntries = ($settings | ForEach-Object {
-        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &$($_.ConstantName) },"
+        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
     }) -join [Environment]::NewLine
 
     return [pscustomobject]@{
@@ -387,7 +390,7 @@ EMC_Result __cdecl Set$($_.FunctionSuffix)(void* user_data, EMC_KeybindValueV1 v
 
     $settingDefs = $settingDefsList -join ([Environment]::NewLine + [Environment]::NewLine)
     $rowEntries = ($settings | ForEach-Object {
-        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, &$($_.ConstantName) },"
+        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
     }) -join [Environment]::NewLine
 
     return [pscustomobject]@{
@@ -477,7 +480,7 @@ EMC_Result __cdecl Set$($_.FunctionSuffix)(void* user_data, int32_t value, char*
 
     $settingDefs = $settingDefsList -join ([Environment]::NewLine + [Environment]::NewLine)
     $rowEntries = ($settings | ForEach-Object {
-        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, &$($_.ConstantName) },"
+        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
     }) -join [Environment]::NewLine
 
     return [pscustomobject]@{
@@ -565,7 +568,7 @@ EMC_Result __cdecl Set$($_.FunctionSuffix)(void* user_data, float value, char* e
 
     $settingDefs = $settingDefsList -join ([Environment]::NewLine + [Environment]::NewLine)
     $rowEntries = ($settings | ForEach-Object {
-        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, &$($_.ConstantName) },"
+        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
     }) -join [Environment]::NewLine
 
     return [pscustomobject]@{
@@ -620,13 +623,422 @@ const EMC_ActionRowDefV1 $($setting.ConstantName) = {
 
     $settingDefs = $settingDefsList -join ([Environment]::NewLine + [Environment]::NewLine)
     $rowEntries = ($settings | ForEach-Object {
-        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION, &$($_.ConstantName) },"
+        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
     }) -join [Environment]::NewLine
 
     return [pscustomobject]@{
         StateFields = ""
         StateInitializers = ""
         Accessors = $accessors
+        SettingDefs = $settingDefs
+        RowEntries = $rowEntries
+    }
+}
+
+function New-HubSelectScaffoldSections {
+    param(
+        [string[]]$RequestedSettingIds = @()
+    )
+
+    $settings = @(New-HubSettingSpecs `
+        -RequestedSettingIds $RequestedSettingIds `
+        -DefaultSettingIds @() `
+        -KindLabel "select setting" `
+        -ConstantPrefix "kSelectSetting")
+
+    if ($settings.Count -eq 0) {
+        return [pscustomobject]@{
+            StateFields = ""
+            StateInitializers = ""
+            Accessors = ""
+            SettingDefs = ""
+            RowEntries = ""
+        }
+    }
+
+    $stateFields = ($settings | ForEach-Object {
+        "    int32_t $($_.FieldName);"
+    }) -join [Environment]::NewLine
+
+    $stateInitializers = ($settings | ForEach-Object {
+        "    0,"
+    }) -join [Environment]::NewLine
+
+    $accessors = ($settings | ForEach-Object {
+@"
+EMC_Result __cdecl Get$($_.FunctionSuffix)(void* user_data, int32_t* out_value)
+{
+    return emc::consumer::GetFieldValue(user_data, out_value, &ExampleModState::$($_.FieldName));
+}
+
+EMC_Result __cdecl Set$($_.FunctionSuffix)(void* user_data, int32_t value, char* err_buf, uint32_t err_buf_size)
+{
+    const EMC_Result rangeValidation = emc::consumer::ValidateValueInRange<int32_t>(
+        value,
+        0,
+        2,
+        err_buf,
+        err_buf_size,
+        "invalid_select_option");
+    if (rangeValidation != EMC_OK)
+    {
+        return rangeValidation;
+    }
+
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            updated.$($_.FieldName) = value;
+        });
+}
+"@
+    }) -join ([Environment]::NewLine + [Environment]::NewLine)
+
+    $settingDefs = ($settings | ForEach-Object {
+@"
+const EMC_SelectOptionV1 $($_.ConstantName)Options[] = {
+    { 0, "Default" },
+    { 1, "Alternative A" },
+    { 2, "Alternative B" }
+};
+
+const EMC_SelectSettingDefV1 $($_.ConstantName) = {
+    "$($_.SettingId)",
+    "$($_.DisplayName)",
+    "Generated select setting for $($_.DisplayName). Replace the option list with your real values.",
+    &g_state,
+    $($_.ConstantName)Options,
+    3u,
+    &Get$($_.FunctionSuffix),
+    &Set$($_.FunctionSuffix) };
+"@
+    }) -join ([Environment]::NewLine + [Environment]::NewLine)
+
+    $rowEntries = ($settings | ForEach-Object {
+        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
+    }) -join [Environment]::NewLine
+
+    return [pscustomobject]@{
+        StateFields = $stateFields
+        StateInitializers = $stateInitializers
+        Accessors = $accessors
+        SettingDefs = $settingDefs
+        RowEntries = $rowEntries
+    }
+}
+
+function New-HubTextScaffoldSections {
+    param(
+        [string[]]$RequestedSettingIds = @()
+    )
+
+    $settings = @(New-HubSettingSpecs `
+        -RequestedSettingIds $RequestedSettingIds `
+        -DefaultSettingIds @() `
+        -KindLabel "text setting" `
+        -ConstantPrefix "kTextSetting")
+
+    if ($settings.Count -eq 0) {
+        return [pscustomobject]@{
+            StateFields = ""
+            StateInitializers = ""
+            Accessors = ""
+            SettingDefs = ""
+            RowEntries = ""
+        }
+    }
+
+    $stateFields = ($settings | ForEach-Object {
+        "    char $($_.FieldName)[65];"
+    }) -join [Environment]::NewLine
+
+    $stateInitializers = ($settings | ForEach-Object {
+        '    "",'
+    }) -join [Environment]::NewLine
+
+    $helperCode = @"
+size_t GeneratedTextLength(const char* value)
+{
+    size_t length = 0u;
+    if (value == 0)
+    {
+        return 0u;
+    }
+
+    while (value[length] != '\0')
+    {
+        ++length;
+    }
+
+    return length;
+}
+
+bool CopyGeneratedTextValue(char* destination, size_t destination_size, const char* source)
+{
+    if (destination == 0 || destination_size == 0u || source == 0)
+    {
+        return false;
+    }
+
+    size_t index = 0u;
+    while (index + 1u < destination_size && source[index] != '\0')
+    {
+        destination[index] = source[index];
+        ++index;
+    }
+
+    if (source[index] != '\0')
+    {
+        destination[0] = '\0';
+        return false;
+    }
+
+    destination[index] = '\0';
+    return true;
+}
+
+EMC_Result CopyGeneratedTextToOutput(const char* source, char* out_value, uint32_t out_value_size)
+{
+    if (source == 0 || out_value == 0 || out_value_size == 0u)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (!CopyGeneratedTextValue(out_value, (size_t)out_value_size, source))
+    {
+        out_value[0] = '\0';
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+"@
+
+    $accessorBodies = ($settings | ForEach-Object {
+@"
+EMC_Result __cdecl Get$($_.FunctionSuffix)(void* user_data, char* out_value, uint32_t out_value_size)
+{
+    if (user_data == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    ExampleModState* state = static_cast<ExampleModState*>(user_data);
+    return CopyGeneratedTextToOutput(state->$($_.FieldName), out_value, out_value_size);
+}
+
+EMC_Result __cdecl Set$($_.FunctionSuffix)(void* user_data, const char* value, char* err_buf, uint32_t err_buf_size)
+{
+    if (value == 0)
+    {
+        emc::consumer::WriteErrorMessage(err_buf, err_buf_size, "invalid_text");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (GeneratedTextLength(value) > 64u)
+    {
+        emc::consumer::WriteErrorMessage(err_buf, err_buf_size, "text_too_long");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            CopyGeneratedTextValue(updated.$($_.FieldName), sizeof(updated.$($_.FieldName)), value);
+        });
+}
+"@
+    }) -join ([Environment]::NewLine + [Environment]::NewLine)
+
+    $settingDefs = ($settings | ForEach-Object {
+@"
+const EMC_TextSettingDefV1 $($_.ConstantName) = {
+    "$($_.SettingId)",
+    "$($_.DisplayName)",
+    "Generated text setting for $($_.DisplayName). Replace max_length and validation with your real contract.",
+    &g_state,
+    64u,
+    &Get$($_.FunctionSuffix),
+    &Set$($_.FunctionSuffix) };
+"@
+    }) -join ([Environment]::NewLine + [Environment]::NewLine)
+
+    $rowEntries = ($settings | ForEach-Object {
+        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
+    }) -join [Environment]::NewLine
+
+    return [pscustomobject]@{
+        StateFields = $stateFields
+        StateInitializers = $stateInitializers
+        Accessors = Join-HubScaffoldSections -Sections @($helperCode, $accessorBodies) -Separator ([Environment]::NewLine + [Environment]::NewLine)
+        SettingDefs = $settingDefs
+        RowEntries = $rowEntries
+    }
+}
+
+function New-HubColorScaffoldSections {
+    param(
+        [string[]]$RequestedSettingIds = @()
+    )
+
+    $settings = @(New-HubSettingSpecs `
+        -RequestedSettingIds $RequestedSettingIds `
+        -DefaultSettingIds @() `
+        -KindLabel "color setting" `
+        -ConstantPrefix "kColorSetting")
+
+    if ($settings.Count -eq 0) {
+        return [pscustomobject]@{
+            StateFields = ""
+            StateInitializers = ""
+            Accessors = ""
+            SettingDefs = ""
+            RowEntries = ""
+        }
+    }
+
+    $stateFields = ($settings | ForEach-Object {
+        "    char $($_.FieldName)[8];"
+    }) -join [Environment]::NewLine
+
+    $stateInitializers = ($settings | ForEach-Object {
+        '    "#6699FF",'
+    }) -join [Environment]::NewLine
+
+    $helperCode = @"
+bool IsGeneratedColorHexDigit(char value)
+{
+    return (value >= '0' && value <= '9')
+        || (value >= 'a' && value <= 'f')
+        || (value >= 'A' && value <= 'F');
+}
+
+char ToGeneratedUpperHex(char value)
+{
+    if (value >= 'a' && value <= 'f')
+    {
+        return (char)(value - ('a' - 'A'));
+    }
+
+    return value;
+}
+
+EMC_Result CopyGeneratedColorToOutput(const char* source, char* out_value, uint32_t out_value_size)
+{
+    if (source == 0 || out_value == 0 || out_value_size < 8u)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    for (size_t index = 0u; index < 8u; ++index)
+    {
+        out_value[index] = source[index];
+        if (source[index] == '\0')
+        {
+            return EMC_OK;
+        }
+    }
+
+    out_value[0] = '\0';
+    return EMC_ERR_INVALID_ARGUMENT;
+}
+
+bool NormalizeGeneratedColorValue(const char* value, char* destination)
+{
+    if (value == 0 || destination == 0)
+    {
+        return false;
+    }
+
+    size_t source_index = (value[0] == '#') ? 1u : 0u;
+    for (size_t digit_index = 0u; digit_index < 6u; ++digit_index)
+    {
+        const char digit = value[source_index + digit_index];
+        if (!IsGeneratedColorHexDigit(digit))
+        {
+            return false;
+        }
+
+        destination[digit_index + 1u] = ToGeneratedUpperHex(digit);
+    }
+
+    if (value[source_index + 6u] != '\0')
+    {
+        return false;
+    }
+
+    destination[0] = '#';
+    destination[7] = '\0';
+    return true;
+}
+"@
+
+    $accessorBodies = ($settings | ForEach-Object {
+@"
+EMC_Result __cdecl Get$($_.FunctionSuffix)(void* user_data, char* out_value, uint32_t out_value_size)
+{
+    if (user_data == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    ExampleModState* state = static_cast<ExampleModState*>(user_data);
+    return CopyGeneratedColorToOutput(state->$($_.FieldName), out_value, out_value_size);
+}
+
+EMC_Result __cdecl Set$($_.FunctionSuffix)(void* user_data, const char* value, char* err_buf, uint32_t err_buf_size)
+{
+    char normalized[8] = {};
+    if (!NormalizeGeneratedColorValue(value, normalized))
+    {
+        emc::consumer::WriteErrorMessage(err_buf, err_buf_size, "invalid_color_hex");
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [value](ExampleModState& updated) {
+            NormalizeGeneratedColorValue(value, updated.$($_.FieldName));
+        });
+}
+"@
+    }) -join ([Environment]::NewLine + [Environment]::NewLine)
+
+    $settingDefs = ($settings | ForEach-Object {
+@"
+const EMC_ColorPresetV1 $($_.ConstantName)Presets[] = {
+    { "#FF3333", "Warm" },
+    { "#33CC66", "Natural" },
+    { "#6699FF", "Cool" }
+};
+
+const EMC_ColorSettingDefV1 $($_.ConstantName) = {
+    "$($_.SettingId)",
+    "$($_.DisplayName)",
+    "Generated color setting for $($_.DisplayName). Replace presets and preview_kind with your real values.",
+    &g_state,
+    EMC_COLOR_PREVIEW_KIND_SWATCH,
+    $($_.ConstantName)Presets,
+    3u,
+    &Get$($_.FunctionSuffix),
+    &Set$($_.FunctionSuffix) };
+"@
+    }) -join ([Environment]::NewLine + [Environment]::NewLine)
+
+    $rowEntries = ($settings | ForEach-Object {
+        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
+    }) -join [Environment]::NewLine
+
+    return [pscustomobject]@{
+        StateFields = $stateFields
+        StateInitializers = $stateInitializers
+        Accessors = Join-HubScaffoldSections -Sections @($helperCode, $accessorBodies) -Separator ([Environment]::NewLine + [Environment]::NewLine)
         SettingDefs = $settingDefs
         RowEntries = $rowEntries
     }
@@ -749,58 +1161,94 @@ $requestedHubActionRows = @(
     (Get-HubSettingsFromManifestProperty -Path $HubSettingsManifest -PropertyName "action_rows")
     $HubActionRow
 )
+$requestedHubSelectSettings = @(
+    (Get-HubSettingsFromManifestProperty -Path $HubSettingsManifest -PropertyName "select_settings")
+    $HubSelectSetting
+)
+$requestedHubTextSettings = @(
+    (Get-HubSettingsFromManifestProperty -Path $HubSettingsManifest -PropertyName "text_settings")
+    $HubTextSetting
+)
+$requestedHubColorSettings = @(
+    (Get-HubSettingsFromManifestProperty -Path $HubSettingsManifest -PropertyName "color_settings")
+    $HubColorSetting
+)
 
 $HubBoolSetting = @(Expand-HubSettingValues -Values $requestedHubBoolSettings)
 $HubKeybindSetting = @(Expand-HubSettingValues -Values $requestedHubKeybindSettings)
 $HubIntSetting = @(Expand-HubSettingValues -Values $requestedHubIntSettings)
 $HubFloatSetting = @(Expand-HubSettingValues -Values $requestedHubFloatSettings)
 $HubActionRow = @(Expand-HubSettingValues -Values $requestedHubActionRows)
+$HubSelectSetting = @(Expand-HubSettingValues -Values $requestedHubSelectSettings)
+$HubTextSetting = @(Expand-HubSettingValues -Values $requestedHubTextSettings)
+$HubColorSetting = @(Expand-HubSettingValues -Values $requestedHubColorSettings)
 
 Assert-HubUniqueSettingIds -Groups @(
     $HubBoolSetting,
     $HubKeybindSetting,
     $HubIntSetting,
     $HubFloatSetting,
-    $HubActionRow)
+    $HubActionRow,
+    $HubSelectSetting,
+    $HubTextSetting,
+    $HubColorSetting)
 
 $boolSections = New-HubBoolScaffoldSections -RequestedSettingIds $HubBoolSetting
 $keybindSections = New-HubKeybindScaffoldSections -RequestedSettingIds $HubKeybindSetting
 $intSections = New-HubIntScaffoldSections -RequestedSettingIds $HubIntSetting
 $floatSections = New-HubFloatScaffoldSections -RequestedSettingIds $HubFloatSetting
 $actionSections = New-HubActionScaffoldSections -RequestedSettingIds $HubActionRow
+$selectSections = New-HubSelectScaffoldSections -RequestedSettingIds $HubSelectSetting
+$textSections = New-HubTextScaffoldSections -RequestedSettingIds $HubTextSetting
+$colorSections = New-HubColorScaffoldSections -RequestedSettingIds $HubColorSetting
 
 $combinedStateFields = Join-HubScaffoldSections -Sections @(
     $boolSections.StateFields,
     $keybindSections.StateFields,
     $intSections.StateFields,
-    $floatSections.StateFields) -Separator ([Environment]::NewLine)
+    $floatSections.StateFields,
+    $selectSections.StateFields,
+    $textSections.StateFields,
+    $colorSections.StateFields) -Separator ([Environment]::NewLine)
 
 $combinedStateInitializers = Join-HubScaffoldSections -Sections @(
     $boolSections.StateInitializers,
     $keybindSections.StateInitializers,
     $intSections.StateInitializers,
-    $floatSections.StateInitializers) -Separator ([Environment]::NewLine)
+    $floatSections.StateInitializers,
+    $selectSections.StateInitializers,
+    $textSections.StateInitializers,
+    $colorSections.StateInitializers) -Separator ([Environment]::NewLine)
 
 $combinedAccessors = Join-HubScaffoldSections -Sections @(
     $boolSections.Accessors,
     $keybindSections.Accessors,
     $intSections.Accessors,
     $floatSections.Accessors,
-    $actionSections.Accessors) -Separator ([Environment]::NewLine + [Environment]::NewLine)
+    $actionSections.Accessors,
+    $selectSections.Accessors,
+    $textSections.Accessors,
+    $colorSections.Accessors) -Separator ([Environment]::NewLine + [Environment]::NewLine)
 
 $combinedSettingDefs = Join-HubScaffoldSections -Sections @(
     $boolSections.SettingDefs,
     $keybindSections.SettingDefs,
     $intSections.SettingDefs,
     $floatSections.SettingDefs,
-    $actionSections.SettingDefs) -Separator ([Environment]::NewLine + [Environment]::NewLine)
+    $actionSections.SettingDefs,
+    $selectSections.SettingDefs,
+    $textSections.SettingDefs,
+    $colorSections.SettingDefs) -Separator ([Environment]::NewLine + [Environment]::NewLine)
 
 $combinedRowEntries = Join-HubScaffoldSections -Sections @(
     $boolSections.RowEntries,
     $keybindSections.RowEntries,
     $intSections.RowEntries,
     $floatSections.RowEntries,
-    $actionSections.RowEntries) -Separator ([Environment]::NewLine)
+    $actionSections.RowEntries,
+    $selectSections.RowEntries,
+    $textSections.RowEntries,
+    $colorSections.RowEntries) -Separator ([Environment]::NewLine)
 
 $srcDir = Join-Path $RepoDir "src"
 if (-not (Test-Path $srcDir)) {

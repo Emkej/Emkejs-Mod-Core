@@ -200,7 +200,7 @@ const EMC_IntSettingDefV2 kCountSettingV2 = {
 };
 
 const emc::ModHubClientSettingRowV1 kRows[] = {
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2, &kCountSettingV2 }
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2, "count", &kCountSettingV2, 0, 0 }
 };
 ```
 
@@ -272,8 +272,8 @@ const EMC_TextSettingDefV1 kTitleSetting = {
 };
 
 const emc::ModHubClientSettingRowV1 kRows[] = {
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT, &kPaletteSetting },
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT, &kTitleSetting }
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_SELECT, "palette", &kPaletteSetting, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT, "title", &kTitleSetting, 0, 0 }
 };
 ```
 
@@ -331,9 +331,84 @@ const EMC_ColorSettingDefV1 kRelationColorSetting = {
 };
 
 const emc::ModHubClientSettingRowV1 kRows[] = {
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR, &kRelationColorSetting }
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_COLOR, "relation_color_hex", &kRelationColorSetting, 0, 0 }
 };
 ```
+
+## Semantic Hover Hints (Phase 27)
+
+New surfaces:
+
+- `EMC_BoolSettingDefV2`
+- `EMC_KeybindSettingDefV2`
+- `EMC_SelectSettingDefV2`
+- `EMC_TextSettingDefV2`
+- `EMC_ActionRowDefV2`
+- `EMC_HubApiV1::register_bool_setting_v2`
+- `EMC_HubApiV1::register_keybind_setting_v2`
+- `EMC_HubApiV1::register_select_setting_v2`
+- `EMC_HubApiV1::register_text_setting_v2`
+- `EMC_HubApiV1::register_action_row_v2`
+- `MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2`
+- `MOD_HUB_CLIENT_SETTING_KIND_KEYBIND_V2`
+- `MOD_HUB_CLIENT_SETTING_KIND_SELECT_V2`
+- `MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2`
+- `MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2`
+
+Behavior:
+
+1. `hover_hint` is optional and additive. It does not replace the existing below-row `description` footer.
+2. Consumer-owned hover text is applied only to the primary semantic control for eligible rows:
+   - bool toggle button
+   - keybind bind button
+   - select combo box
+   - text edit box
+   - action run button
+3. Core-owned mechanics hints stay on sibling controls such as keybind clear, int/float step buttons, color controls, and scroll controls.
+4. Null or empty `hover_hint` behaves as absent.
+
+Fallback behavior:
+
+- `MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2` requires `EMC_HUB_API_V1_BOOL_SETTING_V2_MIN_SIZE`.
+- `MOD_HUB_CLIENT_SETTING_KIND_KEYBIND_V2` requires `EMC_HUB_API_V1_KEYBIND_SETTING_V2_MIN_SIZE`.
+- `MOD_HUB_CLIENT_SETTING_KIND_SELECT_V2` requires `EMC_HUB_API_V1_SELECT_SETTING_V2_MIN_SIZE`.
+- `MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2` requires `EMC_HUB_API_V1_TEXT_SETTING_V2_MIN_SIZE`.
+- `MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2` requires `EMC_HUB_API_V1_ACTION_ROW_V2_MIN_SIZE`.
+- Older hosts fail with `EMC_ERR_API_SIZE_MISMATCH`; the helper does not silently downgrade these rows to V1.
+
+Minimal example:
+
+```cpp
+const EMC_BoolSettingDefV2 kEnabledSetting = {
+    "enabled",
+    "Enabled",
+    "Enable or disable feature",
+    &g_state,
+    &GetEnabled,
+    &SetEnabled,
+    "Toggle the feature state."
+};
+
+const EMC_ActionRowDefV2 kRefreshRow = {
+    "refresh_now",
+    "Refresh now",
+    "Re-sync values from runtime state",
+    &g_state,
+    EMC_ACTION_FORCE_REFRESH,
+    &RefreshNow,
+    "Re-sync values immediately."
+};
+
+const emc::ModHubClientSettingRowV1 kRows[] = {
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2, "enabled", &kEnabledSetting, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2, "refresh_now", &kRefreshRow, 0, 0 }
+};
+```
+
+Migration note:
+
+- Existing V1 rows remain valid.
+- Current scaffold output remains V1-compatible; hand-wire these V2 rows when you want semantic hover hints.
 
 ## Runtime Log Semantics (Hub Events)
 
@@ -392,7 +467,10 @@ Optional typed row skeleton generation:
   --hub-keybind-setting toggle_overlay \
   --hub-int-setting max_markers \
   --hub-float-setting search_radius \
-  --hub-action-row refresh_cache
+  --hub-action-row refresh_cache \
+  --hub-select-setting palette \
+  --hub-text-setting title \
+  --hub-color-setting accent_color
 ```
 
 ```powershell
@@ -401,11 +479,15 @@ Optional typed row skeleton generation:
   -HubKeybindSetting "toggle_overlay" `
   -HubIntSetting "max_markers" `
   -HubFloatSetting "search_radius" `
-  -HubActionRow "refresh_cache"
+  -HubActionRow "refresh_cache" `
+  -HubSelectSetting "palette" `
+  -HubTextSetting "title" `
+  -HubColorSetting "accent_color"
 ```
 
 Bool-only generation remains valid. The extra flags simply replace the default
-keybind/int/float/action examples with named scaffold rows when you want them.
+keybind/int/float/action examples with named scaffold rows when you want them,
+and add select/text/color examples when you need richer row kinds.
 
 For larger lists, use a small manifest instead of repeating flags:
 
@@ -415,7 +497,10 @@ For larger lists, use a small manifest instead of repeating flags:
   "keybind_settings": ["toggle_overlay"],
   "int_settings": ["max_markers"],
   "float_settings": ["search_radius"],
-  "action_rows": ["refresh_cache"]
+  "action_rows": ["refresh_cache"],
+  "select_settings": ["palette"],
+  "text_settings": ["title"],
+  "color_settings": ["accent_color"]
 }
 ```
 
@@ -674,13 +759,14 @@ const EMC_ModDescriptorV1 kModDescriptor = {
     "Example Consumer",
     &g_state };
 
-const EMC_BoolSettingDefV1 kBoolSettingEnabled = {
+const EMC_BoolSettingDefV2 kBoolSettingEnabled = {
     "enabled",
     "Enabled",
     "Generated bool setting for Enabled.",
     &g_state,
     &GetEnabled,
-    &SetEnabled };
+    &SetEnabled,
+    "Toggle the generated feature state." };
 
 const EMC_KeybindSettingDefV1 kKeybindSetting = {
     "hotkey",
@@ -713,20 +799,21 @@ const EMC_FloatSettingDefV1 kFloatSetting = {
     &GetRadius,
     &SetRadius };
 
-const EMC_ActionRowDefV1 kActionRow = {
+const EMC_ActionRowDefV2 kActionRow = {
     "refresh_now",
     "Refresh now",
     "Re-sync values from runtime state",
     &g_state,
     EMC_ACTION_FORCE_REFRESH,
-    &RefreshNow };
+    &RefreshNow,
+    "Re-sync generated values from runtime state." };
 
 const emc::ModHubClientSettingRowV1 kRows[] = {
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kBoolSettingEnabled },
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, &kKeybindSetting },
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, &kIntSetting },
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, &kFloatSetting },
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION, &kActionRow }
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2, "enabled", &kBoolSettingEnabled, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, "toggle_overlay_key", &kKeybindSetting, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, "count", &kIntSetting, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, "radius", &kFloatSetting, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2, "refresh_now", &kActionRow, 0, 0 }
 };
 
 const emc::ModHubClientTableRegistrationV1 kRegistration = {
@@ -887,6 +974,16 @@ Phase 26:
 Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
 
 This harness validates color-row registration, default/override palettes, duplicate normalized preset rejection, pending-color normalization, palette expansion state, and save-time color commit resync.
+
+Phase 27:
+
+```powershell
+./scripts/phase27_hover_hint_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```
+
+Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
+
+This harness validates hover-hint V2 registration, canonical hover-hint drift handling, null/empty hover-hint behavior, and UI metadata flow for bool/keybind/select/text/action rows.
 
 Phase 13:
 

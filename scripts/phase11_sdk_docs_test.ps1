@@ -61,6 +61,11 @@ $requiredSymbols = @(
     "EMC_HUB_API_V1_MIN_SIZE",
     "EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE",
     "EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE",
+    "EMC_HUB_API_V1_BOOL_SETTING_V2_MIN_SIZE",
+    "EMC_HUB_API_V1_KEYBIND_SETTING_V2_MIN_SIZE",
+    "EMC_HUB_API_V1_SELECT_SETTING_V2_MIN_SIZE",
+    "EMC_HUB_API_V1_TEXT_SETTING_V2_MIN_SIZE",
+    "EMC_HUB_API_V1_ACTION_ROW_V2_MIN_SIZE",
     "EMC_MOD_HUB_GET_API_EXPORT_NAME",
     "EMC_MOD_HUB_GET_API_COMPAT_EXPORT_NAME",
     "EMC_MOD_HUB_GET_API_COMPAT_REMOVAL_TARGET",
@@ -82,13 +87,24 @@ $requiredSymbols = @(
     "EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT",
     "RegisterSettingsTableV1",
     "RegisterSettingsTableWithApiSizeV1",
+    "EMC_BoolSettingDefV2",
+    "EMC_KeybindSettingDefV2",
     "EMC_IntSettingDefV2",
+    "EMC_SelectSettingDefV2",
+    "EMC_TextSettingDefV2",
+    "EMC_ActionRowDefV2",
     "MOD_HUB_CLIENT_SETTING_KIND_BOOL",
+    "MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2",
     "MOD_HUB_CLIENT_SETTING_KIND_KEYBIND",
+    "MOD_HUB_CLIENT_SETTING_KIND_KEYBIND_V2",
     "MOD_HUB_CLIENT_SETTING_KIND_INT",
     "MOD_HUB_CLIENT_SETTING_KIND_INT_V2",
     "MOD_HUB_CLIENT_SETTING_KIND_FLOAT",
+    "MOD_HUB_CLIENT_SETTING_KIND_SELECT_V2",
+    "MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2",
     "MOD_HUB_CLIENT_SETTING_KIND_ACTION",
+    "MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2",
+    "hover_hint",
     "OnStartup()",
     "OnOptionsWindowInit()",
     "UseHubUi()",
@@ -117,6 +133,12 @@ Assert-Condition -Condition ($docsText.Contains('--hub-float-setting search_radi
 Assert-Condition -Condition ($docsText.Contains('-HubFloatSetting "search_radius"')) -Message "docs/mod-hub-sdk.md should document PowerShell float-setting scaffold generation."
 Assert-Condition -Condition ($docsText.Contains('--hub-action-row refresh_cache')) -Message "docs/mod-hub-sdk.md should document shell action-row scaffold generation."
 Assert-Condition -Condition ($docsText.Contains('-HubActionRow "refresh_cache"')) -Message "docs/mod-hub-sdk.md should document PowerShell action-row scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('--hub-select-setting palette')) -Message "docs/mod-hub-sdk.md should document shell select-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('-HubSelectSetting "palette"')) -Message "docs/mod-hub-sdk.md should document PowerShell select-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('--hub-text-setting title')) -Message "docs/mod-hub-sdk.md should document shell text-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('-HubTextSetting "title"')) -Message "docs/mod-hub-sdk.md should document PowerShell text-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('--hub-color-setting accent_color')) -Message "docs/mod-hub-sdk.md should document shell color-setting scaffold generation."
+Assert-Condition -Condition ($docsText.Contains('-HubColorSetting "accent_color"')) -Message "docs/mod-hub-sdk.md should document PowerShell color-setting scaffold generation."
 Assert-Condition -Condition ($docsText.Contains('--hub-settings-manifest ./hub-settings.json')) -Message "docs/mod-hub-sdk.md should document shell manifest-based scaffold generation."
 Assert-Condition -Condition ($docsText.Contains('-HubSettingsManifest .\hub-settings.json')) -Message "docs/mod-hub-sdk.md should document PowerShell manifest-based scaffold generation."
 Assert-Condition -Condition ($docsText.Contains('"bool_settings": ["show_overlay", "auto_save"]')) -Message "docs/mod-hub-sdk.md should document the manifest bool_settings format."
@@ -124,6 +146,9 @@ Assert-Condition -Condition ($docsText.Contains('"keybind_settings": ["toggle_ov
 Assert-Condition -Condition ($docsText.Contains('"int_settings": ["max_markers"]')) -Message "docs/mod-hub-sdk.md should document the manifest int_settings format."
 Assert-Condition -Condition ($docsText.Contains('"float_settings": ["search_radius"]')) -Message "docs/mod-hub-sdk.md should document the manifest float_settings format."
 Assert-Condition -Condition ($docsText.Contains('"action_rows": ["refresh_cache"]')) -Message "docs/mod-hub-sdk.md should document the manifest action_rows format."
+Assert-Condition -Condition ($docsText.Contains('"select_settings": ["palette"]')) -Message "docs/mod-hub-sdk.md should document the manifest select_settings format."
+Assert-Condition -Condition ($docsText.Contains('"text_settings": ["title"]')) -Message "docs/mod-hub-sdk.md should document the manifest text_settings format."
+Assert-Condition -Condition ($docsText.Contains('"color_settings": ["accent_color"]')) -Message "docs/mod-hub-sdk.md should document the manifest color_settings format."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase15_scaffold_single_tu_test.ps1")) -Message "docs/mod-hub-sdk.md should reference the phase15 scaffold validation harness."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase5_numeric_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase5 numeric harness command."
 Assert-Condition -Condition ($docsText.Contains("pending-text normalization semantics")) -Message "docs/mod-hub-sdk.md should describe phase5 pending-text normalization coverage."
@@ -156,6 +181,8 @@ Assert-Condition -Condition ($docsText.Contains("./scripts/phase25_select_text_t
 Assert-Condition -Condition ($docsText.Contains("bounded text rejection")) -Message "docs/mod-hub-sdk.md should describe phase25 select/text coverage."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase26_color_row_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase26 color-row harness command."
 Assert-Condition -Condition ($docsText.Contains("duplicate normalized preset rejection")) -Message "docs/mod-hub-sdk.md should describe phase26 color-row coverage."
+Assert-Condition -Condition ($docsText.Contains("./scripts/phase27_hover_hint_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase27 hover-hint harness command."
+Assert-Condition -Condition ($docsText.Contains("canonical hover-hint drift handling")) -Message "docs/mod-hub-sdk.md should describe phase27 hover-hint coverage."
 
 $requiredLogEvents = @(
     "event=hub_commit_failure",
@@ -185,6 +212,9 @@ $requiredQuickstartSymbols = @(
     "--hub-int-setting max_markers",
     "--hub-float-setting search_radius",
     "--hub-action-row refresh_cache",
+    "--hub-select-setting palette",
+    "--hub-text-setting title",
+    "--hub-color-setting accent_color",
     "--hub-settings-manifest ./hub-settings.json",
     "HubNamespaceId",
     "HubModId",
@@ -193,13 +223,35 @@ $requiredQuickstartSymbols = @(
     "HubIntSetting",
     "HubFloatSetting",
     "HubActionRow",
+    "HubSelectSetting",
+    "HubTextSetting",
+    "HubColorSetting",
     "HubSettingsManifest",
+    "select_settings",
+    "text_settings",
+    "color_settings",
     "ModHubConsumerAdapter_OnStartup()",
     "ModHubConsumerAdapter_OnOptionsWindowInit()",
     "ModHubConsumerAdapter_ShouldCreateLocalTab()",
     "MOD_HUB_CLIENT_SETTING_KIND_INT_V2",
+    "MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2",
+    "MOD_HUB_CLIENT_SETTING_KIND_KEYBIND_V2",
     "EMC_IntSettingDefV2",
+    "EMC_BoolSettingDefV2",
+    "EMC_KeybindSettingDefV2",
+    "EMC_SelectSettingDefV2",
+    "EMC_TextSettingDefV2",
+    "EMC_ActionRowDefV2",
+    "MOD_HUB_CLIENT_SETTING_KIND_SELECT_V2",
+    "MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2",
+    "MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2",
+    "hover_hint",
     "EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE",
+    "EMC_HUB_API_V1_BOOL_SETTING_V2_MIN_SIZE",
+    "EMC_HUB_API_V1_KEYBIND_SETTING_V2_MIN_SIZE",
+    "EMC_HUB_API_V1_SELECT_SETTING_V2_MIN_SIZE",
+    "EMC_HUB_API_V1_TEXT_SETTING_V2_MIN_SIZE",
+    "EMC_HUB_API_V1_ACTION_ROW_V2_MIN_SIZE",
     "no per-mod options-init RVA hook is required",
     "samples/mod_hub_consumer_single_tu.cpp",
     "./scripts/sync-mod-hub-sdk.ps1",

@@ -51,6 +51,16 @@ public static class ModHubClientPhase8TableHarness
     private const int MODE_NULL_ROW_DEF = 7;
     private const int MODE_USE_INT_V2 = 8;
     private const int MODE_USE_INT_V2_LEGACY_API = 9;
+    private const int MODE_USE_BOOL_V2 = 10;
+    private const int MODE_USE_BOOL_V2_LEGACY_API = 11;
+    private const int MODE_USE_KEYBIND_V2 = 12;
+    private const int MODE_USE_KEYBIND_V2_LEGACY_API = 13;
+    private const int MODE_USE_SELECT_V2 = 14;
+    private const int MODE_USE_SELECT_V2_LEGACY_API = 15;
+    private const int MODE_USE_TEXT_V2 = 16;
+    private const int MODE_USE_TEXT_V2_LEGACY_API = 17;
+    private const int MODE_USE_ACTION_V2 = 18;
+    private const int MODE_USE_ACTION_V2_LEGACY_API = 19;
 
     private static void Assert(bool condition, string message)
     {
@@ -99,6 +109,29 @@ public static class ModHubClientPhase8TableHarness
         Assert(getAction() == expectedAction, context + " action count mismatch");
     }
 
+    private static void AssertV2Counts(
+        ClientTableGetIntRaw getBoolV2,
+        ClientTableGetIntRaw getKeybindV2,
+        ClientTableGetIntRaw getIntV2,
+        ClientTableGetIntRaw getSelectV2,
+        ClientTableGetIntRaw getTextV2,
+        ClientTableGetIntRaw getActionV2,
+        int expectedBoolV2,
+        int expectedKeybindV2,
+        int expectedIntV2,
+        int expectedSelectV2,
+        int expectedTextV2,
+        int expectedActionV2,
+        string context)
+    {
+        Assert(getBoolV2() == expectedBoolV2, context + " bool_v2 count mismatch");
+        Assert(getKeybindV2() == expectedKeybindV2, context + " keybind_v2 count mismatch");
+        Assert(getIntV2() == expectedIntV2, context + " int_v2 count mismatch");
+        Assert(getSelectV2() == expectedSelectV2, context + " select_v2 count mismatch");
+        Assert(getTextV2() == expectedTextV2, context + " text_v2 count mismatch");
+        Assert(getActionV2() == expectedActionV2, context + " action_v2 count mismatch");
+    }
+
     public static string Run(string dllPath, string kenshiPath)
     {
         IntPtr module = IntPtr.Zero;
@@ -124,14 +157,19 @@ public static class ModHubClientPhase8TableHarness
 
             ClientTableGetIntRaw getModCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterModCalls");
             ClientTableGetIntRaw getBoolCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterBoolCalls");
+            ClientTableGetIntRaw getBoolV2Calls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterBoolV2Calls");
             ClientTableGetIntRaw getKeybindCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterKeybindCalls");
+            ClientTableGetIntRaw getKeybindV2Calls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterKeybindV2Calls");
             ClientTableGetIntRaw getIntCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterIntCalls");
             ClientTableGetIntRaw getIntV2Calls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterIntV2Calls");
             ClientTableGetIntRaw getFloatCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterFloatCalls");
             ClientTableGetIntRaw getSelectCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterSelectCalls");
+            ClientTableGetIntRaw getSelectV2Calls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterSelectV2Calls");
             ClientTableGetIntRaw getTextCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterTextCalls");
+            ClientTableGetIntRaw getTextV2Calls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterTextV2Calls");
             ClientTableGetIntRaw getColorCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterColorCalls");
             ClientTableGetIntRaw getActionCalls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterActionCalls");
+            ClientTableGetIntRaw getActionV2Calls = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetRegisterActionV2Calls");
             ClientTableGetIntRaw getOrderChecks = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetOrderChecksPassed");
             ClientTableGetIntRaw getDescriptorChecks = Bind<ClientTableGetIntRaw>(module, "EMC_ModHub_Test_DummyConsumer_GetDescriptorChecksPassed");
 
@@ -143,6 +181,8 @@ public static class ModHubClientPhase8TableHarness
             Assert(lastFailure() == EMC_OK, "table_success last_failure mismatch");
             AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
                 1, 1, 1, 1, 1, 1, 1, 1, 1, "table_success");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 0, 0, 0, 0, 0, "table_success");
             Assert(getOrderChecks() == 1, "table_success order check mismatch");
             Assert(getDescriptorChecks() == 1, "table_success descriptor check mismatch");
 
@@ -196,7 +236,8 @@ public static class ModHubClientPhase8TableHarness
             Assert(lastFailure() == EMC_OK, "table_int_v2_success last_failure mismatch");
             AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
                 1, 1, 1, 0, 1, 1, 1, 1, 1, "table_int_v2_success");
-            Assert(getIntV2Calls() == 1, "table_int_v2_success int_v2 count mismatch");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 0, 1, 0, 0, 0, "table_int_v2_success");
             Assert(getOrderChecks() == 1, "table_int_v2_success order check mismatch");
             Assert(getDescriptorChecks() == 1, "table_int_v2_success descriptor check mismatch");
 
@@ -208,8 +249,134 @@ public static class ModHubClientPhase8TableHarness
             Assert(lastFailure() == 3, "table_int_v2_legacy last_failure mismatch");
             AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
                 1, 1, 1, 0, 0, 0, 0, 0, 0, "table_int_v2_legacy");
-            Assert(getIntV2Calls() == 0, "table_int_v2_legacy int_v2 should not be called");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 0, 0, 0, 0, 0, "table_int_v2_legacy");
             Assert(getOrderChecks() == 1, "table_int_v2_legacy order check mismatch");
+
+            // Case 8: V2 bool registration uses the new API entry point.
+            reset();
+            setMode(MODE_USE_BOOL_V2);
+            Assert(onStartup() == ATTACH_SUCCESS, "table_bool_v2_success startup result mismatch");
+            Assert(useHubUi() == 1, "table_bool_v2_success use_hub_ui mismatch");
+            Assert(lastFailure() == EMC_OK, "table_bool_v2_success last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 0, 1, 1, 1, 1, 1, 1, 1, "table_bool_v2_success");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                1, 0, 0, 0, 0, 0, "table_bool_v2_success");
+            Assert(getOrderChecks() == 1, "table_bool_v2_success order check mismatch");
+            Assert(getDescriptorChecks() == 1, "table_bool_v2_success descriptor check mismatch");
+
+            // Case 9: V2 bool rows fail cleanly against a legacy host API size.
+            reset();
+            setMode(MODE_USE_BOOL_V2_LEGACY_API);
+            Assert(onStartup() == REGISTRATION_FAILED, "table_bool_v2_legacy startup result mismatch");
+            Assert(useHubUi() == 0, "table_bool_v2_legacy use_hub_ui mismatch");
+            Assert(lastFailure() == 3, "table_bool_v2_legacy last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 0, 0, 0, 0, 0, 0, 0, 0, "table_bool_v2_legacy");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 0, 0, 0, 0, 0, "table_bool_v2_legacy");
+            Assert(getOrderChecks() == 1, "table_bool_v2_legacy order check mismatch");
+
+            // Case 10: V2 keybind registration uses the new API entry point.
+            reset();
+            setMode(MODE_USE_KEYBIND_V2);
+            Assert(onStartup() == ATTACH_SUCCESS, "table_keybind_v2_success startup result mismatch");
+            Assert(useHubUi() == 1, "table_keybind_v2_success use_hub_ui mismatch");
+            Assert(lastFailure() == EMC_OK, "table_keybind_v2_success last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 0, 1, 1, 1, 1, 1, 1, "table_keybind_v2_success");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 1, 0, 0, 0, 0, "table_keybind_v2_success");
+            Assert(getOrderChecks() == 1, "table_keybind_v2_success order check mismatch");
+            Assert(getDescriptorChecks() == 1, "table_keybind_v2_success descriptor check mismatch");
+
+            // Case 11: V2 keybind rows fail cleanly against a legacy host API size.
+            reset();
+            setMode(MODE_USE_KEYBIND_V2_LEGACY_API);
+            Assert(onStartup() == REGISTRATION_FAILED, "table_keybind_v2_legacy startup result mismatch");
+            Assert(useHubUi() == 0, "table_keybind_v2_legacy use_hub_ui mismatch");
+            Assert(lastFailure() == 3, "table_keybind_v2_legacy last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 0, 0, 0, 0, 0, 0, 0, "table_keybind_v2_legacy");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 0, 0, 0, 0, 0, "table_keybind_v2_legacy");
+            Assert(getOrderChecks() == 1, "table_keybind_v2_legacy order check mismatch");
+
+            // Case 12: V2 select registration uses the new API entry point.
+            reset();
+            setMode(MODE_USE_SELECT_V2);
+            Assert(onStartup() == ATTACH_SUCCESS, "table_select_v2_success startup result mismatch");
+            Assert(useHubUi() == 1, "table_select_v2_success use_hub_ui mismatch");
+            Assert(lastFailure() == EMC_OK, "table_select_v2_success last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 1, 1, 0, 1, 1, 1, "table_select_v2_success");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 0, 0, 1, 0, 0, "table_select_v2_success");
+            Assert(getOrderChecks() == 1, "table_select_v2_success order check mismatch");
+            Assert(getDescriptorChecks() == 1, "table_select_v2_success descriptor check mismatch");
+
+            // Case 13: V2 select rows fail cleanly against a legacy host API size.
+            reset();
+            setMode(MODE_USE_SELECT_V2_LEGACY_API);
+            Assert(onStartup() == REGISTRATION_FAILED, "table_select_v2_legacy startup result mismatch");
+            Assert(useHubUi() == 0, "table_select_v2_legacy use_hub_ui mismatch");
+            Assert(lastFailure() == 3, "table_select_v2_legacy last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 1, 1, 0, 0, 0, 0, "table_select_v2_legacy");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 0, 0, 0, 0, 0, "table_select_v2_legacy");
+            Assert(getOrderChecks() == 1, "table_select_v2_legacy order check mismatch");
+
+            // Case 14: V2 text registration uses the new API entry point.
+            reset();
+            setMode(MODE_USE_TEXT_V2);
+            Assert(onStartup() == ATTACH_SUCCESS, "table_text_v2_success startup result mismatch");
+            Assert(useHubUi() == 1, "table_text_v2_success use_hub_ui mismatch");
+            Assert(lastFailure() == EMC_OK, "table_text_v2_success last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 1, 1, 1, 0, 1, 1, "table_text_v2_success");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 0, 0, 0, 1, 0, "table_text_v2_success");
+            Assert(getOrderChecks() == 1, "table_text_v2_success order check mismatch");
+            Assert(getDescriptorChecks() == 1, "table_text_v2_success descriptor check mismatch");
+
+            // Case 15: V2 text rows fail cleanly against a legacy host API size.
+            reset();
+            setMode(MODE_USE_TEXT_V2_LEGACY_API);
+            Assert(onStartup() == REGISTRATION_FAILED, "table_text_v2_legacy startup result mismatch");
+            Assert(useHubUi() == 0, "table_text_v2_legacy use_hub_ui mismatch");
+            Assert(lastFailure() == 3, "table_text_v2_legacy last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 1, 1, 1, 0, 0, 0, "table_text_v2_legacy");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 0, 0, 0, 0, 0, "table_text_v2_legacy");
+            Assert(getOrderChecks() == 1, "table_text_v2_legacy order check mismatch");
+
+            // Case 16: V2 action registration uses the new API entry point.
+            reset();
+            setMode(MODE_USE_ACTION_V2);
+            Assert(onStartup() == ATTACH_SUCCESS, "table_action_v2_success startup result mismatch");
+            Assert(useHubUi() == 1, "table_action_v2_success use_hub_ui mismatch");
+            Assert(lastFailure() == EMC_OK, "table_action_v2_success last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 1, 1, 1, 1, 1, 0, "table_action_v2_success");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 0, 0, 0, 0, 1, "table_action_v2_success");
+            Assert(getOrderChecks() == 1, "table_action_v2_success order check mismatch");
+            Assert(getDescriptorChecks() == 1, "table_action_v2_success descriptor check mismatch");
+
+            // Case 17: V2 action rows fail cleanly against a legacy host API size.
+            reset();
+            setMode(MODE_USE_ACTION_V2_LEGACY_API);
+            Assert(onStartup() == REGISTRATION_FAILED, "table_action_v2_legacy startup result mismatch");
+            Assert(useHubUi() == 0, "table_action_v2_legacy use_hub_ui mismatch");
+            Assert(lastFailure() == 3, "table_action_v2_legacy last_failure mismatch");
+            AssertCounts(getModCalls, getBoolCalls, getKeybindCalls, getIntCalls, getFloatCalls, getSelectCalls, getTextCalls, getColorCalls, getActionCalls,
+                1, 1, 1, 1, 1, 1, 1, 1, 0, "table_action_v2_legacy");
+            AssertV2Counts(getBoolV2Calls, getKeybindV2Calls, getIntV2Calls, getSelectV2Calls, getTextV2Calls, getActionV2Calls,
+                0, 0, 0, 0, 0, 0, "table_action_v2_legacy");
+            Assert(getOrderChecks() == 1, "table_action_v2_legacy order check mismatch");
 
             return "PASS";
         }

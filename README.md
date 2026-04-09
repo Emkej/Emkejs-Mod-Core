@@ -64,8 +64,8 @@ After deploy, expected files:
   - [`docs/mod-hub-sdk-quickstart.md`](docs/mod-hub-sdk-quickstart.md)
 - Optional overrides:
   - `-HubNamespaceId`, `-HubNamespaceDisplayName`, `-HubModId`, `-HubModDisplayName`
-  - `-HubBoolSetting "show_overlay","auto_save"` to generate bool-setting callback/registration skeletons
-  - `-HubSettingsManifest .\hub-settings.json` to load bool-setting names from a small JSON manifest
+  - `-HubBoolSetting`, `-HubKeybindSetting`, `-HubIntSetting`, `-HubFloatSetting`, `-HubActionRow`, `-HubSelectSetting`, `-HubTextSetting`, `-HubColorSetting` to replace the per-kind example rows with generated skeletons
+  - `-HubSettingsManifest .\hub-settings.json` to load `bool_settings`, `keybind_settings`, `int_settings`, `float_settings`, `action_rows`, `select_settings`, `text_settings`, and `color_settings` from a small JSON manifest
 - Output files:
   - `src/mod_hub_consumer_adapter.h`
   - `src/mod_hub_consumer_adapter.cpp`

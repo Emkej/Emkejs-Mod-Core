@@ -52,7 +52,10 @@ can request specific row IDs directly:
   --hub-keybind-setting toggle_overlay \
   --hub-int-setting max_markers \
   --hub-float-setting search_radius \
-  --hub-action-row refresh_cache
+  --hub-action-row refresh_cache \
+  --hub-select-setting palette \
+  --hub-text-setting title \
+  --hub-color-setting accent_color
 ```
 
 ```powershell
@@ -61,11 +64,15 @@ can request specific row IDs directly:
   -HubKeybindSetting "toggle_overlay" `
   -HubIntSetting "max_markers" `
   -HubFloatSetting "search_radius" `
-  -HubActionRow "refresh_cache"
+  -HubActionRow "refresh_cache" `
+  -HubSelectSetting "palette" `
+  -HubTextSetting "title" `
+  -HubColorSetting "accent_color"
 ```
 
 Bool-only generation still works; the new flags just let you replace the
-default keybind/int/float/action examples with named skeletons too.
+default keybind/int/float/action examples with named skeletons too, and add
+hand-editable select/text/color examples when you need richer rows.
 
 If you already know several row IDs, put them in `hub-settings.json`:
 
@@ -75,7 +82,10 @@ If you already know several row IDs, put them in `hub-settings.json`:
   "keybind_settings": ["toggle_overlay"],
   "int_settings": ["max_markers"],
   "float_settings": ["search_radius"],
-  "action_rows": ["refresh_cache"]
+  "action_rows": ["refresh_cache"],
+  "select_settings": ["palette"],
+  "text_settings": ["title"],
+  "color_settings": ["accent_color"]
 }
 ```
 
@@ -139,19 +149,25 @@ In the generated adapter, keep one static table using:
 Supported row kinds:
 
 - `MOD_HUB_CLIENT_SETTING_KIND_BOOL`
+- `MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2`
 - `MOD_HUB_CLIENT_SETTING_KIND_KEYBIND`
+- `MOD_HUB_CLIENT_SETTING_KIND_KEYBIND_V2`
 - `MOD_HUB_CLIENT_SETTING_KIND_INT`
 - `MOD_HUB_CLIENT_SETTING_KIND_INT_V2`
 - `MOD_HUB_CLIENT_SETTING_KIND_FLOAT`
 - `MOD_HUB_CLIENT_SETTING_KIND_SELECT`
+- `MOD_HUB_CLIENT_SETTING_KIND_SELECT_V2`
 - `MOD_HUB_CLIENT_SETTING_KIND_TEXT`
+- `MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2`
 - `MOD_HUB_CLIENT_SETTING_KIND_COLOR`
 - `MOD_HUB_CLIENT_SETTING_KIND_ACTION`
+- `MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2`
 
 Use your existing get/set callbacks in row definitions; the helper performs deterministic registration and commit ordering.
 Generated callback wrappers delegate to the shared consumer helper header to reduce repetitive state/update boilerplate.
-For enum-like, string, or palette-backed color settings, add `EMC_SelectSettingDefV1`, `EMC_TextSettingDefV1`, or `EMC_ColorSettingDefV1` rows by hand after scaffold; the current scaffold flags still only generate bool/keybind/int/float/action examples.
+The scaffold can now generate `EMC_SelectSettingDefV1`, `EMC_TextSettingDefV1`, and `EMC_ColorSettingDefV1` skeletons too. Treat those generated examples as starting points and replace the sample options, text-length contract, validation, presets, and preview mode with your real setting semantics after generation.
 Color rows use canonical uppercase `#RRGGBB` values, skip named-color parsing, and can choose `EMC_COLOR_PREVIEW_KIND_SWATCH` or `EMC_COLOR_PREVIEW_KIND_TEXT` per row.
+Semantic hover hints are hand-wired today: scaffold output does not emit `hover_hint` fields or V2 hover-row kinds automatically.
 
 If you need fewer integer step buttons or exact deltas, switch that row to `EMC_IntSettingDefV2` + `MOD_HUB_CLIENT_SETTING_KIND_INT_V2`.
 
@@ -173,11 +189,31 @@ const EMC_IntSettingDefV2 kCountSettingV2 = {
 };
 
 const emc::ModHubClientSettingRowV1 kRows[] = {
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2, &kCountSettingV2 }
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT_V2, "count", &kCountSettingV2, 0, 0 }
 };
 ```
 
 V2 rows require a host API size of at least `EMC_HUB_API_V1_INT_SETTING_V2_MIN_SIZE`; otherwise registration fails deterministically instead of silently downgrading to V1.
+
+If you want consumer-owned hover hints on a primary semantic control, switch eligible rows to the new V2 hover surfaces instead of changing the row footer description.
+
+Eligible V2 hover rows:
+
+- `EMC_BoolSettingDefV2` + `MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2`
+- `EMC_KeybindSettingDefV2` + `MOD_HUB_CLIENT_SETTING_KIND_KEYBIND_V2`
+- `EMC_SelectSettingDefV2` + `MOD_HUB_CLIENT_SETTING_KIND_SELECT_V2`
+- `EMC_TextSettingDefV2` + `MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2`
+- `EMC_ActionRowDefV2` + `MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2`
+
+API-size gates:
+
+- `EMC_HUB_API_V1_BOOL_SETTING_V2_MIN_SIZE`
+- `EMC_HUB_API_V1_KEYBIND_SETTING_V2_MIN_SIZE`
+- `EMC_HUB_API_V1_SELECT_SETTING_V2_MIN_SIZE`
+- `EMC_HUB_API_V1_TEXT_SETTING_V2_MIN_SIZE`
+- `EMC_HUB_API_V1_ACTION_ROW_V2_MIN_SIZE`
+
+The existing `description` field still renders below the row. `hover_hint` is optional and additive.
 
 ## 4) Wire lifecycle calls
 
