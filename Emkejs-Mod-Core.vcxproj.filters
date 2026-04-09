@@ -30,6 +30,9 @@
     <ClCompile Include="src\hub_exports.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\hub_hover_hint.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\hub_menu_bridge.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -51,6 +54,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\hub_commit.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\hub_hover_hint.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\hub_menu_bridge.h">
