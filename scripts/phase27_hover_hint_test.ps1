@@ -194,13 +194,13 @@ public static class HubPhase27HoverHintHarness
     private const int EMC_OK = 0;
     private const int EMC_ERR_INVALID_ARGUMENT = 1;
     private const uint HUB_API_V1 = 1u;
-    private const uint HUB_API_V1_SIZE = 144u;
+    private const uint HUB_API_V1_SIZE = 160u;
     private const int REGISTER_MOD_OFFSET = 8;
-    private const int REGISTER_BOOL_V2_OFFSET = 104;
-    private const int REGISTER_KEYBIND_V2_OFFSET = 112;
-    private const int REGISTER_SELECT_V2_OFFSET = 120;
-    private const int REGISTER_TEXT_V2_OFFSET = 128;
-    private const int REGISTER_ACTION_V2_OFFSET = 136;
+    private const int REGISTER_BOOL_V2_OFFSET = 112;
+    private const int REGISTER_KEYBIND_V2_OFFSET = 120;
+    private const int REGISTER_SELECT_V2_OFFSET = 128;
+    private const int REGISTER_TEXT_V2_OFFSET = 136;
+    private const int REGISTER_ACTION_V2_OFFSET = 144;
     private const uint TEXT_MAX_LENGTH = 24u;
 
     private static readonly List<Delegate> CallbackRoots = new List<Delegate>();

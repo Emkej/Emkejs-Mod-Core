@@ -171,6 +171,7 @@ Generated callback wrappers delegate to the shared consumer helper header to red
 The scaffold can now generate `EMC_SelectSettingDefV1`, `EMC_TextSettingDefV1`, and `EMC_ColorSettingDefV1` skeletons too. Treat those generated examples as starting points and replace the sample options, text-length contract, validation, presets, and preview mode with your real setting semantics after generation.
 Color rows use canonical uppercase `#RRGGBB` values, skip named-color parsing, and can choose `EMC_COLOR_PREVIEW_KIND_SWATCH` or `EMC_COLOR_PREVIEW_KIND_TEXT` per row.
 Semantic hover hints are hand-wired today: scaffold output does not emit `hover_hint` fields or V2 hover-row kinds automatically.
+Keybind rows preserve the active Ctrl/Shift/Alt state when capture commits a non-modifier key. Read and write `EMC_KeybindValueV1.modifiers` with `EMC_KEYBIND_MODIFIER_CTRL_MASK`, `EMC_KEYBIND_MODIFIER_SHIFT_MASK`, `EMC_KEYBIND_MODIFIER_ALT_MASK`, and `EMC_KEYBIND_MODIFIER_SUPPORTED_MASK`; modifier keys alone are ignored during capture, and Backspace clears the binding.
 
 If you need fewer integer step buttons or exact deltas, switch that row to `EMC_IntSettingDefV2` + `MOD_HUB_CLIENT_SETTING_KIND_INT_V2`.
 

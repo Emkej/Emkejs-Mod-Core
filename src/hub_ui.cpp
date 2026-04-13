@@ -180,6 +180,22 @@ bool KeybindEquals(EMC_KeybindValueV1 lhs, EMC_KeybindValueV1 rhs)
     return lhs.keycode == rhs.keycode && lhs.modifiers == rhs.modifiers;
 }
 
+bool IsModifierKeycode(int32_t keycode)
+{
+    switch (static_cast<OIS::KeyCode>(keycode))
+    {
+    case OIS::KC_LSHIFT:
+    case OIS::KC_RSHIFT:
+    case OIS::KC_LCONTROL:
+    case OIS::KC_RCONTROL:
+    case OIS::KC_LMENU:
+    case OIS::KC_RMENU:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool FloatBitsEqual(float lhs, float rhs)
 {
     uint32_t lhs_bits = 0;
@@ -2595,7 +2611,12 @@ EMC_Result HubUi_CancelKeybindCapture(const char* namespace_id, const char* mod_
     return EMC_OK;
 }
 
-EMC_Result HubUi_ApplyCapturedKeycode(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t keycode)
+EMC_Result HubUi_ApplyCapturedKeybind(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t keycode,
+    uint32_t modifiers)
 {
     HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
     if (row == nullptr || row->kind != HUB_UI_ROW_KIND_KEYBIND)
@@ -2621,14 +2642,24 @@ EMC_Result HubUi_ApplyCapturedKeycode(const char* namespace_id, const char* mod_
         return EMC_OK;
     }
 
+    if (IsModifierKeycode(keycode))
+    {
+        return EMC_OK;
+    }
+
     row->pending_keybind_value.keycode = keycode;
-    row->pending_keybind_value.modifiers = 0;
+    row->pending_keybind_value.modifiers = modifiers & EMC_KEYBIND_MODIFIER_SUPPORTED_MASK;
     row->capture_active = false;
     row->dirty = !KeybindEquals(row->pending_keybind_value, row->canonical_keybind_value);
     return EMC_OK;
 }
 
-EMC_Result HubUi_ApplyCapturedKeycodeToActiveRow(int32_t keycode)
+EMC_Result HubUi_ApplyCapturedKeycode(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t keycode)
+{
+    return HubUi_ApplyCapturedKeybind(namespace_id, mod_id, setting_id, keycode, 0u);
+}
+
+EMC_Result HubUi_ApplyCapturedKeybindToActiveRow(int32_t keycode, uint32_t modifiers)
 {
     for (size_t row_index = 0; row_index < g_rows_in_order.size(); ++row_index)
     {
@@ -2638,10 +2669,15 @@ EMC_Result HubUi_ApplyCapturedKeycodeToActiveRow(int32_t keycode)
             continue;
         }
 
-        return HubUi_ApplyCapturedKeycode(row->namespace_id.c_str(), row->mod_id.c_str(), row->setting_id.c_str(), keycode);
+        return HubUi_ApplyCapturedKeybind(row->namespace_id.c_str(), row->mod_id.c_str(), row->setting_id.c_str(), keycode, modifiers);
     }
 
     return EMC_ERR_NOT_FOUND;
+}
+
+EMC_Result HubUi_ApplyCapturedKeycodeToActiveRow(int32_t keycode)
+{
+    return HubUi_ApplyCapturedKeybindToActiveRow(keycode, 0u);
 }
 
 EMC_Result HubUi_ClearPendingKeybind(const char* namespace_id, const char* mod_id, const char* setting_id)

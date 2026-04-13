@@ -1773,6 +1773,16 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_ApplyCapturedKe
     return HubUi_ApplyCapturedKeycode(namespace_id, mod_id, setting_id, keycode);
 }
 
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_ApplyCapturedKeybind(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t keycode,
+    uint32_t modifiers)
+{
+    return HubUi_ApplyCapturedKeybind(namespace_id, mod_id, setting_id, keycode, modifiers);
+}
+
 extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_ClearPendingKeybind(
     const char* namespace_id,
     const char* mod_id,

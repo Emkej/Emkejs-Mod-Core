@@ -82,6 +82,10 @@ $requiredSymbols = @(
     "register_options_window_init_observer",
     "unregister_options_window_init_observer",
     "EMC_KeybindValueV1",
+    "EMC_KEYBIND_MODIFIER_CTRL_MASK",
+    "EMC_KEYBIND_MODIFIER_SHIFT_MASK",
+    "EMC_KEYBIND_MODIFIER_ALT_MASK",
+    "EMC_KEYBIND_MODIFIER_SUPPORTED_MASK",
     "EMC_KEY_UNBOUND",
     "EMC_ACTION_FORCE_REFRESH",
     "EMC_FLOAT_DISPLAY_DECIMALS_DEFAULT",
@@ -169,6 +173,7 @@ Assert-Condition -Condition ($docsText.Contains("ValidateBoolValue")) -Message "
 Assert-Condition -Condition ($docsText.Contains("ValidateValueInRange")) -Message "docs/mod-hub-sdk.md should document shared range validation."
 Assert-Condition -Condition ($docsText.Contains("GetStringFieldValue")) -Message "docs/mod-hub-sdk.md should document the shared string getter helper."
 Assert-Condition -Condition ($docsText.Contains("NormalizeTextValue")) -Message "docs/mod-hub-sdk.md should document the shared text normalization helper."
+Assert-Condition -Condition ($docsText.Contains("Keybind capture preserves the active Ctrl/Shift/Alt state")) -Message "docs/mod-hub-sdk.md should document keybind modifier capture semantics."
 Assert-Condition -Condition ($docsText.Contains("ApplyUpdateWithRollback")) -Message "docs/mod-hub-sdk.md should document the shared apply/persist/rollback helper."
 Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the select-row API size gate."
 Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the text-row API size gate."
@@ -268,6 +273,10 @@ $requiredQuickstartSymbols = @(
     "ValidateValueInRange",
     "GetStringFieldValue",
     "NormalizeTextValue",
+    "EMC_KEYBIND_MODIFIER_CTRL_MASK",
+    "EMC_KEYBIND_MODIFIER_SHIFT_MASK",
+    "EMC_KEYBIND_MODIFIER_ALT_MASK",
+    "EMC_KEYBIND_MODIFIER_SUPPORTED_MASK",
     "ApplyUpdateWithRollback",
     "MOD_HUB_CLIENT_SETTING_KIND_COLOR",
     "EMC_ColorSettingDefV1",
@@ -280,6 +289,7 @@ foreach ($symbol in $requiredQuickstartSymbols) {
 
 Assert-Condition -Condition ($quickstartDocsText.Contains("Preferred path for new consumers:")) -Message "docs/mod-hub-sdk-quickstart.md should make the preferred adapter-first path explicit."
 Assert-Condition -Condition ($quickstartDocsText.Contains("Most mods only need to replace the example row IDs")) -Message "docs/mod-hub-sdk-quickstart.md should explain the minimal customization point."
+Assert-Condition -Condition ($quickstartDocsText.Contains("Keybind rows preserve the active Ctrl/Shift/Alt state")) -Message "docs/mod-hub-sdk-quickstart.md should document keybind modifier capture semantics."
 
 $headerCode = Extract-CodeBlockBetweenMarkers `
     -Text $docsText `

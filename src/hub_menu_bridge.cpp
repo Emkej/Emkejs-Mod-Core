@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <cctype>
 #include <cstring>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -124,6 +125,7 @@ FnOpenOptionsWindow g_fnOpenOptionsWindow = 0;
 FnOptionsInit g_fnOptionsInitOrig = 0;
 FnOptionsSave g_fnOptionsSaveOrig = 0;
 void (*InputHandler_keyDownEvent_orig)(InputHandler*, OIS::KeyCode) = 0;
+void (*InputHandler_keyUpEvent_orig)(InputHandler*, OIS::KeyCode) = 0;
 ForgottenGUI* g_ptrKenshiGUI = 0;
 
 OptionsWindow* g_active_options_window = 0;
@@ -143,6 +145,12 @@ int32_t g_emc_open_mod_hub_keycode = kDefaultEmcOpenModHubKeycode;
 bool g_emc_open_mod_hub_require_ctrl = kDefaultEmcOpenModHubRequireCtrl;
 bool g_emc_open_mod_hub_require_shift = kDefaultEmcOpenModHubRequireShift;
 bool g_emc_open_mod_hub_require_alt = kDefaultEmcOpenModHubRequireAlt;
+bool g_left_control_down = false;
+bool g_right_control_down = false;
+bool g_left_shift_down = false;
+bool g_right_shift_down = false;
+bool g_left_alt_down = false;
+bool g_right_alt_down = false;
 std::string g_emc_config_path;
 EMC_ModHandle g_emc_mod_handle = 0;
 bool g_restore_search_focus_after_rebuild = false;
@@ -1429,6 +1437,50 @@ std::string FormatBoolButtonCaption(const HubUiRowView& row)
     return "On";
 }
 
+std::string FormatKeybindModifierPrefix(uint32_t modifiers)
+{
+    std::ostringstream prefix;
+    bool has_prefix = false;
+
+    if ((modifiers & EMC_KEYBIND_MODIFIER_CTRL_MASK) != 0u)
+    {
+        prefix << "Ctrl";
+        has_prefix = true;
+    }
+
+    if ((modifiers & EMC_KEYBIND_MODIFIER_SHIFT_MASK) != 0u)
+    {
+        if (has_prefix)
+        {
+            prefix << "+";
+        }
+        prefix << "Shift";
+        has_prefix = true;
+    }
+
+    if ((modifiers & EMC_KEYBIND_MODIFIER_ALT_MASK) != 0u)
+    {
+        if (has_prefix)
+        {
+            prefix << "+";
+        }
+        prefix << "Alt";
+        has_prefix = true;
+    }
+
+    const uint32_t unsupported_modifiers = modifiers & ~EMC_KEYBIND_MODIFIER_SUPPORTED_MASK;
+    if (unsupported_modifiers != 0u)
+    {
+        if (has_prefix)
+        {
+            prefix << "+";
+        }
+        prefix << "0x" << std::hex << unsupported_modifiers << std::dec;
+    }
+
+    return prefix.str();
+}
+
 std::string FormatKeybindButtonCaption(const HubUiRowView& row)
 {
     if (row.capture_active)
@@ -1522,11 +1574,12 @@ std::string FormatKeybindButtonCaption(const HubUiRowView& row)
     }
 
     std::ostringstream caption;
-    caption << key_name;
-    if (row.pending_keybind_value.modifiers != 0u)
+    const std::string modifier_prefix = FormatKeybindModifierPrefix(row.pending_keybind_value.modifiers);
+    if (!modifier_prefix.empty())
     {
-        caption << " +" << row.pending_keybind_value.modifiers;
+        caption << modifier_prefix << "+";
     }
+    caption << key_name;
     return caption.str();
 }
 
@@ -1607,17 +1660,99 @@ void ResetHubSearchSnapshot()
 
 bool IsCtrlModifierDown(const InputHandler* input_handler)
 {
-    return input_handler != 0 && input_handler->ctrl;
+    return g_left_control_down || g_right_control_down || (input_handler != 0 && input_handler->ctrl);
 }
 
 bool IsShiftModifierDown(const InputHandler* input_handler)
 {
-    return input_handler != 0 && input_handler->shift;
+    return g_left_shift_down || g_right_shift_down || (input_handler != 0 && input_handler->shift);
 }
 
 bool IsAltModifierDown(const InputHandler* input_handler)
 {
-    return input_handler != 0 && input_handler->alt;
+    return g_left_alt_down || g_right_alt_down || (input_handler != 0 && input_handler->alt);
+}
+
+uint32_t ResolveKeybindCaptureModifiers(const InputHandler* input_handler)
+{
+    uint32_t modifiers = 0u;
+    if (IsCtrlModifierDown(input_handler))
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_CTRL_MASK;
+    }
+    if (IsShiftModifierDown(input_handler))
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_SHIFT_MASK;
+    }
+    if (IsAltModifierDown(input_handler))
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_ALT_MASK;
+    }
+    return modifiers;
+}
+
+void ResetTrackedModifierKeys()
+{
+    g_left_control_down = false;
+    g_right_control_down = false;
+    g_left_shift_down = false;
+    g_right_shift_down = false;
+    g_left_alt_down = false;
+    g_right_alt_down = false;
+}
+
+void TrackModifierKeyDown(OIS::KeyCode key_code)
+{
+    switch (key_code)
+    {
+    case OIS::KC_LCONTROL:
+        g_left_control_down = true;
+        break;
+    case OIS::KC_RCONTROL:
+        g_right_control_down = true;
+        break;
+    case OIS::KC_LSHIFT:
+        g_left_shift_down = true;
+        break;
+    case OIS::KC_RSHIFT:
+        g_right_shift_down = true;
+        break;
+    case OIS::KC_LMENU:
+        g_left_alt_down = true;
+        break;
+    case OIS::KC_RMENU:
+        g_right_alt_down = true;
+        break;
+    default:
+        break;
+    }
+}
+
+void TrackModifierKeyUp(OIS::KeyCode key_code)
+{
+    switch (key_code)
+    {
+    case OIS::KC_LCONTROL:
+        g_left_control_down = false;
+        break;
+    case OIS::KC_RCONTROL:
+        g_right_control_down = false;
+        break;
+    case OIS::KC_LSHIFT:
+        g_left_shift_down = false;
+        break;
+    case OIS::KC_RSHIFT:
+        g_right_shift_down = false;
+        break;
+    case OIS::KC_LMENU:
+        g_left_alt_down = false;
+        break;
+    case OIS::KC_RMENU:
+        g_right_alt_down = false;
+        break;
+    default:
+        break;
+    }
 }
 
 bool AreOpenModHubShortcutModifiersSatisfied(const InputHandler* input_handler)
@@ -4501,6 +4636,7 @@ void RebuildHubPanelWidgets()
 void ClearActiveUiState()
 {
     DestroyDynamicWidgets();
+    ResetTrackedModifierKeys();
     ResetPendingHubSearchShortcut();
     ResetHubSearchSnapshot();
     g_selected_namespace_id.clear();
@@ -4774,11 +4910,14 @@ void OptionsWindowSaveHook(OptionsWindow* self)
 
 void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code)
 {
+    TrackModifierKeyDown(key_code);
+
     if (g_hub_enabled && HubUi_IsOptionsWindowOpen())
     {
         if (HubUi_IsAnyKeybindCaptureActive())
         {
-            if (HubUi_ApplyCapturedKeycodeToActiveRow(static_cast<int32_t>(key_code)) == EMC_OK)
+            const uint32_t capture_modifiers = ResolveKeybindCaptureModifiers(thisptr);
+            if (HubUi_ApplyCapturedKeybindToActiveRow(static_cast<int32_t>(key_code), capture_modifiers) == EMC_OK)
             {
                 RebuildHubPanelWidgets();
                 return;
@@ -4808,6 +4947,16 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
     if (InputHandler_keyDownEvent_orig != 0)
     {
         InputHandler_keyDownEvent_orig(thisptr, key_code);
+    }
+}
+
+void InputHandler_keyUpEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code)
+{
+    TrackModifierKeyUp(key_code);
+
+    if (InputHandler_keyUpEvent_orig != 0)
+    {
+        InputHandler_keyUpEvent_orig(thisptr, key_code);
     }
 }
 
@@ -4867,6 +5016,15 @@ bool HubMenuBridge_InstallHooks(unsigned int platform, const std::string& versio
             &InputHandler_keyDownEvent_orig))
     {
         ErrorLog("Emkejs-Mod-Core: Could not hook InputHandler::keyDownEvent");
+        return false;
+    }
+
+    if (KenshiLib::SUCCESS != KenshiLib::AddHook(
+            KenshiLib::GetRealAddress(&InputHandler::keyUpEvent),
+            InputHandler_keyUpEvent_hook,
+            &InputHandler_keyUpEvent_orig))
+    {
+        ErrorLog("Emkejs-Mod-Core: Could not hook InputHandler::keyUpEvent");
         return false;
     }
 

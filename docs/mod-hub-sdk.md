@@ -81,6 +81,13 @@ Public value/row constants:
 Core value type:
 
 - `EMC_KeybindValueV1 { int32_t keycode; uint32_t modifiers; }`
+  - `modifiers` is a bitmask made from:
+    - `EMC_KEYBIND_MODIFIER_CTRL_MASK`
+    - `EMC_KEYBIND_MODIFIER_SHIFT_MASK`
+    - `EMC_KEYBIND_MODIFIER_ALT_MASK`
+    - `EMC_KEYBIND_MODIFIER_SUPPORTED_MASK`
+  - Keybind capture preserves the active Ctrl/Shift/Alt state when you press a non-modifier key.
+  - Modifier keys alone are ignored during capture, and Backspace clears the binding to `EMC_KEY_UNBOUND`.
 
 ## Registration Model (Phase 8 SSOT)
 
