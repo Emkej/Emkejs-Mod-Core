@@ -293,6 +293,24 @@ int32_t NormalizeEmcOpenModHubKeycode(int32_t keycode)
     return kDefaultEmcOpenModHubKeycode;
 }
 
+uint32_t GetEmcOpenModHubShortcutModifiers()
+{
+    uint32_t modifiers = 0u;
+    if (g_emc_open_mod_hub_require_ctrl)
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_CTRL_MASK;
+    }
+    if (g_emc_open_mod_hub_require_shift)
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_SHIFT_MASK;
+    }
+    if (g_emc_open_mod_hub_require_alt)
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_ALT_MASK;
+    }
+    return modifiers;
+}
+
 std::string ResolveEmcConfigPath()
 {
     HMODULE module = 0;
@@ -622,15 +640,16 @@ EMC_Result __cdecl GetEmcOpenModHubKeybind(void*, EMC_KeybindValueV1* out_value)
 
     EnsureEmcConfigLoaded();
     out_value->keycode = g_emc_open_mod_hub_keycode;
-    out_value->modifiers = 0u;
+    out_value->modifiers = GetEmcOpenModHubShortcutModifiers();
     return EMC_OK;
 }
 
 EMC_Result __cdecl SetEmcOpenModHubKeybind(void*, EMC_KeybindValueV1 value, char* err_buf, uint32_t err_buf_size)
 {
-    if (value.modifiers != 0u)
+    const uint32_t unsupported_modifiers = value.modifiers & ~EMC_KEYBIND_MODIFIER_SUPPORTED_MASK;
+    if (unsupported_modifiers != 0u)
     {
-        CopyHubErrorMessage(err_buf, err_buf_size, "use_modifier_toggles");
+        CopyHubErrorMessage(err_buf, err_buf_size, "invalid_modifiers");
         return EMC_ERR_INVALID_ARGUMENT;
     }
 
@@ -642,12 +661,21 @@ EMC_Result __cdecl SetEmcOpenModHubKeybind(void*, EMC_KeybindValueV1 value, char
 
     EnsureEmcConfigLoaded();
     const int32_t previous_value = g_emc_open_mod_hub_keycode;
+    const bool previous_require_ctrl = g_emc_open_mod_hub_require_ctrl;
+    const bool previous_require_shift = g_emc_open_mod_hub_require_shift;
+    const bool previous_require_alt = g_emc_open_mod_hub_require_alt;
     g_emc_open_mod_hub_keycode = value.keycode;
+    g_emc_open_mod_hub_require_ctrl = (value.modifiers & EMC_KEYBIND_MODIFIER_CTRL_MASK) != 0u;
+    g_emc_open_mod_hub_require_shift = (value.modifiers & EMC_KEYBIND_MODIFIER_SHIFT_MASK) != 0u;
+    g_emc_open_mod_hub_require_alt = (value.modifiers & EMC_KEYBIND_MODIFIER_ALT_MASK) != 0u;
 
     const char* save_error = "";
     if (!SaveEmcConfig(&save_error))
     {
         g_emc_open_mod_hub_keycode = previous_value;
+        g_emc_open_mod_hub_require_ctrl = previous_require_ctrl;
+        g_emc_open_mod_hub_require_shift = previous_require_shift;
+        g_emc_open_mod_hub_require_alt = previous_require_alt;
         CopyHubErrorMessage(err_buf, err_buf_size, save_error);
         return EMC_ERR_CALLBACK_FAILED;
     }
@@ -812,34 +840,10 @@ void EnsureEmcSettingsRegistered()
     const EMC_KeybindSettingDefV1 open_mod_hub_key_setting = {
         kEmcOpenModHubKeySettingId,
         "Open Mod Hub key",
-        "Primary key used to open Mod Hub from gameplay or switch to the Mod Hub tab when Options is already open. Use the modifier toggles below for combos.",
+        "Primary key used to open Mod Hub from gameplay or switch to the Mod Hub tab when Options is already open. Capture can include Ctrl, Shift, or Alt.",
         0,
         &GetEmcOpenModHubKeybind,
         &SetEmcOpenModHubKeybind
-    };
-    const EMC_BoolSettingDefV1 open_mod_hub_require_ctrl_setting = {
-        kEmcOpenModHubRequireCtrlSettingId,
-        "Require Ctrl for open shortcut",
-        "Require Ctrl to be held with the Open Mod Hub key.",
-        0,
-        &GetEmcOpenModHubRequireCtrl,
-        &SetEmcOpenModHubRequireCtrl
-    };
-    const EMC_BoolSettingDefV1 open_mod_hub_require_shift_setting = {
-        kEmcOpenModHubRequireShiftSettingId,
-        "Require Shift for open shortcut",
-        "Require Shift to be held with the Open Mod Hub key.",
-        0,
-        &GetEmcOpenModHubRequireShift,
-        &SetEmcOpenModHubRequireShift
-    };
-    const EMC_BoolSettingDefV1 open_mod_hub_require_alt_setting = {
-        kEmcOpenModHubRequireAltSettingId,
-        "Require Alt for open shortcut",
-        "Require Alt to be held with the Open Mod Hub key.",
-        0,
-        &GetEmcOpenModHubRequireAlt,
-        &SetEmcOpenModHubRequireAlt
     };
 
     const EMC_Result register_setting_result = HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &persist_search_setting);
@@ -874,36 +878,6 @@ void EnsureEmcSettingsRegistered()
     {
         std::ostringstream line;
         line << "Emkejs-Mod-Core: failed to register internal open shortcut key setting result=" << register_open_key_result;
-        ErrorLog(line.str().c_str());
-        return;
-    }
-
-    const EMC_Result register_open_ctrl_result =
-        HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &open_mod_hub_require_ctrl_setting);
-    if (register_open_ctrl_result != EMC_OK)
-    {
-        std::ostringstream line;
-        line << "Emkejs-Mod-Core: failed to register internal open shortcut Ctrl setting result=" << register_open_ctrl_result;
-        ErrorLog(line.str().c_str());
-        return;
-    }
-
-    const EMC_Result register_open_shift_result =
-        HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &open_mod_hub_require_shift_setting);
-    if (register_open_shift_result != EMC_OK)
-    {
-        std::ostringstream line;
-        line << "Emkejs-Mod-Core: failed to register internal open shortcut Shift setting result=" << register_open_shift_result;
-        ErrorLog(line.str().c_str());
-        return;
-    }
-
-    const EMC_Result register_open_alt_result =
-        HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &open_mod_hub_require_alt_setting);
-    if (register_open_alt_result != EMC_OK)
-    {
-        std::ostringstream line;
-        line << "Emkejs-Mod-Core: failed to register internal open shortcut Alt setting result=" << register_open_alt_result;
         ErrorLog(line.str().c_str());
         return;
     }
