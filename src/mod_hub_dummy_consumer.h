@@ -27,6 +27,7 @@ int32_t ModHubDummyConsumer_GetRegisterColorCalls();
 int32_t ModHubDummyConsumer_GetRegisterSectionCalls();
 int32_t ModHubDummyConsumer_GetRegisterActionCalls();
 int32_t ModHubDummyConsumer_GetRegisterActionV2Calls();
+int32_t ModHubDummyConsumer_GetRegisterBoolConditionRuleCalls();
 int32_t ModHubDummyConsumer_GetOrderChecksPassed();
 int32_t ModHubDummyConsumer_GetDescriptorChecksPassed();
 

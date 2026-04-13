@@ -410,6 +410,82 @@ Migration note:
 - Existing V1 rows remain valid.
 - Current scaffold output remains V1-compatible; hand-wire these V2 rows when you want semantic hover hints.
 
+## Conditional Bool Rules (Phase 28)
+
+New surfaces:
+
+- `EMC_BoolConditionEffectV1`
+- `EMC_BoolConditionRuleDefV1`
+- `EMC_HubApiV1::register_bool_condition_rule`
+- `EMC_HUB_API_V1_BOOL_CONDITION_RULE_MIN_SIZE`
+- `emc::RegisterBoolConditionRuleV1`
+- `emc::RegisterBoolConditionRuleWithApiSizeV1`
+
+Behavior:
+
+1. Register the controller bool row and the target row before you register the condition rule.
+2. `controller_setting_id` must refer to a bool setting in the same mod.
+3. `target_setting_id` must differ from the controller and may have only one canonical rule.
+4. `EMC_BOOL_CONDITION_EFFECT_HIDE` removes the target row from the live row list while the condition matches.
+5. `EMC_BOOL_CONDITION_EFFECT_DISABLE` keeps the target row visible but disables its controls while the condition matches.
+6. Evaluation uses the controller row's pending bool value while the options window is open, so hide/disable behavior updates immediately when the user toggles the controller.
+
+Fallback behavior:
+
+- `register_bool_condition_rule` requires `EMC_HUB_API_V1_BOOL_CONDITION_RULE_MIN_SIZE`.
+- `emc::RegisterBoolConditionRuleV1` returns `EMC_ERR_API_SIZE_MISMATCH` on older hosts; the helper does not silently ignore the rule.
+
+Minimal example:
+
+```cpp
+const EMC_BoolSettingDefV1 kEnabledSetting = {
+    "enabled",
+    "Enabled",
+    "Master toggle",
+    &g_state,
+    &GetEnabled,
+    &SetEnabled
+};
+
+const EMC_BoolSettingDefV1 kAdvancedSetting = {
+    "advanced_overlay",
+    "Advanced overlay",
+    "Enable the advanced overlay layer",
+    &g_state,
+    &GetAdvancedOverlay,
+    &SetAdvancedOverlay
+};
+
+const EMC_BoolConditionRuleDefV1 kAdvancedOverlayRule = {
+    "advanced_overlay",
+    "enabled",
+    EMC_BOOL_CONDITION_EFFECT_DISABLE,
+    0
+};
+
+const emc::ModHubClientSettingRowV1 kRows[] = {
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, "enabled", &kEnabledSetting, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, "advanced_overlay", &kAdvancedSetting, 0, 0 }
+};
+
+EMC_Result RegisterConditionalRows(const EMC_HubApiV1* api, EMC_ModHandle mod)
+{
+    EMC_Result result = api->register_bool_setting(mod, &kEnabledSetting);
+    if (result != EMC_OK)
+    {
+        return result;
+    }
+
+    result = api->register_bool_setting(mod, &kAdvancedSetting);
+    if (result != EMC_OK)
+    {
+        return result;
+    }
+
+    return emc::RegisterBoolConditionRuleV1(api, mod, &kAdvancedOverlayRule);
+}
+```
+
 ## Runtime Log Semantics (Hub Events)
 
 Consumers should expect these event formats in RE_Kenshi logs when the corresponding code path is active. The alias deprecation event is debug-only and appears only when debug logging is enabled:
@@ -514,10 +590,12 @@ For larger lists, use a small manifest instead of repeating flags:
 
 This replaces the per-kind example rows you requested with generated state
 fields, callbacks, setting definitions, and row entries. Generated setters now
-use `ValidateBoolValue`, `ValidateValueInRange`, and
-`ApplyUpdateWithRollback(...)` from `emc/mod_hub_consumer_helpers.h`, while a
-local `PersistExampleModState(...)` stub keeps the persistence boundary visible
-and consumer-owned.
+use `ValidateBoolValue`, `ValidateValueInRange`, `GetStringFieldValue`,
+`NormalizeTextValue`, and `ApplyUpdateWithRollback(...)` from
+`emc/mod_hub_consumer_helpers.h`, while a local `PersistExampleModState(...)`
+stub keeps the persistence boundary visible and consumer-owned. String-backed
+text rows can use the shared string helpers directly instead of hand-rolling
+trim, length, and copy logic.
 
 Migration note:
 
@@ -601,6 +679,8 @@ Source snippet:
 #include "mod_hub_consumer_adapter.h"
 #include "emc/mod_hub_consumer_helpers.h"
 
+#include <string>
+
 namespace
 {
 struct ExampleModState
@@ -609,13 +689,15 @@ struct ExampleModState
     EMC_KeybindValueV1 hotkey;
     int32_t count;
     float radius;
+    std::string title;
 };
 
 ExampleModState g_state = {
     1,
     { 42, 0u },
     10,
-    2.5f};
+    2.5f,
+    "Example title"};
 emc::ModHubClient g_client;
 bool g_client_configured = false;
 
@@ -747,6 +829,34 @@ EMC_Result __cdecl SetRadius(void* user_data, float value, char* err_buf, uint32
         });
 }
 
+EMC_Result __cdecl GetTitle(void* user_data, char* out_value, uint32_t out_value_size)
+{
+    return emc::consumer::GetStringFieldValue(user_data, out_value, out_value_size, &ExampleModState::title);
+}
+
+EMC_Result __cdecl SetTitle(void* user_data, const char* value, char* err_buf, uint32_t err_buf_size)
+{
+    std::string normalized_value;
+    const EMC_Result textValidation = emc::consumer::NormalizeTextValue(
+        value,
+        32u,
+        normalized_value,
+        err_buf,
+        err_buf_size);
+    if (textValidation != EMC_OK)
+    {
+        return textValidation;
+    }
+
+    return ApplyExampleModStateUpdate(
+        user_data,
+        err_buf,
+        err_buf_size,
+        [&normalized_value](ExampleModState& updated) {
+            updated.title = normalized_value;
+        });
+}
+
 EMC_Result __cdecl RefreshNow(void* user_data, char* err_buf, uint32_t err_buf_size)
 {
     return emc::consumer::ActionNoopSuccess(user_data, err_buf, err_buf_size);
@@ -799,6 +909,15 @@ const EMC_FloatSettingDefV1 kFloatSetting = {
     &GetRadius,
     &SetRadius };
 
+const EMC_TextSettingDefV1 kTextSetting = {
+    "title",
+    "Title",
+    "Example text setting",
+    &g_state,
+    32u,
+    &GetTitle,
+    &SetTitle };
+
 const EMC_ActionRowDefV2 kActionRow = {
     "refresh_now",
     "Refresh now",
@@ -813,6 +932,7 @@ const emc::ModHubClientSettingRowV1 kRows[] = {
     { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, "toggle_overlay_key", &kKeybindSetting, 0, 0 },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, "count", &kIntSetting, 0, 0 },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, "radius", &kFloatSetting, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_TEXT_V2, "title", &kTextSetting, 0, 0 },
     { emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2, "refresh_now", &kActionRow, 0, 0 }
 };
 
@@ -984,6 +1104,16 @@ Phase 27:
 Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
 
 This harness validates hover-hint V2 registration, canonical hover-hint drift handling, null/empty hover-hint behavior, and UI metadata flow for bool/keybind/select/text/action rows.
+
+Phase 28:
+
+```powershell
+./scripts/phase28_bool_condition_rule_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]
+```
+
+Requires a Debug DLL built with `EMC_ENABLE_TEST_EXPORTS`.
+
+This harness validates bool-condition-rule registration, pending-bool-driven hide/disable behavior, and deterministic `EMC_ERR_API_SIZE_MISMATCH` fallback for older client API sizes.
 
 Phase 13:
 

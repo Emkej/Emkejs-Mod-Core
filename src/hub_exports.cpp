@@ -588,6 +588,17 @@ EMC_Result __cdecl RegisterActionRowV2Entry(EMC_ModHandle mod, const EMC_ActionR
     return HubRegistry_RegisterActionRowV2(mod, def);
 }
 
+EMC_Result __cdecl RegisterBoolConditionRuleEntry(EMC_ModHandle mod, const EMC_BoolConditionRuleDefV1* def)
+{
+    EMC_Result gate_result = RejectWhenRegistryAttachDisabled("register_bool_condition_rule");
+    if (gate_result != EMC_OK)
+    {
+        return gate_result;
+    }
+
+    return HubRegistry_RegisterBoolConditionRule(mod, def);
+}
+
 const EMC_HubApiV1 kHubApiV1 = {
     EMC_HUB_API_VERSION_1,
     (uint32_t)sizeof(EMC_HubApiV1),
@@ -608,7 +619,8 @@ const EMC_HubApiV1 kHubApiV1 = {
     &RegisterKeybindSettingV2Entry,
     &RegisterSelectSettingV2Entry,
     &RegisterTextSettingV2Entry,
-    &RegisterActionRowV2Entry};
+    &RegisterActionRowV2Entry,
+    &RegisterBoolConditionRuleEntry};
 
 #if defined(EMC_ENABLE_TEST_EXPORTS)
 const int32_t kModHubClientTestGetApiModeSuccess = 0;
@@ -1226,6 +1238,9 @@ const EMC_HubApiV1* GetModHubClientTableTestApi()
         0,
         0,
         0,
+        0,
+        0,
+        0,
         0};
     return &kTableApi;
 }
@@ -1614,6 +1629,16 @@ extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetHoverHint(
 
     CopyStringToBuffer(row_view.hover_hint, out_text, out_text_size);
     return EMC_OK;
+}
+
+extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetBoolConditionState(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t* out_visible,
+    int32_t* out_enabled)
+{
+    return HubUi_GetBoolConditionState(namespace_id, mod_id, setting_id, out_visible, out_enabled);
 }
 
 extern "C" EMC_MOD_HUB_API EMC_Result __cdecl EMC_ModHub_Test_UI_GetDescription(
@@ -2046,6 +2071,11 @@ extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegi
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterBoolV2Calls()
 {
     return ModHubDummyConsumer_GetRegisterBoolV2Calls();
+}
+
+extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterBoolConditionRuleCalls()
+{
+    return ModHubDummyConsumer_GetRegisterBoolConditionRuleCalls();
 }
 
 extern "C" EMC_MOD_HUB_API int32_t __cdecl EMC_ModHub_Test_DummyConsumer_GetRegisterKeybindCalls()

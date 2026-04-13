@@ -167,6 +167,8 @@ Assert-Condition -Condition ($docsText.Contains("./scripts/sync-mod-hub-sdk.sh")
 Assert-Condition -Condition ($docsText.Contains("does not edit changelog")) -Message "docs/mod-hub-sdk.md should clarify changelog edits are manual for sync."
 Assert-Condition -Condition ($docsText.Contains("ValidateBoolValue")) -Message "docs/mod-hub-sdk.md should document shared bool validation."
 Assert-Condition -Condition ($docsText.Contains("ValidateValueInRange")) -Message "docs/mod-hub-sdk.md should document shared range validation."
+Assert-Condition -Condition ($docsText.Contains("GetStringFieldValue")) -Message "docs/mod-hub-sdk.md should document the shared string getter helper."
+Assert-Condition -Condition ($docsText.Contains("NormalizeTextValue")) -Message "docs/mod-hub-sdk.md should document the shared text normalization helper."
 Assert-Condition -Condition ($docsText.Contains("ApplyUpdateWithRollback")) -Message "docs/mod-hub-sdk.md should document the shared apply/persist/rollback helper."
 Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_SELECT_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the select-row API size gate."
 Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_TEXT_SETTING_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the text-row API size gate."
@@ -183,6 +185,11 @@ Assert-Condition -Condition ($docsText.Contains("./scripts/phase26_color_row_tes
 Assert-Condition -Condition ($docsText.Contains("duplicate normalized preset rejection")) -Message "docs/mod-hub-sdk.md should describe phase26 color-row coverage."
 Assert-Condition -Condition ($docsText.Contains("./scripts/phase27_hover_hint_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase27 hover-hint harness command."
 Assert-Condition -Condition ($docsText.Contains("canonical hover-hint drift handling")) -Message "docs/mod-hub-sdk.md should describe phase27 hover-hint coverage."
+Assert-Condition -Condition ($docsText.Contains("EMC_BoolConditionRuleDefV1")) -Message "docs/mod-hub-sdk.md should document the bool-condition rule definition."
+Assert-Condition -Condition ($docsText.Contains("EMC_HUB_API_V1_BOOL_CONDITION_RULE_MIN_SIZE")) -Message "docs/mod-hub-sdk.md should document the bool-condition-rule API size gate."
+Assert-Condition -Condition ($docsText.Contains("RegisterBoolConditionRuleV1")) -Message "docs/mod-hub-sdk.md should document the shared bool-condition-rule helper."
+Assert-Condition -Condition ($docsText.Contains("./scripts/phase28_bool_condition_rule_test.ps1 -DllPath <path-to-Emkejs-Mod-Core.dll> [-KenshiPath <path-to-Kenshi>]")) -Message "docs/mod-hub-sdk.md should reference the phase28 bool-condition-rule harness command."
+Assert-Condition -Condition ($docsText.Contains("pending-bool-driven hide/disable behavior")) -Message "docs/mod-hub-sdk.md should describe phase28 bool-condition-rule coverage."
 
 $requiredLogEvents = @(
     "event=hub_commit_failure",
@@ -259,6 +266,8 @@ $requiredQuickstartSymbols = @(
     "pull + validate only",
     "ValidateBoolValue",
     "ValidateValueInRange",
+    "GetStringFieldValue",
+    "NormalizeTextValue",
     "ApplyUpdateWithRollback",
     "MOD_HUB_CLIENT_SETTING_KIND_COLOR",
     "EMC_ColorSettingDefV1",
@@ -293,6 +302,8 @@ Assert-Condition -Condition ($headerCode.Contains("older hub builds that do not 
 Assert-Condition -Condition ($sourceCode.Contains("return !ModHubConsumerAdapter_UseHubUi();")) -Message "Phase11 sample should derive local-tab suppression from UseHubUi."
 Assert-Condition -Condition ($sourceCode.Contains('#include "emc/mod_hub_consumer_helpers.h"')) -Message "Phase11 sample should include the shared consumer helper header."
 Assert-Condition -Condition ($sourceCode.Contains("PersistExampleModState")) -Message "Phase11 sample should expose the local persistence seam helper."
+Assert-Condition -Condition ($sourceCode.Contains("GetStringFieldValue")) -Message "Phase11 sample should show the shared string getter helper."
+Assert-Condition -Condition ($sourceCode.Contains("NormalizeTextValue")) -Message "Phase11 sample should show the shared text normalization helper."
 Assert-Condition -Condition ($sourceCode.Contains("ApplyUpdateWithRollback")) -Message "Phase11 sample should delegate rollback through the shared helper."
 
 if (-not $TempRoot) {

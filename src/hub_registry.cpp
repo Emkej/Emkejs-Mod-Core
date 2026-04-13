@@ -46,6 +46,14 @@ struct ColorPresetEntry
     std::string label;
 };
 
+struct BoolConditionRuleEntry
+{
+    std::string target_setting_id;
+    std::string controller_setting_id;
+    uint32_t effect;
+    int32_t expected_bool_value;
+};
+
 struct SettingEntry
 {
     SettingKind kind;
@@ -106,6 +114,7 @@ struct ModEntry
 
     std::vector<SettingEntry*> settings_in_order;
     std::map<std::string, SettingEntry*> settings_by_id;
+    std::map<std::string, BoolConditionRuleEntry> bool_condition_rules_by_target;
 };
 
 struct NamespaceEntry
@@ -310,6 +319,40 @@ ModEntry* FindModByHandle(EMC_ModHandle handle)
 bool ValidateCommonSettingStrings(const char* setting_id, const char* label, const char* description)
 {
     return IsValidId(setting_id) && label != nullptr && description != nullptr;
+}
+
+bool ValidateBoolConditionRuleStrings(const EMC_BoolConditionRuleDefV1* def)
+{
+    if (def == nullptr)
+    {
+        return false;
+    }
+
+    if (!IsValidId(def->target_setting_id) || !IsValidId(def->controller_setting_id))
+    {
+        return false;
+    }
+
+    if (std::strcmp(def->target_setting_id, def->controller_setting_id) == 0)
+    {
+        return false;
+    }
+
+    return def->effect == EMC_BOOL_CONDITION_EFFECT_HIDE
+        || def->effect == EMC_BOOL_CONDITION_EFFECT_DISABLE;
+}
+
+bool BoolConditionRuleEquals(const BoolConditionRuleEntry& existing, const EMC_BoolConditionRuleDefV1* def)
+{
+    if (def == nullptr)
+    {
+        return false;
+    }
+
+    return existing.target_setting_id == def->target_setting_id
+        && existing.controller_setting_id == def->controller_setting_id
+        && existing.effect == def->effect
+        && existing.expected_bool_value == def->expected_bool_value;
 }
 
 void LogSettingWarning(
@@ -1547,6 +1590,95 @@ EMC_Result __cdecl HubRegistry_RegisterSettingSection(EMC_ModHandle mod, const E
     setting->section_id = def->section_id;
     setting->section_display_name = def->section_display_name;
     return EMC_OK;
+}
+
+EMC_Result __cdecl HubRegistry_RegisterBoolConditionRule(EMC_ModHandle mod, const EMC_BoolConditionRuleDefV1* def)
+{
+    ModEntry* mod_entry = nullptr;
+    EMC_Result validation_result = ValidateSettingRegistrationCall(mod, def, "register_bool_condition_rule", &mod_entry);
+    if (validation_result != EMC_OK)
+    {
+        return validation_result;
+    }
+
+    if (!ValidateBoolConditionRuleStrings(def) || def->expected_bool_value < 0 || def->expected_bool_value > 1)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::map<std::string, SettingEntry*>::const_iterator target_it = mod_entry->settings_by_id.find(def->target_setting_id);
+    if (target_it == mod_entry->settings_by_id.end())
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    std::map<std::string, SettingEntry*>::const_iterator controller_it = mod_entry->settings_by_id.find(def->controller_setting_id);
+    if (controller_it == mod_entry->settings_by_id.end())
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    if (controller_it->second->kind != SETTING_KIND_BOOL)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    std::map<std::string, BoolConditionRuleEntry>::iterator existing_rule_it =
+        mod_entry->bool_condition_rules_by_target.find(def->target_setting_id);
+    if (existing_rule_it != mod_entry->bool_condition_rules_by_target.end())
+    {
+        if (!BoolConditionRuleEquals(existing_rule_it->second, def))
+        {
+            LogSettingRegistrationConflict(
+                mod_entry->namespace_id.c_str(),
+                mod_entry->mod_id.c_str(),
+                def->target_setting_id,
+                EMC_ERR_CONFLICT,
+                "bool_condition_rule_drift_ignored_using_canonical");
+            return EMC_ERR_CONFLICT;
+        }
+
+        return EMC_OK;
+    }
+
+    BoolConditionRuleEntry rule;
+    rule.target_setting_id = def->target_setting_id;
+    rule.controller_setting_id = def->controller_setting_id;
+    rule.effect = def->effect;
+    rule.expected_bool_value = def->expected_bool_value;
+    mod_entry->bool_condition_rules_by_target[rule.target_setting_id] = rule;
+    return EMC_OK;
+}
+
+bool HubRegistry_GetBoolConditionRuleView(
+    EMC_ModHandle mod,
+    const char* target_setting_id,
+    HubRegistryBoolConditionRuleView* out_view)
+{
+    if (out_view == nullptr || mod == nullptr || !IsValidId(target_setting_id))
+    {
+        return false;
+    }
+
+    ModEntry* mod_entry = FindModByHandle(mod);
+    if (mod_entry == nullptr)
+    {
+        return false;
+    }
+
+    std::map<std::string, BoolConditionRuleEntry>::const_iterator it =
+        mod_entry->bool_condition_rules_by_target.find(target_setting_id);
+    if (it == mod_entry->bool_condition_rules_by_target.end())
+    {
+        return false;
+    }
+
+    const BoolConditionRuleEntry& rule = it->second;
+    out_view->target_setting_id = rule.target_setting_id.c_str();
+    out_view->controller_setting_id = rule.controller_setting_id.c_str();
+    out_view->effect = rule.effect;
+    out_view->expected_bool_value = rule.expected_bool_value;
+    return true;
 }
 
 EMC_Result __cdecl HubRegistry_RegisterActionRow(EMC_ModHandle mod, const EMC_ActionRowDefV1* def)

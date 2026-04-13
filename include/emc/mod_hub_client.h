@@ -61,6 +61,17 @@ EMC_Result RegisterSettingsTableWithApiSizeV1(
     uint32_t api_size,
     const ModHubClientTableRegistrationV1* table_registration);
 
+EMC_Result RegisterBoolConditionRuleV1(
+    const EMC_HubApiV1* api,
+    EMC_ModHandle mod,
+    const EMC_BoolConditionRuleDefV1* def);
+
+EMC_Result RegisterBoolConditionRuleWithApiSizeV1(
+    const EMC_HubApiV1* api,
+    uint32_t api_size,
+    EMC_ModHandle mod,
+    const EMC_BoolConditionRuleDefV1* def);
+
 class ModHubClient
 {
 public:

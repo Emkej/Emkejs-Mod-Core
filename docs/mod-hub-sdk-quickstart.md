@@ -104,6 +104,9 @@ seam explicitly.
 Most mods only need to replace the example row IDs and implement that
 `PersistExampleModState(...)` seam; the helper-backed callback structure can
 stay otherwise unchanged.
+String-backed text rows can also use `GetStringFieldValue` and
+`NormalizeTextValue` from the same helper header instead of hand-writing trim
+and bounds checks.
 
 ## 2) Set your namespace and mod IDs
 
@@ -214,6 +217,15 @@ API-size gates:
 - `EMC_HUB_API_V1_ACTION_ROW_V2_MIN_SIZE`
 
 The existing `description` field still renders below the row. `hover_hint` is optional and additive.
+
+If one row should hide or disable based on another bool row, register an `EMC_BoolConditionRuleDefV1` after both settings are registered.
+
+- `target_setting_id`: the dependent row
+- `controller_setting_id`: the bool row that drives the condition
+- `effect`: `EMC_BOOL_CONDITION_EFFECT_HIDE` or `EMC_BOOL_CONDITION_EFFECT_DISABLE`
+- `expected_bool_value`: `0` or `1`
+
+Use `emc::RegisterBoolConditionRuleV1(...)` and gate on `EMC_HUB_API_V1_BOOL_CONDITION_RULE_MIN_SIZE` when you need legacy-host compatibility.
 
 ## 4) Wire lifecycle calls
 

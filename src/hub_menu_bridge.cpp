@@ -3065,6 +3065,16 @@ void AttachPrimaryControlHoverHint(MyGUI::Widget* widget, const HubUiRowView& ro
     HubHoverHint_Attach(widget, fallback_hint);
 }
 
+void ApplyBoolConditionEnabledState(MyGUI::Widget* widget, const HubUiRowView& row)
+{
+    if (widget == 0 || row.condition_enabled != 0)
+    {
+        return;
+    }
+
+    widget->setEnabled(false);
+}
+
 int GetColorPaletteHeight(const HubUiRowView& row)
 {
     if (row.kind != HUB_UI_ROW_KIND_COLOR
@@ -3115,6 +3125,12 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
         return;
     }
 
+    if (row.condition_visible == 0)
+    {
+        *out_next_y = y;
+        return;
+    }
+
     const int label_x = 34;
     int label_width = panel_width - 290;
     if (row.kind == HUB_UI_ROW_KIND_INT)
@@ -3145,6 +3161,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
         label->setCaption(row.label != 0 ? row.label : row.setting_id);
         label->setFontHeight(18);
     }
+    ApplyBoolConditionEnabledState(label, row);
 
     if (row.kind == HUB_UI_ROW_KIND_BOOL)
     {
@@ -3159,6 +3176,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(button, "bool_toggle", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             AttachPrimaryControlHoverHint(button, row, static_cast<const char*>(0));
         }
+        ApplyBoolConditionEnabledState(button, row);
     }
     else if (row.kind == HUB_UI_ROW_KIND_KEYBIND)
     {
@@ -3173,6 +3191,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(bind_button, "keybind_bind", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             AttachPrimaryControlHoverHint(bind_button, row, "Capture a new primary key.");
         }
+        ApplyBoolConditionEnabledState(bind_button, row);
 
         MyGUI::Button* clear_button = CreateTrackedWidget<MyGUI::Button>(
             parent,
@@ -3185,6 +3204,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(clear_button, "keybind_clear", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             HubHoverHint_Attach(clear_button, "Set this keybind to Unbound.");
         }
+        ApplyBoolConditionEnabledState(clear_button, row);
     }
     else if (row.kind == HUB_UI_ROW_KIND_INT)
     {
@@ -3220,6 +3240,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                         row.setting_id != 0 ? row.setting_id : "");
                     HubHoverHint_Attach(button, BuildIntDeltaHoverHint(-delta));
                 }
+                ApplyBoolConditionEnabledState(button, row);
                 control_x += button_width + button_gap;
             }
         }
@@ -3236,6 +3257,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(minus_ten_button, "int_step_dec_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(minus_ten_button, "Decrease by 10.");
             }
+            ApplyBoolConditionEnabledState(minus_ten_button, row);
             control_x += button_width + button_gap;
 
             MyGUI::Button* minus_five_button = CreateTrackedWidget<MyGUI::Button>(
@@ -3249,6 +3271,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(minus_five_button, "int_step_dec_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(minus_five_button, "Decrease by 5.");
             }
+            ApplyBoolConditionEnabledState(minus_five_button, row);
             control_x += button_width + button_gap;
 
             MyGUI::Button* minus_button = CreateTrackedWidget<MyGUI::Button>(
@@ -3262,6 +3285,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(minus_button, "int_step_dec", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(minus_button, "Decrease by 1.");
             }
+            ApplyBoolConditionEnabledState(minus_button, row);
             control_x += button_width + button_gap;
         }
 
@@ -3277,6 +3301,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             value_box->eventEditSelectAccept += MyGUI::newDelegate(&OnHubIntEditAccepted);
             value_box->eventKeyLostFocus += MyGUI::newDelegate(&OnHubIntEditLostFocus);
         }
+        ApplyBoolConditionEnabledState(value_box, row);
         control_x += value_box_width + button_gap;
 
         if (row.int_use_custom_buttons)
@@ -3305,6 +3330,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                         row.setting_id != 0 ? row.setting_id : "");
                     HubHoverHint_Attach(button, BuildIntDeltaHoverHint(delta));
                 }
+                ApplyBoolConditionEnabledState(button, row);
                 control_x += button_width + button_gap;
             }
         }
@@ -3321,6 +3347,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(plus_button, "int_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(plus_button, "Increase by 1.");
             }
+            ApplyBoolConditionEnabledState(plus_button, row);
             control_x += button_width + button_gap;
 
             MyGUI::Button* plus_five_button = CreateTrackedWidget<MyGUI::Button>(
@@ -3334,6 +3361,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(plus_five_button, "int_step_inc_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(plus_five_button, "Increase by 5.");
             }
+            ApplyBoolConditionEnabledState(plus_five_button, row);
             control_x += button_width + button_gap;
 
             MyGUI::Button* plus_ten_button = CreateTrackedWidget<MyGUI::Button>(
@@ -3347,6 +3375,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(plus_ten_button, "int_step_inc_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(plus_ten_button, "Increase by 10.");
             }
+            ApplyBoolConditionEnabledState(plus_ten_button, row);
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_FLOAT)
@@ -3362,6 +3391,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(minus_button, "float_step_dec", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             HubHoverHint_Attach(minus_button, BuildFloatStepHoverHint(false, row));
         }
+        ApplyBoolConditionEnabledState(minus_button, row);
 
         MyGUI::EditBox* value_box = CreateTrackedSearchBox(
             parent,
@@ -3375,6 +3405,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             value_box->eventEditSelectAccept += MyGUI::newDelegate(&OnHubFloatEditAccepted);
             value_box->eventKeyLostFocus += MyGUI::newDelegate(&OnHubFloatEditLostFocus);
         }
+        ApplyBoolConditionEnabledState(value_box, row);
 
         MyGUI::Button* plus_button = CreateTrackedWidget<MyGUI::Button>(
             parent,
@@ -3387,6 +3418,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(plus_button, "float_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             HubHoverHint_Attach(plus_button, BuildFloatStepHoverHint(true, row));
         }
+        ApplyBoolConditionEnabledState(plus_button, row);
     }
     else if (row.kind == HUB_UI_ROW_KIND_SELECT)
     {
@@ -3412,6 +3444,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             combo_box->eventComboAccept += MyGUI::newDelegate(&OnHubSelectAccepted);
             AttachPrimaryControlHoverHint(combo_box, row, static_cast<const char*>(0));
         }
+        ApplyBoolConditionEnabledState(combo_box, row);
     }
     else if (row.kind == HUB_UI_ROW_KIND_TEXT)
     {
@@ -3427,6 +3460,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             value_box->eventEditTextChange += MyGUI::newDelegate(&OnHubTextChanged);
             AttachPrimaryControlHoverHint(value_box, row, static_cast<const char*>(0));
         }
+        ApplyBoolConditionEnabledState(value_box, row);
     }
     else if (row.kind == HUB_UI_ROW_KIND_COLOR)
     {
@@ -3455,6 +3489,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(mode_button, "color_mode_toggle", namespace_value, mod_value, setting_value);
             HubHoverHint_Attach(mode_button, "Toggle between preset palette and hex input.");
         }
+        ApplyBoolConditionEnabledState(mode_button, row);
 
         if (row.color_hex_mode)
         {
@@ -3471,6 +3506,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 value_box->eventEditSelectAccept += MyGUI::newDelegate(&OnHubColorEditAccepted);
                 value_box->eventKeyLostFocus += MyGUI::newDelegate(&OnHubColorEditLostFocus);
             }
+            ApplyBoolConditionEnabledState(value_box, row);
         }
         else
         {
@@ -3487,6 +3523,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                     palette_button,
                     row.color_palette_expanded ? "Hide preset colors." : "Show preset colors.");
             }
+            ApplyBoolConditionEnabledState(palette_button, row);
         }
 
         MyGUI::Button* current_swatch = CreateTrackedWidget<MyGUI::Button>(
@@ -3499,6 +3536,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             current_swatch->setColour(current_color);
             HubHoverHint_Attach(current_swatch, "Current color preview.");
         }
+        ApplyBoolConditionEnabledState(current_swatch, row);
 
         if (row.color_preview_kind == EMC_COLOR_PREVIEW_KIND_TEXT)
         {
@@ -3513,6 +3551,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 preview_text->setTextColour(current_color);
                 preview_text->setFontHeight(18);
             }
+            ApplyBoolConditionEnabledState(preview_text, row);
         }
         else
         {
@@ -3525,6 +3564,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 preview_swatch->setCaption("");
                 preview_swatch->setColour(current_color);
             }
+            ApplyBoolConditionEnabledState(preview_swatch, row);
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_ACTION)
@@ -3540,6 +3580,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(action_button, "action_invoke", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             AttachPrimaryControlHoverHint(action_button, row, "Run this action now.");
         }
+        ApplyBoolConditionEnabledState(action_button, row);
     }
 
     int next_y = y + row_height;
@@ -3583,6 +3624,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 setting_value,
                 row.color_presets[preset_index].value_hex);
             HubHoverHint_Attach(preset_button, BuildColorPresetHoverHint(row.color_presets[preset_index].value_hex));
+            ApplyBoolConditionEnabledState(preset_button, row);
         }
 
         next_y += GetColorPaletteHeight(row);
