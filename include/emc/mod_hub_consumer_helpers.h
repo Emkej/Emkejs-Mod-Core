@@ -161,6 +161,49 @@ inline EMC_Result GetBoolFieldValue(void* user_data, int32_t* out_value, int32_t
     return EMC_OK;
 }
 
+template <typename StateType>
+inline EMC_Result GetBoolSelectionFieldValue(
+    void* user_data,
+    int32_t* out_value,
+    bool StateType::*field,
+    int32_t false_value = 0,
+    int32_t true_value = 1)
+{
+    if (user_data == 0 || out_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    StateType* state = static_cast<StateType*>(user_data);
+    *out_value = (state->*field) ? true_value : false_value;
+    return EMC_OK;
+}
+
+inline EMC_Result NormalizeBoolSelectionValue(
+    int32_t value,
+    int32_t false_value,
+    int32_t true_value,
+    bool* out_bool_value,
+    char* err_buf,
+    uint32_t err_buf_size,
+    const char* invalid_message = "invalid_select_option")
+{
+    if (out_bool_value == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (value != false_value && value != true_value)
+    {
+        WriteErrorMessage(err_buf, err_buf_size, invalid_message);
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_bool_value = value == true_value;
+    WriteErrorMessage(err_buf, err_buf_size, 0);
+    return EMC_OK;
+}
+
 template <typename StateType, typename ValueType>
 inline EMC_Result SetFieldValueWithRollback(
     void* user_data,

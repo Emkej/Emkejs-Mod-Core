@@ -2039,7 +2039,7 @@ EMC_Result HubUi_SetSectionCollapsed(const char* namespace_id, const char* mod_i
 
     section->collapsed = is_collapsed;
     const std::string persisted_key = BuildPersistedSectionCollapseStateKey(namespace_id, mod_id, section_id);
-    if (!g_collapse_persistence_enabled)
+    if (!g_collapse_persistence_enabled || !section->collapsed)
     {
         g_persisted_section_collapse_states.erase(persisted_key);
     }
