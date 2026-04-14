@@ -1170,20 +1170,15 @@ bool ResolveInitialSectionCollapsedState(
     const std::string& mod_id,
     const std::string& section_id)
 {
-    if (!g_collapse_persistence_enabled)
-    {
-        return false;
-    }
-
     const std::map<std::string, bool>::const_iterator it =
         g_persisted_section_collapse_states.find(
             BuildPersistedSectionCollapseStateKey(namespace_id, mod_id, section_id));
-    if (it == g_persisted_section_collapse_states.end())
+    if (it != g_persisted_section_collapse_states.end())
     {
-        return false;
+        return it->second;
     }
 
-    return it->second;
+    return section_id == "advanced";
 }
 
 HubUiSettingRow* FindRow(const char* namespace_id, const char* mod_id, const char* setting_id)
@@ -2044,7 +2039,7 @@ EMC_Result HubUi_SetSectionCollapsed(const char* namespace_id, const char* mod_i
 
     section->collapsed = is_collapsed;
     const std::string persisted_key = BuildPersistedSectionCollapseStateKey(namespace_id, mod_id, section_id);
-    if (!g_collapse_persistence_enabled || !section->collapsed)
+    if (!g_collapse_persistence_enabled)
     {
         g_persisted_section_collapse_states.erase(persisted_key);
     }
