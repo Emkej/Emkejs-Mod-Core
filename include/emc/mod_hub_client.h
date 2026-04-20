@@ -50,6 +50,8 @@ struct ModHubClientTableRegistrationV1
     const EMC_ModDescriptorV1* mod_desc;
     const ModHubClientSettingRowV1* rows;
     uint32_t row_count;
+    const EMC_BoolConditionRuleDefV1* bool_condition_rules;
+    uint32_t bool_condition_rule_count;
 };
 
 EMC_Result RegisterSettingsTableV1(

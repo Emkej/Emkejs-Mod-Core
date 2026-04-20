@@ -557,6 +557,12 @@ EMC_Result RegisterSettingsTableWithApiSizeV1(
         return EMC_ERR_INVALID_ARGUMENT;
     }
 
+    if (table_registration->bool_condition_rule_count > 0u
+        && table_registration->bool_condition_rules == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
     EMC_ModHandle mod_handle = 0;
     EMC_Result result = api->register_mod(table_registration->mod_desc, &mod_handle);
     if (result != EMC_OK)
@@ -573,6 +579,19 @@ EMC_Result RegisterSettingsTableWithApiSizeV1(
     {
         const ModHubClientSettingRowV1* row = &table_registration->rows[row_index];
         result = RegisterSettingsRow(api, api_size, mod_handle, row);
+        if (result != EMC_OK)
+        {
+            return result;
+        }
+    }
+
+    for (uint32_t rule_index = 0u;
+         rule_index < table_registration->bool_condition_rule_count;
+         ++rule_index)
+    {
+        const EMC_BoolConditionRuleDefV1* rule =
+            &table_registration->bool_condition_rules[rule_index];
+        result = RegisterBoolConditionRuleWithApiSizeV1(api, api_size, mod_handle, rule);
         if (result != EMC_OK)
         {
             return result;
