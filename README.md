@@ -15,6 +15,7 @@ If you want to pull subtree updates from the shared build-tools repo, add a loca
 This sets:
 - `KENSHILIB_DEPS_DIR`
 - `KENSHILIB_DIR`
+- `BOOST_INCLUDE_PATH`
 
 ## Build
 You can build in Visual Studio, or via the script below.
