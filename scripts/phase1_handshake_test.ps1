@@ -3,6 +3,50 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$DllPath = (Resolve-Path -Path $DllPath).ProviderPath
+
+function Get-DllExportSet {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $exports = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+
+    if (Get-Command objdump -ErrorAction SilentlyContinue) {
+        $rawLines = & objdump -p $Path 2>$null | Select-String -Pattern 'EMC_ModHub_'
+    } elseif (Get-Command llvm-nm -ErrorAction SilentlyContinue) {
+        $rawLines = & llvm-nm -D --defined-only $Path 2>$null | Select-String -Pattern 'EMC_ModHub_'
+    } elseif (Get-Command nm -ErrorAction SilentlyContinue) {
+        $rawLines = & nm -D --defined-only $Path 2>$null | Select-String -Pattern 'EMC_ModHub_'
+    } else {
+        throw 'Unable to inspect DLL exports: install objdump, llvm-nm, or nm in PATH.'
+    }
+
+    foreach ($line in $rawLines) {
+        if ($line -match '(EMC_ModHub_[A-Za-z0-9_]+)') {
+            $null = $exports.Add($Matches[1])
+        }
+    }
+
+    return $exports
+}
+
+if (-not $IsWindows) {
+    $exports = Get-DllExportSet -Path $DllPath
+    $required = @(
+        'EMC_ModHub_GetApi',
+        'EMC_ModHub_GetApi_v1_compat'
+    )
+
+    foreach ($name in $required) {
+        if (-not $exports.Contains($name)) {
+            throw "Missing required export in WSL smoke check: $name"
+        }
+    }
+
+    Write-Host "PASS: phase1 export smoke completed (WSL)"
+    return
+}
 
 $code = @"
 using System;

@@ -58,6 +58,9 @@ try {
         -HubIntSetting "max_markers" `
         -HubFloatSetting "search_radius" `
         -HubActionRow "refresh_cache" `
+        -HubSelectSetting "palette" `
+        -HubTextSetting "title" `
+        -HubColorSetting "accent_color" `
         -HubNamespaceId "phase15.scaffold" `
         -HubNamespaceDisplayName "Phase15 Scaffold" `
         -HubModId "phase15_consumer" `
@@ -95,18 +98,33 @@ try {
     Assert-Condition -Condition ($source.Contains("RefreshCache")) -Message "Scaffold adapter missing generated action callback."
     Assert-Condition -Condition ($source.Contains('const EMC_ActionRowDefV1 kActionRowRefreshCache')) -Message "Scaffold adapter missing generated action row definition."
     Assert-Condition -Condition (-not $source.Contains('const EMC_ActionRowDefV1 kActionRow =')) -Message "Scaffold adapter should replace the legacy single action definition when custom action rows are requested."
+    Assert-Condition -Condition ($source.Contains("GetPalette")) -Message "Scaffold adapter missing generated select getter."
+    Assert-Condition -Condition ($source.Contains("SetPalette")) -Message "Scaffold adapter missing generated select setter."
+    Assert-Condition -Condition ($source.Contains('const EMC_SelectSettingDefV1 kSelectSettingPalette')) -Message "Scaffold adapter missing generated select setting definition."
+    Assert-Condition -Condition ($source.Contains("GetTitle")) -Message "Scaffold adapter missing generated text getter."
+    Assert-Condition -Condition ($source.Contains("SetTitle")) -Message "Scaffold adapter missing generated text setter."
+    Assert-Condition -Condition ($source.Contains('const EMC_TextSettingDefV1 kTextSettingTitle')) -Message "Scaffold adapter missing generated text setting definition."
+    Assert-Condition -Condition ($source.Contains("GetAccentColor")) -Message "Scaffold adapter missing generated color getter."
+    Assert-Condition -Condition ($source.Contains("SetAccentColor")) -Message "Scaffold adapter missing generated color setter."
+    Assert-Condition -Condition ($source.Contains('const EMC_ColorSettingDefV1 kColorSettingAccentColor')) -Message "Scaffold adapter missing generated color setting definition."
     Assert-Condition -Condition ($singleTu.Contains("GetShowOverlay")) -Message "Single-TU sample missing generated show_overlay getter."
     Assert-Condition -Condition ($singleTu.Contains("SetAutoSave")) -Message "Single-TU sample missing generated auto_save setter."
     Assert-Condition -Condition ($singleTu.Contains("GetToggleOverlay")) -Message "Single-TU sample missing generated keybind getter."
     Assert-Condition -Condition ($singleTu.Contains("GetMaxMarkers")) -Message "Single-TU sample missing generated int getter."
     Assert-Condition -Condition ($singleTu.Contains("GetSearchRadius")) -Message "Single-TU sample missing generated float getter."
     Assert-Condition -Condition ($singleTu.Contains("RefreshCache")) -Message "Single-TU sample missing generated action callback."
+    Assert-Condition -Condition ($singleTu.Contains("GetPalette")) -Message "Single-TU sample missing generated select getter."
+    Assert-Condition -Condition ($singleTu.Contains("SetTitle")) -Message "Single-TU sample missing generated text setter."
+    Assert-Condition -Condition ($singleTu.Contains("SetAccentColor")) -Message "Single-TU sample missing generated color setter."
     Assert-Condition -Condition ($source.Contains("PersistExampleModState")) -Message "Scaffold adapter should include the local persistence seam helper."
     Assert-Condition -Condition ($source.Contains("ApplyExampleModStateUpdate")) -Message "Scaffold adapter should include the local state-update helper."
     Assert-Condition -Condition ($source.Contains("ValidateBoolValue")) -Message "Scaffold adapter should validate bool setters through the shared helper surface."
     Assert-Condition -Condition ($source.Contains("ValidateValueInRange<int32_t>")) -Message "Scaffold adapter should validate int setters through the shared helper surface."
     Assert-Condition -Condition ($source.Contains("ValidateValueInRange<float>")) -Message "Scaffold adapter should validate float setters through the shared helper surface."
     Assert-Condition -Condition ($singleTu.Contains("ApplyUpdateWithRollback")) -Message "Single-TU sample should delegate persistence rollback through the shared helper."
+    Assert-Condition -Condition ($source.Contains("invalid_select_option")) -Message "Scaffold adapter should validate generated select rows."
+    Assert-Condition -Condition ($source.Contains("text_too_long")) -Message "Scaffold adapter should bound generated text rows."
+    Assert-Condition -Condition ($source.Contains("invalid_color_hex")) -Message "Scaffold adapter should validate generated color rows."
 
     $consumerHelpersPath = Join-Path $RepoRoot "include\emc\mod_hub_consumer_helpers.h"
     Assert-Condition -Condition (Test-Path $consumerHelpersPath) -Message "Missing shared consumer helper header: $consumerHelpersPath"
@@ -147,6 +165,15 @@ try {
   ],
   "action_rows": [
     "refresh_cache"
+  ],
+  "select_settings": [
+    "palette"
+  ],
+  "text_settings": [
+    "title"
+  ],
+  "color_settings": [
+    "accent_color"
   ]
 }
 '@
@@ -174,6 +201,9 @@ try {
         Assert-Condition -Condition ($shellSource.Contains("GetMaxMarkers")) -Message "Shell wrapper missing generated int getter."
         Assert-Condition -Condition ($shellSource.Contains("GetSearchRadius")) -Message "Shell wrapper missing generated float getter."
         Assert-Condition -Condition ($shellSource.Contains("RefreshCache")) -Message "Shell wrapper missing generated action callback."
+        Assert-Condition -Condition ($shellSource.Contains("GetPalette")) -Message "Shell wrapper missing generated select getter."
+        Assert-Condition -Condition ($shellSource.Contains("SetTitle")) -Message "Shell wrapper missing generated text setter."
+        Assert-Condition -Condition ($shellSource.Contains("SetAccentColor")) -Message "Shell wrapper missing generated color setter."
     }
 
     $includePath = Join-Path $RepoRoot "include"

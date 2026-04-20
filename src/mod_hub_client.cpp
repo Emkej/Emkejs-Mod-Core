@@ -252,6 +252,14 @@ bool HasActionRowV2Support(const EMC_HubApiV1* api, uint32_t api_size)
         && api->register_action_row_v2 != 0;
 }
 
+bool HasBoolConditionRuleSupport(const EMC_HubApiV1* api, uint32_t api_size)
+{
+    return api != 0
+        && api_size >= EMC_HUB_API_V1_BOOL_CONDITION_RULE_MIN_SIZE
+        && api->api_size >= EMC_HUB_API_V1_BOOL_CONDITION_RULE_MIN_SIZE
+        && api->register_bool_condition_rule != 0;
+}
+
 uint32_t ResolveExpectedSdkApiVersion(const emc::ModHubClient::Config& config)
 {
     return config.expected_sdk_api_version != 0u
@@ -549,6 +557,12 @@ EMC_Result RegisterSettingsTableWithApiSizeV1(
         return EMC_ERR_INVALID_ARGUMENT;
     }
 
+    if (table_registration->bool_condition_rule_count > 0u
+        && table_registration->bool_condition_rules == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
     EMC_ModHandle mod_handle = 0;
     EMC_Result result = api->register_mod(table_registration->mod_desc, &mod_handle);
     if (result != EMC_OK)
@@ -571,7 +585,58 @@ EMC_Result RegisterSettingsTableWithApiSizeV1(
         }
     }
 
+    for (uint32_t rule_index = 0u;
+         rule_index < table_registration->bool_condition_rule_count;
+         ++rule_index)
+    {
+        const EMC_BoolConditionRuleDefV1* rule =
+            &table_registration->bool_condition_rules[rule_index];
+        result = RegisterBoolConditionRuleWithApiSizeV1(api, api_size, mod_handle, rule);
+        if (result != EMC_OK)
+        {
+            return result;
+        }
+    }
+
     return EMC_OK;
+}
+
+EMC_Result RegisterBoolConditionRuleWithApiSizeV1(
+    const EMC_HubApiV1* api,
+    uint32_t api_size,
+    EMC_ModHandle mod,
+    const EMC_BoolConditionRuleDefV1* def);
+
+EMC_Result RegisterBoolConditionRuleV1(
+    const EMC_HubApiV1* api,
+    EMC_ModHandle mod,
+    const EMC_BoolConditionRuleDefV1* def)
+{
+    return RegisterBoolConditionRuleWithApiSizeV1(api, api != 0 ? api->api_size : 0u, mod, def);
+}
+
+EMC_Result RegisterBoolConditionRuleWithApiSizeV1(
+    const EMC_HubApiV1* api,
+    uint32_t api_size,
+    EMC_ModHandle mod,
+    const EMC_BoolConditionRuleDefV1* def)
+{
+    if (api == 0 || mod == 0 || def == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    if (!HasBoolConditionRuleSupport(api, api_size))
+    {
+        return EMC_ERR_API_SIZE_MISMATCH;
+    }
+
+    if (api->register_bool_condition_rule == 0)
+    {
+        return EMC_ERR_INTERNAL;
+    }
+
+    return api->register_bool_condition_rule(mod, def);
 }
 
 ModHubClient::Config::Config()

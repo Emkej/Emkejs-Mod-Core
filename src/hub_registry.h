@@ -31,6 +31,20 @@ struct HubRegistryModView
     EMC_ModHandle handle;
 };
 
+enum HubRegistryBoolConditionEffect
+{
+    HUB_REGISTRY_BOOL_CONDITION_EFFECT_HIDE = 0,
+    HUB_REGISTRY_BOOL_CONDITION_EFFECT_DISABLE = 1
+};
+
+struct HubRegistryBoolConditionRuleView
+{
+    const char* target_setting_id;
+    const char* controller_setting_id;
+    uint32_t effect;
+    int32_t expected_bool_value;
+};
+
 struct HubRegistrySettingView
 {
     int32_t kind;
@@ -103,6 +117,11 @@ EMC_Result __cdecl HubRegistry_RegisterColorSetting(EMC_ModHandle mod, const EMC
 EMC_Result __cdecl HubRegistry_RegisterSettingSection(EMC_ModHandle mod, const EMC_SettingSectionDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterActionRow(EMC_ModHandle mod, const EMC_ActionRowDefV1* def);
 EMC_Result __cdecl HubRegistry_RegisterActionRowV2(EMC_ModHandle mod, const EMC_ActionRowDefV2* def);
+EMC_Result __cdecl HubRegistry_RegisterBoolConditionRule(EMC_ModHandle mod, const EMC_BoolConditionRuleDefV1* def);
+bool HubRegistry_GetBoolConditionRuleView(
+    EMC_ModHandle mod,
+    const char* target_setting_id,
+    HubRegistryBoolConditionRuleView* out_view);
 void HubRegistry_ForEachSettingInOrder(HubRegistryVisitSettingFn visitor, void* user_data);
 
 void HubRegistry_SetRegistrationLocked(bool is_locked);

@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <cctype>
 #include <cstring>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -124,6 +125,7 @@ FnOpenOptionsWindow g_fnOpenOptionsWindow = 0;
 FnOptionsInit g_fnOptionsInitOrig = 0;
 FnOptionsSave g_fnOptionsSaveOrig = 0;
 void (*InputHandler_keyDownEvent_orig)(InputHandler*, OIS::KeyCode) = 0;
+void (*InputHandler_keyUpEvent_orig)(InputHandler*, OIS::KeyCode) = 0;
 ForgottenGUI* g_ptrKenshiGUI = 0;
 
 OptionsWindow* g_active_options_window = 0;
@@ -143,6 +145,12 @@ int32_t g_emc_open_mod_hub_keycode = kDefaultEmcOpenModHubKeycode;
 bool g_emc_open_mod_hub_require_ctrl = kDefaultEmcOpenModHubRequireCtrl;
 bool g_emc_open_mod_hub_require_shift = kDefaultEmcOpenModHubRequireShift;
 bool g_emc_open_mod_hub_require_alt = kDefaultEmcOpenModHubRequireAlt;
+bool g_left_control_down = false;
+bool g_right_control_down = false;
+bool g_left_shift_down = false;
+bool g_right_shift_down = false;
+bool g_left_alt_down = false;
+bool g_right_alt_down = false;
 std::string g_emc_config_path;
 EMC_ModHandle g_emc_mod_handle = 0;
 bool g_restore_search_focus_after_rebuild = false;
@@ -283,6 +291,24 @@ int32_t NormalizeEmcOpenModHubKeycode(int32_t keycode)
     }
 
     return kDefaultEmcOpenModHubKeycode;
+}
+
+uint32_t GetEmcOpenModHubShortcutModifiers()
+{
+    uint32_t modifiers = 0u;
+    if (g_emc_open_mod_hub_require_ctrl)
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_CTRL_MASK;
+    }
+    if (g_emc_open_mod_hub_require_shift)
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_SHIFT_MASK;
+    }
+    if (g_emc_open_mod_hub_require_alt)
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_ALT_MASK;
+    }
+    return modifiers;
 }
 
 std::string ResolveEmcConfigPath()
@@ -614,15 +640,16 @@ EMC_Result __cdecl GetEmcOpenModHubKeybind(void*, EMC_KeybindValueV1* out_value)
 
     EnsureEmcConfigLoaded();
     out_value->keycode = g_emc_open_mod_hub_keycode;
-    out_value->modifiers = 0u;
+    out_value->modifiers = GetEmcOpenModHubShortcutModifiers();
     return EMC_OK;
 }
 
 EMC_Result __cdecl SetEmcOpenModHubKeybind(void*, EMC_KeybindValueV1 value, char* err_buf, uint32_t err_buf_size)
 {
-    if (value.modifiers != 0u)
+    const uint32_t unsupported_modifiers = value.modifiers & ~EMC_KEYBIND_MODIFIER_SUPPORTED_MASK;
+    if (unsupported_modifiers != 0u)
     {
-        CopyHubErrorMessage(err_buf, err_buf_size, "use_modifier_toggles");
+        CopyHubErrorMessage(err_buf, err_buf_size, "invalid_modifiers");
         return EMC_ERR_INVALID_ARGUMENT;
     }
 
@@ -634,12 +661,21 @@ EMC_Result __cdecl SetEmcOpenModHubKeybind(void*, EMC_KeybindValueV1 value, char
 
     EnsureEmcConfigLoaded();
     const int32_t previous_value = g_emc_open_mod_hub_keycode;
+    const bool previous_require_ctrl = g_emc_open_mod_hub_require_ctrl;
+    const bool previous_require_shift = g_emc_open_mod_hub_require_shift;
+    const bool previous_require_alt = g_emc_open_mod_hub_require_alt;
     g_emc_open_mod_hub_keycode = value.keycode;
+    g_emc_open_mod_hub_require_ctrl = (value.modifiers & EMC_KEYBIND_MODIFIER_CTRL_MASK) != 0u;
+    g_emc_open_mod_hub_require_shift = (value.modifiers & EMC_KEYBIND_MODIFIER_SHIFT_MASK) != 0u;
+    g_emc_open_mod_hub_require_alt = (value.modifiers & EMC_KEYBIND_MODIFIER_ALT_MASK) != 0u;
 
     const char* save_error = "";
     if (!SaveEmcConfig(&save_error))
     {
         g_emc_open_mod_hub_keycode = previous_value;
+        g_emc_open_mod_hub_require_ctrl = previous_require_ctrl;
+        g_emc_open_mod_hub_require_shift = previous_require_shift;
+        g_emc_open_mod_hub_require_alt = previous_require_alt;
         CopyHubErrorMessage(err_buf, err_buf_size, save_error);
         return EMC_ERR_CALLBACK_FAILED;
     }
@@ -804,34 +840,10 @@ void EnsureEmcSettingsRegistered()
     const EMC_KeybindSettingDefV1 open_mod_hub_key_setting = {
         kEmcOpenModHubKeySettingId,
         "Open Mod Hub key",
-        "Primary key used to open Mod Hub from gameplay or switch to the Mod Hub tab when Options is already open. Use the modifier toggles below for combos.",
+        "Primary key used to open Mod Hub from gameplay or switch to the Mod Hub tab when Options is already open. Capture can include Ctrl, Shift, or Alt.",
         0,
         &GetEmcOpenModHubKeybind,
         &SetEmcOpenModHubKeybind
-    };
-    const EMC_BoolSettingDefV1 open_mod_hub_require_ctrl_setting = {
-        kEmcOpenModHubRequireCtrlSettingId,
-        "Require Ctrl for open shortcut",
-        "Require Ctrl to be held with the Open Mod Hub key.",
-        0,
-        &GetEmcOpenModHubRequireCtrl,
-        &SetEmcOpenModHubRequireCtrl
-    };
-    const EMC_BoolSettingDefV1 open_mod_hub_require_shift_setting = {
-        kEmcOpenModHubRequireShiftSettingId,
-        "Require Shift for open shortcut",
-        "Require Shift to be held with the Open Mod Hub key.",
-        0,
-        &GetEmcOpenModHubRequireShift,
-        &SetEmcOpenModHubRequireShift
-    };
-    const EMC_BoolSettingDefV1 open_mod_hub_require_alt_setting = {
-        kEmcOpenModHubRequireAltSettingId,
-        "Require Alt for open shortcut",
-        "Require Alt to be held with the Open Mod Hub key.",
-        0,
-        &GetEmcOpenModHubRequireAlt,
-        &SetEmcOpenModHubRequireAlt
     };
 
     const EMC_Result register_setting_result = HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &persist_search_setting);
@@ -866,36 +878,6 @@ void EnsureEmcSettingsRegistered()
     {
         std::ostringstream line;
         line << "Emkejs-Mod-Core: failed to register internal open shortcut key setting result=" << register_open_key_result;
-        ErrorLog(line.str().c_str());
-        return;
-    }
-
-    const EMC_Result register_open_ctrl_result =
-        HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &open_mod_hub_require_ctrl_setting);
-    if (register_open_ctrl_result != EMC_OK)
-    {
-        std::ostringstream line;
-        line << "Emkejs-Mod-Core: failed to register internal open shortcut Ctrl setting result=" << register_open_ctrl_result;
-        ErrorLog(line.str().c_str());
-        return;
-    }
-
-    const EMC_Result register_open_shift_result =
-        HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &open_mod_hub_require_shift_setting);
-    if (register_open_shift_result != EMC_OK)
-    {
-        std::ostringstream line;
-        line << "Emkejs-Mod-Core: failed to register internal open shortcut Shift setting result=" << register_open_shift_result;
-        ErrorLog(line.str().c_str());
-        return;
-    }
-
-    const EMC_Result register_open_alt_result =
-        HubRegistry_RegisterBoolSetting(g_emc_mod_handle, &open_mod_hub_require_alt_setting);
-    if (register_open_alt_result != EMC_OK)
-    {
-        std::ostringstream line;
-        line << "Emkejs-Mod-Core: failed to register internal open shortcut Alt setting result=" << register_open_alt_result;
         ErrorLog(line.str().c_str());
         return;
     }
@@ -1429,6 +1411,50 @@ std::string FormatBoolButtonCaption(const HubUiRowView& row)
     return "On";
 }
 
+std::string FormatKeybindModifierPrefix(uint32_t modifiers)
+{
+    std::ostringstream prefix;
+    bool has_prefix = false;
+
+    if ((modifiers & EMC_KEYBIND_MODIFIER_CTRL_MASK) != 0u)
+    {
+        prefix << "Ctrl";
+        has_prefix = true;
+    }
+
+    if ((modifiers & EMC_KEYBIND_MODIFIER_SHIFT_MASK) != 0u)
+    {
+        if (has_prefix)
+        {
+            prefix << "+";
+        }
+        prefix << "Shift";
+        has_prefix = true;
+    }
+
+    if ((modifiers & EMC_KEYBIND_MODIFIER_ALT_MASK) != 0u)
+    {
+        if (has_prefix)
+        {
+            prefix << "+";
+        }
+        prefix << "Alt";
+        has_prefix = true;
+    }
+
+    const uint32_t unsupported_modifiers = modifiers & ~EMC_KEYBIND_MODIFIER_SUPPORTED_MASK;
+    if (unsupported_modifiers != 0u)
+    {
+        if (has_prefix)
+        {
+            prefix << "+";
+        }
+        prefix << "0x" << std::hex << unsupported_modifiers << std::dec;
+    }
+
+    return prefix.str();
+}
+
 std::string FormatKeybindButtonCaption(const HubUiRowView& row)
 {
     if (row.capture_active)
@@ -1522,11 +1548,12 @@ std::string FormatKeybindButtonCaption(const HubUiRowView& row)
     }
 
     std::ostringstream caption;
-    caption << key_name;
-    if (row.pending_keybind_value.modifiers != 0u)
+    const std::string modifier_prefix = FormatKeybindModifierPrefix(row.pending_keybind_value.modifiers);
+    if (!modifier_prefix.empty())
     {
-        caption << " +" << row.pending_keybind_value.modifiers;
+        caption << modifier_prefix << "+";
     }
+    caption << key_name;
     return caption.str();
 }
 
@@ -1607,17 +1634,99 @@ void ResetHubSearchSnapshot()
 
 bool IsCtrlModifierDown(const InputHandler* input_handler)
 {
-    return input_handler != 0 && input_handler->ctrl;
+    return g_left_control_down || g_right_control_down || (input_handler != 0 && input_handler->ctrl);
 }
 
 bool IsShiftModifierDown(const InputHandler* input_handler)
 {
-    return input_handler != 0 && input_handler->shift;
+    return g_left_shift_down || g_right_shift_down || (input_handler != 0 && input_handler->shift);
 }
 
 bool IsAltModifierDown(const InputHandler* input_handler)
 {
-    return input_handler != 0 && input_handler->alt;
+    return g_left_alt_down || g_right_alt_down || (input_handler != 0 && input_handler->alt);
+}
+
+uint32_t ResolveKeybindCaptureModifiers(const InputHandler* input_handler)
+{
+    uint32_t modifiers = 0u;
+    if (IsCtrlModifierDown(input_handler))
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_CTRL_MASK;
+    }
+    if (IsShiftModifierDown(input_handler))
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_SHIFT_MASK;
+    }
+    if (IsAltModifierDown(input_handler))
+    {
+        modifiers |= EMC_KEYBIND_MODIFIER_ALT_MASK;
+    }
+    return modifiers;
+}
+
+void ResetTrackedModifierKeys()
+{
+    g_left_control_down = false;
+    g_right_control_down = false;
+    g_left_shift_down = false;
+    g_right_shift_down = false;
+    g_left_alt_down = false;
+    g_right_alt_down = false;
+}
+
+void TrackModifierKeyDown(OIS::KeyCode key_code)
+{
+    switch (key_code)
+    {
+    case OIS::KC_LCONTROL:
+        g_left_control_down = true;
+        break;
+    case OIS::KC_RCONTROL:
+        g_right_control_down = true;
+        break;
+    case OIS::KC_LSHIFT:
+        g_left_shift_down = true;
+        break;
+    case OIS::KC_RSHIFT:
+        g_right_shift_down = true;
+        break;
+    case OIS::KC_LMENU:
+        g_left_alt_down = true;
+        break;
+    case OIS::KC_RMENU:
+        g_right_alt_down = true;
+        break;
+    default:
+        break;
+    }
+}
+
+void TrackModifierKeyUp(OIS::KeyCode key_code)
+{
+    switch (key_code)
+    {
+    case OIS::KC_LCONTROL:
+        g_left_control_down = false;
+        break;
+    case OIS::KC_RCONTROL:
+        g_right_control_down = false;
+        break;
+    case OIS::KC_LSHIFT:
+        g_left_shift_down = false;
+        break;
+    case OIS::KC_RSHIFT:
+        g_right_shift_down = false;
+        break;
+    case OIS::KC_LMENU:
+        g_left_alt_down = false;
+        break;
+    case OIS::KC_RMENU:
+        g_right_alt_down = false;
+        break;
+    default:
+        break;
+    }
 }
 
 bool AreOpenModHubShortcutModifiersSatisfied(const InputHandler* input_handler)
@@ -3065,6 +3174,16 @@ void AttachPrimaryControlHoverHint(MyGUI::Widget* widget, const HubUiRowView& ro
     HubHoverHint_Attach(widget, fallback_hint);
 }
 
+void ApplyBoolConditionEnabledState(MyGUI::Widget* widget, const HubUiRowView& row)
+{
+    if (widget == 0 || row.condition_enabled != 0)
+    {
+        return;
+    }
+
+    widget->setEnabled(false);
+}
+
 int GetColorPaletteHeight(const HubUiRowView& row)
 {
     if (row.kind != HUB_UI_ROW_KIND_COLOR
@@ -3115,6 +3234,12 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
         return;
     }
 
+    if (row.condition_visible == 0)
+    {
+        *out_next_y = y;
+        return;
+    }
+
     const int label_x = 34;
     int label_width = panel_width - 290;
     if (row.kind == HUB_UI_ROW_KIND_INT)
@@ -3145,6 +3270,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
         label->setCaption(row.label != 0 ? row.label : row.setting_id);
         label->setFontHeight(18);
     }
+    ApplyBoolConditionEnabledState(label, row);
 
     if (row.kind == HUB_UI_ROW_KIND_BOOL)
     {
@@ -3159,6 +3285,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(button, "bool_toggle", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             AttachPrimaryControlHoverHint(button, row, static_cast<const char*>(0));
         }
+        ApplyBoolConditionEnabledState(button, row);
     }
     else if (row.kind == HUB_UI_ROW_KIND_KEYBIND)
     {
@@ -3173,6 +3300,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(bind_button, "keybind_bind", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             AttachPrimaryControlHoverHint(bind_button, row, "Capture a new primary key.");
         }
+        ApplyBoolConditionEnabledState(bind_button, row);
 
         MyGUI::Button* clear_button = CreateTrackedWidget<MyGUI::Button>(
             parent,
@@ -3185,6 +3313,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(clear_button, "keybind_clear", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             HubHoverHint_Attach(clear_button, "Set this keybind to Unbound.");
         }
+        ApplyBoolConditionEnabledState(clear_button, row);
     }
     else if (row.kind == HUB_UI_ROW_KIND_INT)
     {
@@ -3220,6 +3349,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                         row.setting_id != 0 ? row.setting_id : "");
                     HubHoverHint_Attach(button, BuildIntDeltaHoverHint(-delta));
                 }
+                ApplyBoolConditionEnabledState(button, row);
                 control_x += button_width + button_gap;
             }
         }
@@ -3236,6 +3366,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(minus_ten_button, "int_step_dec_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(minus_ten_button, "Decrease by 10.");
             }
+            ApplyBoolConditionEnabledState(minus_ten_button, row);
             control_x += button_width + button_gap;
 
             MyGUI::Button* minus_five_button = CreateTrackedWidget<MyGUI::Button>(
@@ -3249,6 +3380,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(minus_five_button, "int_step_dec_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(minus_five_button, "Decrease by 5.");
             }
+            ApplyBoolConditionEnabledState(minus_five_button, row);
             control_x += button_width + button_gap;
 
             MyGUI::Button* minus_button = CreateTrackedWidget<MyGUI::Button>(
@@ -3262,6 +3394,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(minus_button, "int_step_dec", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(minus_button, "Decrease by 1.");
             }
+            ApplyBoolConditionEnabledState(minus_button, row);
             control_x += button_width + button_gap;
         }
 
@@ -3277,6 +3410,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             value_box->eventEditSelectAccept += MyGUI::newDelegate(&OnHubIntEditAccepted);
             value_box->eventKeyLostFocus += MyGUI::newDelegate(&OnHubIntEditLostFocus);
         }
+        ApplyBoolConditionEnabledState(value_box, row);
         control_x += value_box_width + button_gap;
 
         if (row.int_use_custom_buttons)
@@ -3305,6 +3439,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                         row.setting_id != 0 ? row.setting_id : "");
                     HubHoverHint_Attach(button, BuildIntDeltaHoverHint(delta));
                 }
+                ApplyBoolConditionEnabledState(button, row);
                 control_x += button_width + button_gap;
             }
         }
@@ -3321,6 +3456,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(plus_button, "int_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(plus_button, "Increase by 1.");
             }
+            ApplyBoolConditionEnabledState(plus_button, row);
             control_x += button_width + button_gap;
 
             MyGUI::Button* plus_five_button = CreateTrackedWidget<MyGUI::Button>(
@@ -3334,6 +3470,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(plus_five_button, "int_step_inc_5", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(plus_five_button, "Increase by 5.");
             }
+            ApplyBoolConditionEnabledState(plus_five_button, row);
             control_x += button_width + button_gap;
 
             MyGUI::Button* plus_ten_button = CreateTrackedWidget<MyGUI::Button>(
@@ -3347,6 +3484,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 AttachHubAction(plus_ten_button, "int_step_inc_10", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
                 HubHoverHint_Attach(plus_ten_button, "Increase by 10.");
             }
+            ApplyBoolConditionEnabledState(plus_ten_button, row);
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_FLOAT)
@@ -3362,6 +3500,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(minus_button, "float_step_dec", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             HubHoverHint_Attach(minus_button, BuildFloatStepHoverHint(false, row));
         }
+        ApplyBoolConditionEnabledState(minus_button, row);
 
         MyGUI::EditBox* value_box = CreateTrackedSearchBox(
             parent,
@@ -3375,6 +3514,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             value_box->eventEditSelectAccept += MyGUI::newDelegate(&OnHubFloatEditAccepted);
             value_box->eventKeyLostFocus += MyGUI::newDelegate(&OnHubFloatEditLostFocus);
         }
+        ApplyBoolConditionEnabledState(value_box, row);
 
         MyGUI::Button* plus_button = CreateTrackedWidget<MyGUI::Button>(
             parent,
@@ -3387,6 +3527,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(plus_button, "float_step_inc", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             HubHoverHint_Attach(plus_button, BuildFloatStepHoverHint(true, row));
         }
+        ApplyBoolConditionEnabledState(plus_button, row);
     }
     else if (row.kind == HUB_UI_ROW_KIND_SELECT)
     {
@@ -3412,6 +3553,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             combo_box->eventComboAccept += MyGUI::newDelegate(&OnHubSelectAccepted);
             AttachPrimaryControlHoverHint(combo_box, row, static_cast<const char*>(0));
         }
+        ApplyBoolConditionEnabledState(combo_box, row);
     }
     else if (row.kind == HUB_UI_ROW_KIND_TEXT)
     {
@@ -3427,6 +3569,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             value_box->eventEditTextChange += MyGUI::newDelegate(&OnHubTextChanged);
             AttachPrimaryControlHoverHint(value_box, row, static_cast<const char*>(0));
         }
+        ApplyBoolConditionEnabledState(value_box, row);
     }
     else if (row.kind == HUB_UI_ROW_KIND_COLOR)
     {
@@ -3455,6 +3598,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(mode_button, "color_mode_toggle", namespace_value, mod_value, setting_value);
             HubHoverHint_Attach(mode_button, "Toggle between preset palette and hex input.");
         }
+        ApplyBoolConditionEnabledState(mode_button, row);
 
         if (row.color_hex_mode)
         {
@@ -3471,6 +3615,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 value_box->eventEditSelectAccept += MyGUI::newDelegate(&OnHubColorEditAccepted);
                 value_box->eventKeyLostFocus += MyGUI::newDelegate(&OnHubColorEditLostFocus);
             }
+            ApplyBoolConditionEnabledState(value_box, row);
         }
         else
         {
@@ -3487,6 +3632,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                     palette_button,
                     row.color_palette_expanded ? "Hide preset colors." : "Show preset colors.");
             }
+            ApplyBoolConditionEnabledState(palette_button, row);
         }
 
         MyGUI::Button* current_swatch = CreateTrackedWidget<MyGUI::Button>(
@@ -3499,6 +3645,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             current_swatch->setColour(current_color);
             HubHoverHint_Attach(current_swatch, "Current color preview.");
         }
+        ApplyBoolConditionEnabledState(current_swatch, row);
 
         if (row.color_preview_kind == EMC_COLOR_PREVIEW_KIND_TEXT)
         {
@@ -3513,6 +3660,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 preview_text->setTextColour(current_color);
                 preview_text->setFontHeight(18);
             }
+            ApplyBoolConditionEnabledState(preview_text, row);
         }
         else
         {
@@ -3525,6 +3673,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 preview_swatch->setCaption("");
                 preview_swatch->setColour(current_color);
             }
+            ApplyBoolConditionEnabledState(preview_swatch, row);
         }
     }
     else if (row.kind == HUB_UI_ROW_KIND_ACTION)
@@ -3540,6 +3689,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
             AttachHubAction(action_button, "action_invoke", row.namespace_id != 0 ? row.namespace_id : "", row.mod_id != 0 ? row.mod_id : "", row.setting_id != 0 ? row.setting_id : "");
             AttachPrimaryControlHoverHint(action_button, row, "Run this action now.");
         }
+        ApplyBoolConditionEnabledState(action_button, row);
     }
 
     int next_y = y + row_height;
@@ -3583,6 +3733,7 @@ void CreateRowWidgets(MyGUI::Widget* parent, int panel_width, int y, const HubUi
                 setting_value,
                 row.color_presets[preset_index].value_hex);
             HubHoverHint_Attach(preset_button, BuildColorPresetHoverHint(row.color_presets[preset_index].value_hex));
+            ApplyBoolConditionEnabledState(preset_button, row);
         }
 
         next_y += GetColorPaletteHeight(row);
@@ -4459,6 +4610,7 @@ void RebuildHubPanelWidgets()
 void ClearActiveUiState()
 {
     DestroyDynamicWidgets();
+    ResetTrackedModifierKeys();
     ResetPendingHubSearchShortcut();
     ResetHubSearchSnapshot();
     g_selected_namespace_id.clear();
@@ -4732,11 +4884,14 @@ void OptionsWindowSaveHook(OptionsWindow* self)
 
 void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code)
 {
+    TrackModifierKeyDown(key_code);
+
     if (g_hub_enabled && HubUi_IsOptionsWindowOpen())
     {
         if (HubUi_IsAnyKeybindCaptureActive())
         {
-            if (HubUi_ApplyCapturedKeycodeToActiveRow(static_cast<int32_t>(key_code)) == EMC_OK)
+            const uint32_t capture_modifiers = ResolveKeybindCaptureModifiers(thisptr);
+            if (HubUi_ApplyCapturedKeybindToActiveRow(static_cast<int32_t>(key_code), capture_modifiers) == EMC_OK)
             {
                 RebuildHubPanelWidgets();
                 return;
@@ -4766,6 +4921,16 @@ void InputHandler_keyDownEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code
     if (InputHandler_keyDownEvent_orig != 0)
     {
         InputHandler_keyDownEvent_orig(thisptr, key_code);
+    }
+}
+
+void InputHandler_keyUpEvent_hook(InputHandler* thisptr, OIS::KeyCode key_code)
+{
+    TrackModifierKeyUp(key_code);
+
+    if (InputHandler_keyUpEvent_orig != 0)
+    {
+        InputHandler_keyUpEvent_orig(thisptr, key_code);
     }
 }
 
@@ -4825,6 +4990,15 @@ bool HubMenuBridge_InstallHooks(unsigned int platform, const std::string& versio
             &InputHandler_keyDownEvent_orig))
     {
         ErrorLog("Emkejs-Mod-Core: Could not hook InputHandler::keyDownEvent");
+        return false;
+    }
+
+    if (KenshiLib::SUCCESS != KenshiLib::AddHook(
+            KenshiLib::GetRealAddress(&InputHandler::keyUpEvent),
+            InputHandler_keyUpEvent_hook,
+            &InputHandler_keyUpEvent_orig))
+    {
+        ErrorLog("Emkejs-Mod-Core: Could not hook InputHandler::keyUpEvent");
         return false;
     }
 

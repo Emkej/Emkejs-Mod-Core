@@ -29,6 +29,8 @@ const int32_t kModeUseTextV2 = 16;
 const int32_t kModeUseTextV2LegacyApi = 17;
 const int32_t kModeUseActionV2 = 18;
 const int32_t kModeUseActionV2LegacyApi = 19;
+const int32_t kModeUseBoolConditionRule = 20;
+const int32_t kModeUseBoolConditionRuleLegacyApi = 21;
 
 const char* kNamespaceId = "phase8.dummy_consumer";
 const char* kNamespaceDisplayName = "Phase8 Dummy Consumer";
@@ -43,6 +45,9 @@ const char* kSelectSettingId = "palette";
 const char* kTextSettingId = "title";
 const char* kColorSettingId = "status_color";
 const char* kActionSettingId = "refresh_now";
+const char* kBoolConditionControllerSettingId = "feature_enabled";
+const char* kBoolConditionHiddenSettingId = "feature_hidden";
+const char* kBoolConditionDisabledSettingId = "feature_disabled";
 const char* kSectionId = "general";
 const char* kSectionDisplayName = "General";
 const uint32_t kTextMaxLength = 32u;
@@ -52,6 +57,16 @@ const char* kKeybindHoverHint = "Capture the dummy hotkey.";
 const char* kSelectHoverHint = "Choose the dummy palette.";
 const char* kTextHoverHint = "Edit the dummy title.";
 const char* kActionHoverHint = "Refresh the dummy state now.";
+const EMC_BoolConditionRuleDefV1 kBoolConditionHideRule = {
+    kBoolConditionHiddenSettingId,
+    kBoolConditionControllerSettingId,
+    EMC_BOOL_CONDITION_EFFECT_HIDE,
+    0 };
+const EMC_BoolConditionRuleDefV1 kBoolConditionDisableRule = {
+    kBoolConditionDisabledSettingId,
+    kBoolConditionControllerSettingId,
+    EMC_BOOL_CONDITION_EFFECT_DISABLE,
+    0 };
 
 int32_t g_mod_user_data = 11;
 int32_t g_bool_value = 1;
@@ -62,6 +77,9 @@ int32_t g_select_value = 1;
 char g_text_value[kTextMaxLength + 1u] = "Example title";
 char g_color_value[kColorTextLength + 1u] = "#FF3333";
 int32_t g_action_count = 0;
+int32_t g_bool_condition_controller_value = 0;
+int32_t g_bool_condition_hidden_value = 1;
+int32_t g_bool_condition_disabled_value = 1;
 
 const EMC_SelectOptionV1 kSelectOptions[] = {
     { 0, "Default" },
@@ -389,6 +407,30 @@ const EMC_ActionRowDefV2 kActionSettingDefV2 = {
     &InvokeAction,
     kActionHoverHint};
 
+const EMC_BoolSettingDefV1 kBoolConditionControllerSettingDef = {
+    kBoolConditionControllerSettingId,
+    "Feature enabled",
+    "Toggle the conditional rows",
+    &g_bool_condition_controller_value,
+    &GetBool,
+    &SetBool};
+
+const EMC_BoolSettingDefV1 kBoolConditionHiddenSettingDef = {
+    kBoolConditionHiddenSettingId,
+    "Feature hidden",
+    "Hidden when the controller is off",
+    &g_bool_condition_hidden_value,
+    &GetBool,
+    &SetBool};
+
+const EMC_BoolSettingDefV1 kBoolConditionDisabledSettingDef = {
+    kBoolConditionDisabledSettingId,
+    "Feature disabled",
+    "Disabled when the controller is off",
+    &g_bool_condition_disabled_value,
+    &GetBool,
+    &SetBool};
+
 struct HandleToken
 {
     int32_t value;
@@ -422,6 +464,7 @@ struct DummyState
     int32_t register_section_calls;
     int32_t register_action_calls;
     int32_t register_action_v2_calls;
+    int32_t register_bool_condition_rule_calls;
 
     int32_t order_checks_passed;
     int32_t descriptor_checks_passed;
@@ -482,6 +525,7 @@ void ResetCapture()
     g_state.register_section_calls = 0;
     g_state.register_action_calls = 0;
     g_state.register_action_v2_calls = 0;
+    g_state.register_bool_condition_rule_calls = 0;
     g_state.order_checks_passed = 1;
     g_state.descriptor_checks_passed = 1;
     g_state.next_expected_kind_index = 0;
@@ -549,11 +593,17 @@ bool IsLegacyApiMode()
         || g_state.mode == kModeUseKeybindV2LegacyApi
         || g_state.mode == kModeUseSelectV2LegacyApi
         || g_state.mode == kModeUseTextV2LegacyApi
-        || g_state.mode == kModeUseActionV2LegacyApi;
+        || g_state.mode == kModeUseActionV2LegacyApi
+        || g_state.mode == kModeUseBoolConditionRuleLegacyApi;
 }
 
 uint32_t ResolveLegacyApiSize()
 {
+    if (g_state.mode == kModeUseBoolConditionRuleLegacyApi)
+    {
+        return EMC_HUB_API_V1_BOOL_CONDITION_RULE_MIN_SIZE - 1u;
+    }
+
     if (g_state.mode == kModeUseIntV2LegacyApi)
     {
         return EMC_HUB_API_V1_OPTIONS_WINDOW_INIT_OBSERVER_MIN_SIZE;
@@ -635,6 +685,79 @@ void ApplyMode()
     }
 }
 
+EMC_Result __cdecl TestRegisterBoolConditionRules(const EMC_HubApiV1* api, void* user_data);
+EMC_Result __cdecl TestGetApi(
+    uint32_t requested_version,
+    uint32_t caller_api_size,
+    const EMC_HubApiV1** out_api,
+    uint32_t* out_api_size);
+
+void ConfigureClientForMode()
+{
+    emc::ModHubClient::Config config;
+    config.get_api_fn = &TestGetApi;
+    if (g_state.mode == kModeUseBoolConditionRule || g_state.mode == kModeUseBoolConditionRuleLegacyApi)
+    {
+        config.register_fn = &TestRegisterBoolConditionRules;
+        config.table_registration = 0;
+    }
+    else
+    {
+        config.table_registration = &g_table_registration;
+    }
+
+    g_state.client.SetConfig(config);
+    g_state.client.Reset();
+}
+
+EMC_Result __cdecl TestRegisterBoolConditionRules(const EMC_HubApiV1* api, void* user_data)
+{
+    (void)user_data;
+
+    if (api == 0 || api->register_mod == 0 || api->register_bool_setting == 0)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    EMC_ModHandle mod = 0;
+    EMC_Result result = api->register_mod(&kModDescriptor, &mod);
+    if (result != EMC_OK)
+    {
+        return result;
+    }
+
+    result = api->register_bool_setting(mod, &kBoolConditionControllerSettingDef);
+    if (result != EMC_OK)
+    {
+        return result;
+    }
+
+    result = api->register_bool_setting(mod, &kBoolConditionHiddenSettingDef);
+    if (result != EMC_OK)
+    {
+        return result;
+    }
+
+    result = api->register_bool_setting(mod, &kBoolConditionDisabledSettingDef);
+    if (result != EMC_OK)
+    {
+        return result;
+    }
+
+    result = emc::RegisterBoolConditionRuleWithApiSizeV1(api, api->api_size, mod, &kBoolConditionHideRule);
+    if (result != EMC_OK)
+    {
+        return result;
+    }
+
+    result = emc::RegisterBoolConditionRuleWithApiSizeV1(api, api->api_size, mod, &kBoolConditionDisableRule);
+    if (result != EMC_OK)
+    {
+        return result;
+    }
+    return EMC_OK;
+}
+
 EMC_Result __cdecl TestRegisterMod(const EMC_ModDescriptorV1* desc, EMC_ModHandle* out_handle)
 {
     if (out_handle == 0)
@@ -662,20 +785,55 @@ EMC_Result __cdecl TestRegisterMod(const EMC_ModDescriptorV1* desc, EMC_ModHandl
 EMC_Result __cdecl TestRegisterBool(EMC_ModHandle mod, const EMC_BoolSettingDefV1* def)
 {
     g_state.register_bool_calls += 1;
-    RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL);
+    if (g_state.mode != kModeUseBoolConditionRule && g_state.mode != kModeUseBoolConditionRuleLegacyApi)
+    {
+        RecordKind(emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL);
+
+        if (mod != GetHandle()
+            || def == 0
+            || !StringEquals(def->setting_id, kBoolSettingId)
+            || def->get_value != &GetBool
+            || def->set_value != &SetBool
+            || def->user_data != &g_bool_value)
+        {
+            g_state.descriptor_checks_passed = 0;
+            return EMC_ERR_INVALID_ARGUMENT;
+        }
+
+        return ShouldFailKind(emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL) ? EMC_ERR_INTERNAL : EMC_OK;
+    }
+
+    const int32_t call_index = g_state.register_bool_calls - 1;
+    const char* expected_setting_id = nullptr;
+    void* expected_user_data = nullptr;
+    if (call_index == 0)
+    {
+        expected_setting_id = kBoolConditionControllerSettingId;
+        expected_user_data = &g_bool_condition_controller_value;
+    }
+    else if (call_index == 1)
+    {
+        expected_setting_id = kBoolConditionHiddenSettingId;
+        expected_user_data = &g_bool_condition_hidden_value;
+    }
+    else
+    {
+        expected_setting_id = kBoolConditionDisabledSettingId;
+        expected_user_data = &g_bool_condition_disabled_value;
+    }
 
     if (mod != GetHandle()
         || def == 0
-        || !StringEquals(def->setting_id, kBoolSettingId)
+        || !StringEquals(def->setting_id, expected_setting_id)
         || def->get_value != &GetBool
         || def->set_value != &SetBool
-        || def->user_data != &g_bool_value)
+        || def->user_data != expected_user_data)
     {
         g_state.descriptor_checks_passed = 0;
         return EMC_ERR_INVALID_ARGUMENT;
     }
 
-    return ShouldFailKind(emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL) ? EMC_ERR_INTERNAL : EMC_OK;
+    return EMC_OK;
 }
 
 EMC_Result __cdecl TestRegisterBoolV2(EMC_ModHandle mod, const EMC_BoolSettingDefV2* def)
@@ -987,6 +1145,30 @@ EMC_Result __cdecl TestRegisterActionV2(EMC_ModHandle mod, const EMC_ActionRowDe
     return EMC_OK;
 }
 
+EMC_Result __cdecl TestRegisterBoolConditionRule(EMC_ModHandle mod, const EMC_BoolConditionRuleDefV1* def)
+{
+    g_state.register_bool_condition_rule_calls += 1;
+
+    const int32_t call_index = g_state.register_bool_condition_rule_calls - 1;
+    const char* expected_target_id =
+        call_index == 0 ? kBoolConditionHiddenSettingId : kBoolConditionDisabledSettingId;
+    const uint32_t expected_effect =
+        call_index == 0 ? EMC_BOOL_CONDITION_EFFECT_HIDE : EMC_BOOL_CONDITION_EFFECT_DISABLE;
+
+    if (mod != GetHandle()
+        || def == 0
+        || !StringEquals(def->target_setting_id, expected_target_id)
+        || !StringEquals(def->controller_setting_id, kBoolConditionControllerSettingId)
+        || def->effect != expected_effect
+        || def->expected_bool_value != 0)
+    {
+        g_state.descriptor_checks_passed = 0;
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
 const EMC_HubApiV1* GetTestApi()
 {
     static const EMC_HubApiV1 kApi = {
@@ -1009,7 +1191,8 @@ const EMC_HubApiV1* GetTestApi()
         &TestRegisterKeybindV2,
         &TestRegisterSelectV2,
         &TestRegisterTextV2,
-        &TestRegisterActionV2};
+        &TestRegisterActionV2,
+        &TestRegisterBoolConditionRule};
     return &kApi;
 }
 
@@ -1037,10 +1220,19 @@ EMC_Result __cdecl TestGetApi(
         return EMC_ERR_API_SIZE_MISMATCH;
     }
 
-    *out_api = GetTestApi();
-    *out_api_size = IsLegacyApiMode()
-        ? ResolveLegacyApiSize()
-        : (uint32_t)sizeof(EMC_HubApiV1);
+    if (IsLegacyApiMode())
+    {
+        static EMC_HubApiV1 legacy_api;
+        legacy_api = *GetTestApi();
+        legacy_api.api_size = ResolveLegacyApiSize();
+        *out_api = &legacy_api;
+        *out_api_size = legacy_api.api_size;
+    }
+    else
+    {
+        *out_api = GetTestApi();
+        *out_api_size = (uint32_t)sizeof(EMC_HubApiV1);
+    }
     return EMC_OK;
 }
 
@@ -1054,33 +1246,24 @@ void EnsureInitialized()
     g_state.mode = kModeSuccess;
     ResetRows();
     ResetCapture();
-
-    emc::ModHubClient::Config config;
-    config.get_api_fn = &TestGetApi;
-    config.table_registration = &g_table_registration;
-    g_state.client.SetConfig(config);
-    g_state.client.Reset();
+    ConfigureClientForMode();
 
     g_initialized = true;
 }
 
 void ResetState()
 {
-    g_state.mode = kModeSuccess;
     ResetRows();
+    ApplyMode();
     ResetCapture();
-
-    emc::ModHubClient::Config config;
-    config.get_api_fn = &TestGetApi;
-    config.table_registration = &g_table_registration;
-    g_state.client.SetConfig(config);
-    g_state.client.Reset();
+    ConfigureClientForMode();
 }
 }
 
 void ModHubDummyConsumer_Reset()
 {
     EnsureInitialized();
+    g_state.mode = kModeSuccess;
     ResetState();
 }
 
@@ -1088,10 +1271,7 @@ void ModHubDummyConsumer_SetMode(int32_t mode)
 {
     EnsureInitialized();
     g_state.mode = mode;
-    ResetRows();
-    ApplyMode();
-    ResetCapture();
-    g_state.client.Reset();
+    ResetState();
 }
 
 int32_t ModHubDummyConsumer_OnStartup()
@@ -1206,6 +1386,12 @@ int32_t ModHubDummyConsumer_GetRegisterActionV2Calls()
 {
     EnsureInitialized();
     return g_state.register_action_v2_calls;
+}
+
+int32_t ModHubDummyConsumer_GetRegisterBoolConditionRuleCalls()
+{
+    EnsureInitialized();
+    return g_state.register_bool_condition_rule_calls;
 }
 
 int32_t ModHubDummyConsumer_GetOrderChecksPassed()

@@ -55,6 +55,9 @@ public static class HubPhase3BoolKeybindHarness
     public delegate int UiApplyCapturedKeycodeRaw(IntPtr nsId, IntPtr modId, IntPtr settingId, int keycode);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int UiApplyCapturedKeybindRaw(IntPtr nsId, IntPtr modId, IntPtr settingId, int keycode, uint modifiers);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int UiInvokeActionRowRaw(IntPtr nsId, IntPtr modId, IntPtr settingId);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -291,7 +294,8 @@ public static class HubPhase3BoolKeybindHarness
             IntPtr closeOptionsProc = GetProcAddress(module, "EMC_ModHub_Test_Menu_CloseOptionsWindow");
             IntPtr setPendingBoolProc = GetProcAddress(module, "EMC_ModHub_Test_UI_SetPendingBool");
             IntPtr beginCaptureProc = GetProcAddress(module, "EMC_ModHub_Test_UI_BeginKeybindCapture");
-            IntPtr applyCaptureProc = GetProcAddress(module, "EMC_ModHub_Test_UI_ApplyCapturedKeycode");
+            IntPtr applyCaptureKeycodeProc = GetProcAddress(module, "EMC_ModHub_Test_UI_ApplyCapturedKeycode");
+            IntPtr applyCaptureKeybindProc = GetProcAddress(module, "EMC_ModHub_Test_UI_ApplyCapturedKeybind");
             IntPtr invokeActionProc = GetProcAddress(module, "EMC_ModHub_Test_UI_InvokeActionRow");
             IntPtr getSummaryProc = GetProcAddress(module, "EMC_ModHub_Test_Commit_GetLastSummary");
 
@@ -301,7 +305,8 @@ public static class HubPhase3BoolKeybindHarness
             Assert(closeOptionsProc != IntPtr.Zero, "Missing EMC_ModHub_Test_Menu_CloseOptionsWindow export");
             Assert(setPendingBoolProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_SetPendingBool export");
             Assert(beginCaptureProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_BeginKeybindCapture export");
-            Assert(applyCaptureProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_ApplyCapturedKeycode export");
+            Assert(applyCaptureKeycodeProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_ApplyCapturedKeycode export");
+            Assert(applyCaptureKeybindProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_ApplyCapturedKeybind export");
             Assert(invokeActionProc != IntPtr.Zero, "Missing EMC_ModHub_Test_UI_InvokeActionRow export");
             Assert(getSummaryProc != IntPtr.Zero, "Missing EMC_ModHub_Test_Commit_GetLastSummary export");
 
@@ -311,7 +316,8 @@ public static class HubPhase3BoolKeybindHarness
             closeOptions = (MenuCloseRaw)Marshal.GetDelegateForFunctionPointer(closeOptionsProc, typeof(MenuCloseRaw));
             UiSetPendingBoolRaw setPendingBool = (UiSetPendingBoolRaw)Marshal.GetDelegateForFunctionPointer(setPendingBoolProc, typeof(UiSetPendingBoolRaw));
             UiBeginKeybindCaptureRaw beginCapture = (UiBeginKeybindCaptureRaw)Marshal.GetDelegateForFunctionPointer(beginCaptureProc, typeof(UiBeginKeybindCaptureRaw));
-            UiApplyCapturedKeycodeRaw applyCapture = (UiApplyCapturedKeycodeRaw)Marshal.GetDelegateForFunctionPointer(applyCaptureProc, typeof(UiApplyCapturedKeycodeRaw));
+            UiApplyCapturedKeycodeRaw applyCaptureKeycode = (UiApplyCapturedKeycodeRaw)Marshal.GetDelegateForFunctionPointer(applyCaptureKeycodeProc, typeof(UiApplyCapturedKeycodeRaw));
+            UiApplyCapturedKeybindRaw applyCaptureKeybind = (UiApplyCapturedKeybindRaw)Marshal.GetDelegateForFunctionPointer(applyCaptureKeybindProc, typeof(UiApplyCapturedKeybindRaw));
             UiInvokeActionRowRaw invokeAction = (UiInvokeActionRowRaw)Marshal.GetDelegateForFunctionPointer(invokeActionProc, typeof(UiInvokeActionRowRaw));
             CommitGetSummaryRaw getSummary = (CommitGetSummaryRaw)Marshal.GetDelegateForFunctionPointer(getSummaryProc, typeof(CommitGetSummaryRaw));
 
@@ -456,8 +462,8 @@ public static class HubPhase3BoolKeybindHarness
             Assert(skipReason == HUB_COMMIT_SKIP_REASON_KEYBIND_CAPTURE_ACTIVE, "Capture-active save must set keybind capture skip reason");
             Assert(BoolSetCount == 0 && KeybindSetCount == 0, "Skipped commit must not call set callbacks");
 
-            r = applyCapture(nsId, modId, keybindSettingId, 44);
-            ExpectResult(r, EMC_OK, "apply_captured_keycode failed");
+            r = applyCaptureKeybind(nsId, modId, keybindSettingId, 44, 5u);
+            ExpectResult(r, EMC_OK, "apply_captured_keybind failed");
 
             saveOptions();
             ReadSummary(getSummary, out attempted, out succeeded, out failed, out skipped, out skipReason);
@@ -467,7 +473,7 @@ public static class HubPhase3BoolKeybindHarness
             Assert(CommitSetOrder.Count >= 2, "Expected commit set order to contain two entries");
             Assert(CommitSetOrder[0] == "bool" && CommitSetOrder[1] == "keybind", "Commit set order must follow registration order");
             Assert(CurrentBoolValue == 0, "Bool value did not commit expected pending value");
-            Assert(CurrentKeybindValue.keycode == 44 && CurrentKeybindValue.modifiers == 0u, "Keybind value did not commit expected pending value");
+            Assert(CurrentKeybindValue.keycode == 44 && CurrentKeybindValue.modifiers == 5u, "Keybind value did not commit expected pending value");
 
             r = beginCapture(nsId, modId, keybindSettingId);
             ExpectResult(r, EMC_OK, "begin_keybind_capture before action failed");
@@ -479,7 +485,7 @@ public static class HubPhase3BoolKeybindHarness
             ReadSummary(getSummary, out attempted, out succeeded, out failed, out skipped, out skipReason);
             Assert(skipped == 1u && skipReason == HUB_COMMIT_SKIP_REASON_KEYBIND_CAPTURE_ACTIVE, "Save after action during capture should still skip commit");
 
-            r = applyCapture(nsId, modId, keybindSettingId, 55);
+            r = applyCaptureKeycode(nsId, modId, keybindSettingId, 55);
             ExpectResult(r, EMC_OK, "apply_captured_keycode second capture failed");
             saveOptions();
             ReadSummary(getSummary, out attempted, out succeeded, out failed, out skipped, out skipReason);

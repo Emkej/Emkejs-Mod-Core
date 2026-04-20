@@ -5,6 +5,57 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-DllExportSet {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $exports = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+
+    if (Get-Command objdump -ErrorAction SilentlyContinue) {
+        $rawLines = & objdump -p $Path 2>$null | Select-String -Pattern 'EMC_ModHub_'
+    } elseif (Get-Command llvm-nm -ErrorAction SilentlyContinue) {
+        $rawLines = & llvm-nm -D --defined-only $Path 2>$null | Select-String -Pattern 'EMC_ModHub_'
+    } elseif (Get-Command nm -ErrorAction SilentlyContinue) {
+        $rawLines = & nm -D --defined-only $Path 2>$null | Select-String -Pattern 'EMC_ModHub_'
+    } else {
+        throw 'Unable to inspect DLL exports: install objdump, llvm-nm, or nm in PATH.'
+    }
+
+    foreach ($line in $rawLines) {
+        if ($line -match '(EMC_ModHub_[A-Za-z0-9_]+)') {
+            $null = $exports.Add($Matches[1])
+        }
+    }
+
+    return $exports
+}
+
+function Assert-HasAllDebugHelpers {
+    param(
+        [Parameter(Mandatory = $true)]$ExportSet
+    )
+
+    $helperNames = @(
+        'EMC_ModHub_Test_ResetGetApiAliasWarningCount',
+        'EMC_ModHub_Test_GetApiAliasWarningCount',
+        'EMC_ModHub_Test_Client_DefaultLookup_SetMode',
+        'EMC_ModHub_Test_Client_DefaultLookup_Reset',
+        'EMC_ModHub_Test_Client_DefaultLookup_CallGetApi'
+    )
+
+    $present = 0
+    foreach ($helper in $helperNames) {
+        if ($ExportSet.Contains($helper)) {
+            $present += 1
+        }
+    }
+
+    if (($present -gt 0) -and ($present -ne $helperNames.Count)) {
+        throw "Expected phase 13 helper exports to be all-or-nothing. Found $present of $($helperNames.Count)."
+    }
+}
+
 function Assert-Condition {
     param(
         [Parameter(Mandatory = $true)][bool]$Condition,
@@ -19,6 +70,25 @@ function Assert-Condition {
 $DllPath = (Resolve-Path -Path $DllPath).ProviderPath
 if ($KenshiPath) {
     $KenshiPath = (Resolve-Path -Path $KenshiPath).ProviderPath
+}
+
+if (-not $IsWindows) {
+    $DllPath = (Resolve-Path -Path $DllPath).ProviderPath
+    $exports = Get-DllExportSet -Path $DllPath
+
+    $required = @(
+        'EMC_ModHub_GetApi',
+        'EMC_ModHub_GetApi_v1_compat'
+    )
+    foreach ($name in $required) {
+        if (-not $exports.Contains($name)) {
+            throw "Missing required export in WSL smoke check: $name"
+        }
+    }
+
+    Assert-HasAllDebugHelpers -ExportSet $exports
+    Write-Host 'PASS'
+    return
 }
 
 $code = @"

@@ -82,6 +82,8 @@ struct HubUiRowView
     uint32_t color_preset_count;
     bool color_hex_mode;
     bool color_palette_expanded;
+    int32_t condition_visible;
+    int32_t condition_enabled;
 };
 
 void HubUi_SetOptionsWindowOpen(bool is_open);
@@ -109,6 +111,12 @@ bool HubUi_DoesSettingMatchNamespaceSearch(
     const char* mod_id,
     const char* setting_id,
     bool* out_matches);
+EMC_Result HubUi_GetBoolConditionState(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t* out_visible,
+    int32_t* out_enabled);
 
 EMC_Result HubUi_SetPendingBool(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t value);
 EMC_Result HubUi_AdjustPendingIntStep(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t step_delta);
@@ -131,7 +139,14 @@ EMC_Result HubUi_SetColorPaletteExpanded(
     bool is_expanded);
 EMC_Result HubUi_BeginKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_CancelKeybindCapture(const char* namespace_id, const char* mod_id, const char* setting_id);
+EMC_Result HubUi_ApplyCapturedKeybind(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t keycode,
+    uint32_t modifiers);
 EMC_Result HubUi_ApplyCapturedKeycode(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t keycode);
+EMC_Result HubUi_ApplyCapturedKeybindToActiveRow(int32_t keycode, uint32_t modifiers);
 EMC_Result HubUi_ApplyCapturedKeycodeToActiveRow(int32_t keycode);
 EMC_Result HubUi_ClearPendingKeybind(const char* namespace_id, const char* mod_id, const char* setting_id);
 EMC_Result HubUi_InvokeActionRow(const char* namespace_id, const char* mod_id, const char* setting_id);

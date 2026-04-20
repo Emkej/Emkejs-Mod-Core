@@ -158,13 +158,14 @@ EMC_Result __cdecl RefreshNow(void* user_data, char* err_buf, uint32_t err_buf_s
 "@
 
     $settingDefs = @"
-const EMC_BoolSettingDefV1 kBoolSettingEnabled = {
+const EMC_BoolSettingDefV2 kBoolSettingEnabled = {
     "enabled",
     "Enabled",
     "Generated bool setting for Enabled.",
     &g_state,
     &GetEnabled,
-    &SetEnabled };
+    &SetEnabled,
+    "Toggle the generated feature state." };
 
 const EMC_KeybindSettingDefV1 kKeybindSetting = {
     "hotkey",
@@ -197,21 +198,22 @@ const EMC_FloatSettingDefV1 kFloatSetting = {
     &GetRadius,
     &SetRadius };
 
-const EMC_ActionRowDefV1 kActionRow = {
+const EMC_ActionRowDefV2 kActionRow = {
     "refresh_now",
     "Refresh now",
     "Re-sync values from runtime state",
     &g_state,
     EMC_ACTION_FORCE_REFRESH,
-    &RefreshNow };
+    &RefreshNow,
+    "Re-sync generated values from runtime state." };
 "@
 
     $rowEntries = @"
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, &kBoolSettingEnabled },
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, &kKeybindSetting },
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, &kIntSetting },
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, &kFloatSetting },
-    { emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION, &kActionRow }
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL_V2, "enabled", &kBoolSettingEnabled, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, "toggle_overlay_key", &kKeybindSetting, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, "count", &kIntSetting, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, "radius", &kFloatSetting, 0, 0 },
+    { emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION_V2, "refresh_now", &kActionRow, 0, 0 }
 "@
 
     return [ordered]@{

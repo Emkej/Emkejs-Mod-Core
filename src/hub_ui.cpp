@@ -136,6 +136,7 @@ struct HubUiModSection
     std::string namespace_id;
     std::string mod_id;
     std::string mod_display_name;
+    EMC_ModHandle handle;
     bool collapsed;
     std::vector<HubUiSettingRow*> rows;
     bool uses_sections;
@@ -177,6 +178,22 @@ bool IsBoolValueValid(int32_t value)
 bool KeybindEquals(EMC_KeybindValueV1 lhs, EMC_KeybindValueV1 rhs)
 {
     return lhs.keycode == rhs.keycode && lhs.modifiers == rhs.modifiers;
+}
+
+bool IsModifierKeycode(int32_t keycode)
+{
+    switch (static_cast<OIS::KeyCode>(keycode))
+    {
+    case OIS::KC_LSHIFT:
+    case OIS::KC_RSHIFT:
+    case OIS::KC_LCONTROL:
+    case OIS::KC_RCONTROL:
+    case OIS::KC_LMENU:
+    case OIS::KC_RMENU:
+        return true;
+    default:
+        return false;
+    }
 }
 
 bool FloatBitsEqual(float lhs, float rhs)
@@ -304,6 +321,59 @@ bool TryFindColorPresetValue(const HubUiSettingRow* row, const char* value_hex)
 bool ShouldStartColorInHexMode(const HubUiSettingRow* row, const char* value_hex)
 {
     return row != nullptr && !TryFindColorPresetValue(row, value_hex);
+}
+
+HubUiSettingRow* FindRow(const char* namespace_id, const char* mod_id, const char* setting_id);
+
+bool TryResolveBoolConditionStateForRow(
+    const HubUiSettingRow* row,
+    int32_t* out_visible,
+    int32_t* out_enabled)
+{
+    if (out_visible == nullptr || out_enabled == nullptr)
+    {
+        return false;
+    }
+
+    *out_visible = 1;
+    *out_enabled = 1;
+
+    if (row == nullptr || row->parent_mod == nullptr || row->setting_id.empty())
+    {
+        return false;
+    }
+
+    HubRegistryBoolConditionRuleView rule_view = {};
+    if (!HubRegistry_GetBoolConditionRuleView(row->parent_mod->handle, row->setting_id.c_str(), &rule_view))
+    {
+        return true;
+    }
+
+    HubUiSettingRow* controller_row = FindRow(
+        row->namespace_id.c_str(),
+        row->mod_id.c_str(),
+        rule_view.controller_setting_id);
+    if (controller_row == nullptr || controller_row->kind != HUB_UI_ROW_KIND_BOOL)
+    {
+        return true;
+    }
+
+    const bool condition_matches = controller_row->pending_bool_value == rule_view.expected_bool_value;
+    if (!condition_matches)
+    {
+        return true;
+    }
+
+    if (rule_view.effect == HUB_REGISTRY_BOOL_CONDITION_EFFECT_HIDE)
+    {
+        *out_visible = 0;
+    }
+    else if (rule_view.effect == HUB_REGISTRY_BOOL_CONDITION_EFFECT_DISABLE)
+    {
+        *out_enabled = 0;
+    }
+
+    return true;
 }
 
 int32_t ClampIntValue(int32_t value, int32_t min_value, int32_t max_value)
@@ -1100,20 +1170,15 @@ bool ResolveInitialSectionCollapsedState(
     const std::string& mod_id,
     const std::string& section_id)
 {
-    if (!g_collapse_persistence_enabled)
-    {
-        return false;
-    }
-
     const std::map<std::string, bool>::const_iterator it =
         g_persisted_section_collapse_states.find(
             BuildPersistedSectionCollapseStateKey(namespace_id, mod_id, section_id));
-    if (it == g_persisted_section_collapse_states.end())
+    if (it != g_persisted_section_collapse_states.end())
     {
-        return false;
+        return it->second;
     }
 
-    return it->second;
+    return section_id == "advanced";
 }
 
 HubUiSettingRow* FindRow(const char* namespace_id, const char* mod_id, const char* setting_id)
@@ -1502,6 +1567,7 @@ void __cdecl BuildSessionRow(
         mod->namespace_id = mod_view->namespace_id;
         mod->mod_id = mod_view->mod_id;
         mod->mod_display_name = mod_view->mod_display_name;
+        mod->handle = mod_view->handle;
         mod->collapsed = ResolveInitialModCollapsedState(mod->namespace_id, mod->mod_id);
         tab->mods.push_back(mod);
     }
@@ -2117,6 +2183,35 @@ bool HubUi_DoesSettingMatchNamespaceSearch(
     return true;
 }
 
+EMC_Result HubUi_GetBoolConditionState(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t* out_visible,
+    int32_t* out_enabled)
+{
+    if (out_visible == nullptr || out_enabled == nullptr)
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    *out_visible = 1;
+    *out_enabled = 1;
+
+    HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
+    if (row == nullptr)
+    {
+        return EMC_ERR_NOT_FOUND;
+    }
+
+    if (!TryResolveBoolConditionStateForRow(row, out_visible, out_enabled))
+    {
+        return EMC_ERR_INVALID_ARGUMENT;
+    }
+
+    return EMC_OK;
+}
+
 EMC_Result HubUi_SetPendingBool(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t value)
 {
     if (!IsBoolValueValid(value))
@@ -2511,7 +2606,12 @@ EMC_Result HubUi_CancelKeybindCapture(const char* namespace_id, const char* mod_
     return EMC_OK;
 }
 
-EMC_Result HubUi_ApplyCapturedKeycode(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t keycode)
+EMC_Result HubUi_ApplyCapturedKeybind(
+    const char* namespace_id,
+    const char* mod_id,
+    const char* setting_id,
+    int32_t keycode,
+    uint32_t modifiers)
 {
     HubUiSettingRow* row = FindRow(namespace_id, mod_id, setting_id);
     if (row == nullptr || row->kind != HUB_UI_ROW_KIND_KEYBIND)
@@ -2537,14 +2637,24 @@ EMC_Result HubUi_ApplyCapturedKeycode(const char* namespace_id, const char* mod_
         return EMC_OK;
     }
 
+    if (IsModifierKeycode(keycode))
+    {
+        return EMC_OK;
+    }
+
     row->pending_keybind_value.keycode = keycode;
-    row->pending_keybind_value.modifiers = 0;
+    row->pending_keybind_value.modifiers = modifiers & EMC_KEYBIND_MODIFIER_SUPPORTED_MASK;
     row->capture_active = false;
     row->dirty = !KeybindEquals(row->pending_keybind_value, row->canonical_keybind_value);
     return EMC_OK;
 }
 
-EMC_Result HubUi_ApplyCapturedKeycodeToActiveRow(int32_t keycode)
+EMC_Result HubUi_ApplyCapturedKeycode(const char* namespace_id, const char* mod_id, const char* setting_id, int32_t keycode)
+{
+    return HubUi_ApplyCapturedKeybind(namespace_id, mod_id, setting_id, keycode, 0u);
+}
+
+EMC_Result HubUi_ApplyCapturedKeybindToActiveRow(int32_t keycode, uint32_t modifiers)
 {
     for (size_t row_index = 0; row_index < g_rows_in_order.size(); ++row_index)
     {
@@ -2554,10 +2664,15 @@ EMC_Result HubUi_ApplyCapturedKeycodeToActiveRow(int32_t keycode)
             continue;
         }
 
-        return HubUi_ApplyCapturedKeycode(row->namespace_id.c_str(), row->mod_id.c_str(), row->setting_id.c_str(), keycode);
+        return HubUi_ApplyCapturedKeybind(row->namespace_id.c_str(), row->mod_id.c_str(), row->setting_id.c_str(), keycode, modifiers);
     }
 
     return EMC_ERR_NOT_FOUND;
+}
+
+EMC_Result HubUi_ApplyCapturedKeycodeToActiveRow(int32_t keycode)
+{
+    return HubUi_ApplyCapturedKeybindToActiveRow(keycode, 0u);
 }
 
 EMC_Result HubUi_ClearPendingKeybind(const char* namespace_id, const char* mod_id, const char* setting_id)
@@ -2681,6 +2796,9 @@ bool HubUi_GetRowViewByIndex(uint32_t index, HubUiRowView* out_view)
     out_view->color_preset_count = static_cast<uint32_t>(row->color_preset_views.size());
     out_view->color_hex_mode = row->color_hex_mode;
     out_view->color_palette_expanded = row->color_palette_expanded;
+    out_view->condition_visible = 1;
+    out_view->condition_enabled = 1;
+    TryResolveBoolConditionStateForRow(row, &out_view->condition_visible, &out_view->condition_enabled);
     return true;
 }
 

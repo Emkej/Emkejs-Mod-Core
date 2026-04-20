@@ -50,6 +50,8 @@ struct ModHubClientTableRegistrationV1
     const EMC_ModDescriptorV1* mod_desc;
     const ModHubClientSettingRowV1* rows;
     uint32_t row_count;
+    const EMC_BoolConditionRuleDefV1* bool_condition_rules;
+    uint32_t bool_condition_rule_count;
 };
 
 EMC_Result RegisterSettingsTableV1(
@@ -60,6 +62,17 @@ EMC_Result RegisterSettingsTableWithApiSizeV1(
     const EMC_HubApiV1* api,
     uint32_t api_size,
     const ModHubClientTableRegistrationV1* table_registration);
+
+EMC_Result RegisterBoolConditionRuleV1(
+    const EMC_HubApiV1* api,
+    EMC_ModHandle mod,
+    const EMC_BoolConditionRuleDefV1* def);
+
+EMC_Result RegisterBoolConditionRuleWithApiSizeV1(
+    const EMC_HubApiV1* api,
+    uint32_t api_size,
+    EMC_ModHandle mod,
+    const EMC_BoolConditionRuleDefV1* def);
 
 class ModHubClient
 {
