@@ -311,7 +311,7 @@ const EMC_BoolSettingDefV1 $($_.ConstantName) = {
     }) -join ([Environment]::NewLine + [Environment]::NewLine)
 
     $boolRowEntries = ($settings | ForEach-Object {
-        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
+        '    {{ emc::MOD_HUB_CLIENT_SETTING_KIND_BOOL, "{0}", &{1}, 0, 0 }},' -f $_.SettingId, $_.ConstantName
     }) -join [Environment]::NewLine
 
     return [pscustomobject]@{
@@ -390,7 +390,7 @@ EMC_Result __cdecl Set$($_.FunctionSuffix)(void* user_data, EMC_KeybindValueV1 v
 
     $settingDefs = $settingDefsList -join ([Environment]::NewLine + [Environment]::NewLine)
     $rowEntries = ($settings | ForEach-Object {
-        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
+        '    {{ emc::MOD_HUB_CLIENT_SETTING_KIND_KEYBIND, "{0}", &{1}, 0, 0 }},' -f $_.SettingId, $_.ConstantName
     }) -join [Environment]::NewLine
 
     return [pscustomobject]@{
@@ -480,7 +480,7 @@ EMC_Result __cdecl Set$($_.FunctionSuffix)(void* user_data, int32_t value, char*
 
     $settingDefs = $settingDefsList -join ([Environment]::NewLine + [Environment]::NewLine)
     $rowEntries = ($settings | ForEach-Object {
-        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_INT, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
+        '    {{ emc::MOD_HUB_CLIENT_SETTING_KIND_INT, "{0}", &{1}, 0, 0 }},' -f $_.SettingId, $_.ConstantName
     }) -join [Environment]::NewLine
 
     return [pscustomobject]@{
@@ -568,7 +568,7 @@ EMC_Result __cdecl Set$($_.FunctionSuffix)(void* user_data, float value, char* e
 
     $settingDefs = $settingDefsList -join ([Environment]::NewLine + [Environment]::NewLine)
     $rowEntries = ($settings | ForEach-Object {
-        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
+        '    {{ emc::MOD_HUB_CLIENT_SETTING_KIND_FLOAT, "{0}", &{1}, 0, 0 }},' -f $_.SettingId, $_.ConstantName
     }) -join [Environment]::NewLine
 
     return [pscustomobject]@{
@@ -623,7 +623,7 @@ const EMC_ActionRowDefV1 $($setting.ConstantName) = {
 
     $settingDefs = $settingDefsList -join ([Environment]::NewLine + [Environment]::NewLine)
     $rowEntries = ($settings | ForEach-Object {
-        "    { emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION, `"$($_.SettingId)`", &$($_.ConstantName), 0, 0 },"
+        '    {{ emc::MOD_HUB_CLIENT_SETTING_KIND_ACTION, "{0}", &{1}, 0, 0 }},' -f $_.SettingId, $_.ConstantName
     }) -join [Environment]::NewLine
 
     return [pscustomobject]@{
